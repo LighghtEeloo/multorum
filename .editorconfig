@@ -1,0 +1,18 @@
+# top-most EditorConfig file
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+
+[*.toml]
+indent_style = space
+indent_size = 4
+
+[*.{rs, lalrpop}]
+indent_style = space
+indent_size = 4
+
+[*.bb]
+indent_style = space
+indent_size = 2
