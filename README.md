@@ -22,10 +22,10 @@ The project maintains a single `.multorum/rulebook.toml`, versioned in git. The 
 [filesets]
 AuthFiles  = "src/auth/**"
 TestFiles  = "tests/**"
-AuthTests  = "AuthFiles ∩ TestFiles"
+AuthTests  = "AuthFiles & TestFiles"
 
 [perspectives.AuthWorker]
-write = "AuthFiles \\ AuthTests"
+write = "AuthFiles - AuthTests"
 read  = "AuthTests"
 
 [perspectives.TestWorker]

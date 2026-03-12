@@ -84,9 +84,9 @@ The two primitive forms of a file set are:
 
 File sets can be composed using three operations:
 
-- **Union** (`A ∪ B`) — all files in A, all files in B, or both
-- **Intersection** (`A ∩ B`) — only files that appear in both A and B
-- **Difference** (`A \ B`) — files in A that do not appear in B
+- **Union** (`A | B`) — all files in A, all files in B, or both
+- **Intersection** (`A & B`) — only files that appear in both A and B
+- **Difference** (`A - B`) — files in A that do not appear in B
 
 These operations can be nested arbitrarily to express complex permission boundaries.
 
@@ -99,11 +99,11 @@ A file set expression can be given a name, making it referenceable by other file
 [filesets]
 AuthFiles  = "src/auth/**"
 TestFiles  = "tests/**"
-AuthTests  = "AuthFiles ∩ TestFiles"
+AuthTests  = "AuthFiles & TestFiles"
 
 # Used in a perspective
 [perspectives.WorkerA]
-write = "AuthFiles \\ AuthTests"
+write = "AuthFiles - AuthTests"
 read  = "AuthTests"
 
 [perspectives.WorkerB]
