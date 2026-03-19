@@ -62,13 +62,9 @@ impl<'a> ExprParser<'a> {
         while let Some(op) = self.try_parse_op() {
             let right = self.parse_atom()?;
             left = match op {
-                Op::Union => Expr::Union(Box::new(left), Box::new(right)),
-                Op::Intersection => {
-                    Expr::Intersection(Box::new(left), Box::new(right))
-                }
-                Op::Difference => {
-                    Expr::Difference(Box::new(left), Box::new(right))
-                }
+                | Op::Union => Expr::Union(Box::new(left), Box::new(right)),
+                | Op::Intersection => Expr::Intersection(Box::new(left), Box::new(right)),
+                | Op::Difference => Expr::Difference(Box::new(left), Box::new(right)),
             };
         }
         Ok(left)
@@ -78,24 +74,24 @@ impl<'a> ExprParser<'a> {
     fn parse_atom(&mut self) -> Result<Expr, ParseError> {
         self.skip_whitespace();
         match self.peek() {
-            None => Err(ParseError::UnexpectedEof),
-            Some('(') => {
+            | None => Err(ParseError::UnexpectedEof),
+            | Some('(') => {
                 self.advance();
                 let expr = self.parse_expr()?;
                 self.skip_whitespace();
                 match self.peek() {
-                    Some(')') => {
+                    | Some(')') => {
                         self.advance();
                         Ok(expr)
                     }
-                    _ => Err(ParseError::UnclosedParen { pos: self.pos }),
+                    | _ => Err(ParseError::UnclosedParen { pos: self.pos }),
                 }
             }
-            Some(ch) if ch.is_ascii_uppercase() => {
+            | Some(ch) if ch.is_ascii_uppercase() => {
                 let name = self.parse_name()?;
                 Ok(Expr::Ref(name))
             }
-            Some(ch) => Err(ParseError::UnexpectedChar { ch, pos: self.pos }),
+            | Some(ch) => Err(ParseError::UnexpectedChar { ch, pos: self.pos }),
         }
     }
 
@@ -118,19 +114,19 @@ impl<'a> ExprParser<'a> {
     fn try_parse_op(&mut self) -> Option<Op> {
         self.skip_whitespace();
         match self.peek()? {
-            '|' => {
+            | '|' => {
                 self.advance();
                 Some(Op::Union)
             }
-            '&' => {
+            | '&' => {
                 self.advance();
                 Some(Op::Intersection)
             }
-            '-' => {
+            | '-' => {
                 self.advance();
                 Some(Op::Difference)
             }
-            _ => None,
+            | _ => None,
         }
     }
 
@@ -178,22 +174,19 @@ mod tests {
 
     #[test]
     fn union() {
-        let expected =
-            Expr::Union(Box::new(name("A")), Box::new(name("B")));
+        let expected = Expr::Union(Box::new(name("A")), Box::new(name("B")));
         assert_eq!(parse("A | B").unwrap(), expected);
     }
 
     #[test]
     fn intersection() {
-        let expected =
-            Expr::Intersection(Box::new(name("A")), Box::new(name("B")));
+        let expected = Expr::Intersection(Box::new(name("A")), Box::new(name("B")));
         assert_eq!(parse("A & B").unwrap(), expected);
     }
 
     #[test]
     fn difference() {
-        let expected =
-            Expr::Difference(Box::new(name("A")), Box::new(name("B")));
+        let expected = Expr::Difference(Box::new(name("A")), Box::new(name("B")));
         assert_eq!(parse("A - B").unwrap(), expected);
     }
 
@@ -201,43 +194,36 @@ mod tests {
     fn left_associativity() {
         // A - B - C  →  (A - B) - C
         let ab = Expr::Difference(Box::new(name("A")), Box::new(name("B")));
-        let expected =
-            Expr::Difference(Box::new(ab), Box::new(name("C")));
+        let expected = Expr::Difference(Box::new(ab), Box::new(name("C")));
         assert_eq!(parse("A - B - C").unwrap(), expected);
     }
 
     #[test]
     fn flat_precedence() {
         // A | B & C  →  (A | B) & C  (not A | (B & C))
-        let a_or_b =
-            Expr::Union(Box::new(name("A")), Box::new(name("B")));
-        let expected =
-            Expr::Intersection(Box::new(a_or_b), Box::new(name("C")));
+        let a_or_b = Expr::Union(Box::new(name("A")), Box::new(name("B")));
+        let expected = Expr::Intersection(Box::new(a_or_b), Box::new(name("C")));
         assert_eq!(parse("A | B & C").unwrap(), expected);
     }
 
     #[test]
     fn parenthesized_grouping() {
         // A | (B & C)
-        let b_and_c =
-            Expr::Intersection(Box::new(name("B")), Box::new(name("C")));
-        let expected =
-            Expr::Union(Box::new(name("A")), Box::new(b_and_c));
+        let b_and_c = Expr::Intersection(Box::new(name("B")), Box::new(name("C")));
+        let expected = Expr::Union(Box::new(name("A")), Box::new(b_and_c));
         assert_eq!(parse("A | (B & C)").unwrap(), expected);
     }
 
     #[test]
     fn nested_parens() {
         // ((A | B))
-        let inner =
-            Expr::Union(Box::new(name("A")), Box::new(name("B")));
+        let inner = Expr::Union(Box::new(name("A")), Box::new(name("B")));
         assert_eq!(parse("((A | B))").unwrap(), inner);
     }
 
     #[test]
     fn whitespace_is_flexible() {
-        let expected =
-            Expr::Union(Box::new(name("A")), Box::new(name("B")));
+        let expected = Expr::Union(Box::new(name("A")), Box::new(name("B")));
         assert_eq!(parse("  A  |  B  ").unwrap(), expected);
         assert_eq!(parse("A|B").unwrap(), expected);
     }
@@ -255,34 +241,19 @@ mod tests {
 
     #[test]
     fn trailing_content() {
-        assert!(matches!(
-            parse("A B"),
-            Err(ParseError::TrailingContent { .. })
-        ));
+        assert!(matches!(parse("A B"), Err(ParseError::TrailingContent { .. })));
     }
 
     #[test]
     fn unexpected_char() {
-        assert!(matches!(
-            parse("A | !B"),
-            Err(ParseError::UnexpectedChar { ch: '!', .. })
-        ));
+        assert!(matches!(parse("A | !B"), Err(ParseError::UnexpectedChar { ch: '!', .. })));
     }
 
     #[test]
     fn design_doc_example() {
         // "AuthFiles - AuthSpecs - AuthTests"  →  (AuthFiles - AuthSpecs) - AuthTests
-        let step1 = Expr::Difference(
-            Box::new(name("AuthFiles")),
-            Box::new(name("AuthSpecs")),
-        );
-        let expected = Expr::Difference(
-            Box::new(step1),
-            Box::new(name("AuthTests")),
-        );
-        assert_eq!(
-            parse("AuthFiles - AuthSpecs - AuthTests").unwrap(),
-            expected
-        );
+        let step1 = Expr::Difference(Box::new(name("AuthFiles")), Box::new(name("AuthSpecs")));
+        let expected = Expr::Difference(Box::new(step1), Box::new(name("AuthTests")));
+        assert_eq!(parse("AuthFiles - AuthSpecs - AuthTests").unwrap(), expected);
     }
 }

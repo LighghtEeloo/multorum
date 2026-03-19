@@ -107,16 +107,13 @@ impl FileSetTable {
     /// references), then compiles each definition into a concrete
     /// `BTreeSet<PathBuf>`.
     pub fn compile(
-        &self,
-        files: &[std::path::PathBuf],
+        &self, files: &[std::path::PathBuf],
     ) -> Result<
         BTreeMap<Name, std::collections::BTreeSet<std::path::PathBuf>>,
         super::error::FileSetError,
     > {
-        let order =
-            super::validate::Validator::new(&self.definitions).validate()?;
-        let result =
-            super::compile::Compiler::new(files).compile(&self.definitions, &order)?;
+        let order = super::validate::Validator::new(&self.definitions).validate()?;
+        let result = super::compile::Compiler::new(files).compile(&self.definitions, &order)?;
         Ok(result)
     }
 }
@@ -138,22 +135,18 @@ impl<'de> de::Deserialize<'de> for FileSetTable {
     where
         D: de::Deserializer<'de>,
     {
-        let raw: BTreeMap<String, RawDefinition> =
-            BTreeMap::deserialize(deserializer)?;
+        let raw: BTreeMap<String, RawDefinition> = BTreeMap::deserialize(deserializer)?;
 
         let mut definitions = BTreeMap::new();
         for (key, value) in raw {
             let name = Name::new(&key).map_err(de::Error::custom)?;
             let def = match value {
-                RawDefinition::Primitive { path } => {
-                    let pattern =
-                        GlobPattern::new(&path).map_err(de::Error::custom)?;
+                | RawDefinition::Primitive { path } => {
+                    let pattern = GlobPattern::new(&path).map_err(de::Error::custom)?;
                     Definition::Primitive(pattern)
                 }
-                RawDefinition::Compound(expr_str) => {
-                    let expr = ExprParser::new(&expr_str)
-                        .parse()
-                        .map_err(de::Error::custom)?;
+                | RawDefinition::Compound(expr_str) => {
+                    let expr = ExprParser::new(&expr_str).parse().map_err(de::Error::custom)?;
                     Definition::Compound(expr)
                 }
             };

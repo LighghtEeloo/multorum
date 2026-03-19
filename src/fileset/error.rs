@@ -14,9 +14,7 @@ pub enum NameError {
     InvalidStart { name: String },
 
     /// A non-alphanumeric character was found.
-    #[error(
-        "file set name `{name}` contains invalid character `{ch}` at byte {pos}"
-    )]
+    #[error("file set name `{name}` contains invalid character `{ch}` at byte {pos}")]
     InvalidChar { name: String, ch: char, pos: usize },
 }
 
@@ -57,10 +55,7 @@ pub enum ParseError {
 pub enum ValidationError {
     /// A compound expression references a name not defined in the table.
     #[error("undefined file set `{name}`, referenced by `{referenced_by}`")]
-    Undefined {
-        name: super::Name,
-        referenced_by: super::Name,
-    },
+    Undefined { name: super::Name, referenced_by: super::Name },
 
     /// A cycle was detected in the dependency graph.
     #[error("cycle detected in file set definitions: {cycle}")]
@@ -76,10 +71,7 @@ pub enum CompileError {
 
     /// Filesystem walking failed.
     #[error("failed to walk directory `{}`: {reason}", root.display())]
-    Walk {
-        root: std::path::PathBuf,
-        reason: String,
-    },
+    Walk { root: std::path::PathBuf, reason: String },
 }
 
 /// Top-level error for the file set pipeline

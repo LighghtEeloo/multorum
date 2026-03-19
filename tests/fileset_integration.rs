@@ -7,9 +7,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 
-use multorum::fileset::{
-    FileSetError, FileSetTable, Name, ValidationError, enumerate_files,
-};
+use multorum::fileset::{FileSetError, FileSetTable, Name, ValidationError, enumerate_files};
 
 fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
     strs.iter().map(PathBuf::from).collect()
@@ -58,10 +56,7 @@ fn full_pipeline_with_tempdir() {
     let table: FileSetTable = toml::from_str(toml_str).unwrap();
     let result = table.compile(&files).unwrap();
 
-    assert_eq!(
-        result[&n("SpecFiles")],
-        path_set(&["api/api.spec.md", "auth/auth.spec.md"])
-    );
+    assert_eq!(result[&n("SpecFiles")], path_set(&["api/api.spec.md", "auth/auth.spec.md"]));
     assert_eq!(
         result[&n("TestFiles")],
         path_set(&["api/test/api_test.rs", "auth/test/login_test.rs"])
@@ -75,14 +70,8 @@ fn full_pipeline_with_tempdir() {
             "auth/test/login_test.rs",
         ])
     );
-    assert_eq!(
-        result[&n("AuthSpecs")],
-        path_set(&["auth/auth.spec.md"])
-    );
-    assert_eq!(
-        result[&n("AuthTests")],
-        path_set(&["auth/test/login_test.rs"])
-    );
+    assert_eq!(result[&n("AuthSpecs")], path_set(&["auth/auth.spec.md"]));
+    assert_eq!(result[&n("AuthTests")], path_set(&["auth/test/login_test.rs"]));
 }
 
 #[test]
@@ -117,10 +106,7 @@ fn difference_subtracts_correctly() {
     let result = table.compile(&files).unwrap();
 
     // Only production auth files remain.
-    assert_eq!(
-        result[&n("AuthImpl")],
-        path_set(&["auth/login.rs", "auth/logout.rs"])
-    );
+    assert_eq!(result[&n("AuthImpl")], path_set(&["auth/login.rs", "auth/logout.rs"]));
 }
 
 #[test]
@@ -135,10 +121,7 @@ fn intersection_narrows_correctly() {
     let table: FileSetTable = toml::from_str(toml_str).unwrap();
     let result = table.compile(&files).unwrap();
 
-    assert_eq!(
-        result[&n("ApiTests")],
-        path_set(&["api/test/api_test.rs"])
-    );
+    assert_eq!(result[&n("ApiTests")], path_set(&["api/test/api_test.rs"]));
 }
 
 #[test]
@@ -160,21 +143,12 @@ fn parenthesized_grouping_changes_result() {
         Grouped = "AuthFiles | (ApiFiles & SpecFiles)"
     "#;
 
-    let flat_result = toml::from_str::<FileSetTable>(flat)
-        .unwrap()
-        .compile(&files)
-        .unwrap();
-    let grouped_result = toml::from_str::<FileSetTable>(grouped)
-        .unwrap()
-        .compile(&files)
-        .unwrap();
+    let flat_result = toml::from_str::<FileSetTable>(flat).unwrap().compile(&files).unwrap();
+    let grouped_result = toml::from_str::<FileSetTable>(grouped).unwrap().compile(&files).unwrap();
 
     // Flat precedence: union first, then intersect with SpecFiles.
     // Result: all files in auth + api, intersected with spec files.
-    assert_eq!(
-        flat_result[&n("Flat")],
-        path_set(&["api/api.spec.md", "auth/auth.spec.md"])
-    );
+    assert_eq!(flat_result[&n("Flat")], path_set(&["api/api.spec.md", "auth/auth.spec.md"]));
 
     // Grouped: ApiFiles & SpecFiles first, then union with all auth.
     // Result: api/api.spec.md plus all auth files.
@@ -224,10 +198,7 @@ fn all_primitives_no_compounds() {
             "auth/test/login_test.rs",
         ])
     );
-    assert_eq!(
-        result[&n("MarkdownFiles")],
-        path_set(&["api/api.spec.md", "auth/auth.spec.md"])
-    );
+    assert_eq!(result[&n("MarkdownFiles")], path_set(&["api/api.spec.md", "auth/auth.spec.md"]));
 }
 
 #[test]
@@ -248,11 +219,7 @@ fn chained_compounds() {
     // Only production source files remain.
     assert_eq!(
         result[&n("NonSpecNonTest")],
-        path_set(&[
-            "api/handler.rs",
-            "auth/login.rs",
-            "auth/logout.rs",
-        ])
+        path_set(&["api/handler.rs", "auth/login.rs", "auth/logout.rs",])
     );
 }
 
@@ -265,10 +232,7 @@ fn validation_rejects_undefined_reference() {
     "#;
     let table: FileSetTable = toml::from_str(toml_str).unwrap();
     let err = table.compile(&files).unwrap_err();
-    assert!(matches!(
-        err,
-        FileSetError::Validation(ValidationError::Undefined { .. })
-    ));
+    assert!(matches!(err, FileSetError::Validation(ValidationError::Undefined { .. })));
 }
 
 #[test]
@@ -280,10 +244,7 @@ fn validation_rejects_cycle() {
     let table: FileSetTable = toml::from_str(toml_str).unwrap();
     let (_dir, files) = setup_tempdir();
     let err = table.compile(&files).unwrap_err();
-    assert!(matches!(
-        err,
-        FileSetError::Validation(ValidationError::Cycle { .. })
-    ));
+    assert!(matches!(err, FileSetError::Validation(ValidationError::Cycle { .. })));
 }
 
 #[test]
@@ -298,7 +259,6 @@ fn enumerate_files_finds_all() {
         fs::write(&full, "").unwrap();
     }
 
-    let files: BTreeSet<PathBuf> =
-        enumerate_files(root).unwrap().into_iter().collect();
+    let files: BTreeSet<PathBuf> = enumerate_files(root).unwrap().into_iter().collect();
     assert_eq!(files, path_set(&["a.txt", "sub/b.txt", "sub/deep/c.txt"]));
 }

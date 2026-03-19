@@ -19,9 +19,7 @@ pub enum PerspectiveNameError {
     InvalidStart { name: String },
 
     /// A non-alphanumeric character was found.
-    #[error(
-        "perspective name `{name}` contains invalid character `{ch}` at byte {pos}"
-    )]
+    #[error("perspective name `{name}` contains invalid character `{ch}` at byte {pos}")]
     InvalidChar { name: String, ch: char, pos: usize },
 }
 
@@ -36,22 +34,14 @@ pub enum SafetyViolation {
         "write-write overlap between `{left}` and `{right}`: {} shared file(s)",
         files.len()
     )]
-    WriteWriteOverlap {
-        left: PerspectiveName,
-        right: PerspectiveName,
-        files: BTreeSet<PathBuf>,
-    },
+    WriteWriteOverlap { left: PerspectiveName, right: PerspectiveName, files: BTreeSet<PathBuf> },
 
     /// A file is written by one perspective and read by another.
     #[error(
         "write-read overlap: `{writer}` writes and `{reader}` reads {} shared file(s)",
         files.len()
     )]
-    WriteReadOverlap {
-        writer: PerspectiveName,
-        reader: PerspectiveName,
-        files: BTreeSet<PathBuf>,
-    },
+    WriteReadOverlap { writer: PerspectiveName, reader: PerspectiveName, files: BTreeSet<PathBuf> },
 }
 
 /// Top-level error for the perspective pipeline.
@@ -59,10 +49,7 @@ pub enum SafetyViolation {
 pub enum PerspectiveError {
     /// A file set expression failed to parse.
     #[error("in perspective `{perspective}`: {source}")]
-    Parse {
-        perspective: PerspectiveName,
-        source: crate::fileset::ParseError,
-    },
+    Parse { perspective: PerspectiveName, source: crate::fileset::ParseError },
 
     /// The safety property was violated.
     #[error("{0}")]

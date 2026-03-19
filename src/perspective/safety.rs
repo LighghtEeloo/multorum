@@ -24,9 +24,7 @@ pub struct SafetyValidator<'a> {
 
 impl<'a> SafetyValidator<'a> {
     /// Create a validator for the given compiled perspectives.
-    pub fn new(
-        perspectives: &'a BTreeMap<PerspectiveName, CompiledPerspective>,
-    ) -> Self {
+    pub fn new(perspectives: &'a BTreeMap<PerspectiveName, CompiledPerspective>) -> Self {
         Self { perspectives }
     }
 
@@ -48,18 +46,12 @@ impl<'a> SafetyValidator<'a> {
 
     /// Check the safety property between two distinct perspectives.
     fn check_pair(
-        &self,
-        name_p: &PerspectiveName,
-        p: &CompiledPerspective,
-        name_q: &PerspectiveName,
+        &self, name_p: &PerspectiveName, p: &CompiledPerspective, name_q: &PerspectiveName,
         q: &CompiledPerspective,
     ) -> Result<(), SafetyViolation> {
         // write(P) ∩ write(Q) = ∅
-        let ww: std::collections::BTreeSet<_> = p
-            .write()
-            .intersection(q.write())
-            .cloned()
-            .collect();
+        let ww: std::collections::BTreeSet<_> =
+            p.write().intersection(q.write()).cloned().collect();
         if !ww.is_empty() {
             return Err(SafetyViolation::WriteWriteOverlap {
                 left: name_p.clone(),
@@ -69,11 +61,7 @@ impl<'a> SafetyValidator<'a> {
         }
 
         // write(P) ∩ read(Q) = ∅
-        let wr: std::collections::BTreeSet<_> = p
-            .write()
-            .intersection(q.read())
-            .cloned()
-            .collect();
+        let wr: std::collections::BTreeSet<_> = p.write().intersection(q.read()).cloned().collect();
         if !wr.is_empty() {
             return Err(SafetyViolation::WriteReadOverlap {
                 writer: name_p.clone(),
@@ -83,11 +71,7 @@ impl<'a> SafetyValidator<'a> {
         }
 
         // write(Q) ∩ read(P) = ∅
-        let rw: std::collections::BTreeSet<_> = q
-            .write()
-            .intersection(p.read())
-            .cloned()
-            .collect();
+        let rw: std::collections::BTreeSet<_> = q.write().intersection(p.read()).cloned().collect();
         if !rw.is_empty() {
             return Err(SafetyViolation::WriteReadOverlap {
                 writer: name_q.clone(),

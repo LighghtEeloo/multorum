@@ -10,8 +10,7 @@ use std::path::PathBuf;
 
 use multorum::fileset::{FileSetTable, enumerate_files};
 use multorum::perspective::{
-    CompiledPerspectives, PerspectiveError, PerspectiveName,
-    PerspectiveTable, SafetyViolation,
+    CompiledPerspectives, PerspectiveError, PerspectiveName, PerspectiveTable, SafetyViolation,
 };
 
 fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
@@ -20,11 +19,8 @@ fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
 
 /// Create the design-doc file tree in a temporary directory and
 /// return compiled file sets ready for perspective compilation.
-fn setup_design_doc_filesets(
-) -> (
-    tempfile::TempDir,
-    std::collections::BTreeMap<multorum::fileset::Name, BTreeSet<PathBuf>>,
-) {
+fn setup_design_doc_filesets()
+-> (tempfile::TempDir, std::collections::BTreeMap<multorum::fileset::Name, BTreeSet<PathBuf>>) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -73,26 +69,13 @@ fn full_pipeline_with_tempdir() {
     let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
     let compiled = table.compile(&filesets).unwrap();
 
-    let impl_p = compiled
-        .get(&PerspectiveName::new("AuthImplementor").unwrap())
-        .unwrap();
-    assert_eq!(
-        *impl_p.write(),
-        path_set(&["auth/login.rs", "auth/logout.rs"])
-    );
+    let impl_p = compiled.get(&PerspectiveName::new("AuthImplementor").unwrap()).unwrap();
+    assert_eq!(*impl_p.write(), path_set(&["auth/login.rs", "auth/logout.rs"]));
     assert_eq!(*impl_p.read(), path_set(&["auth/auth.spec.md"]));
 
-    let test_p = compiled
-        .get(&PerspectiveName::new("AuthTester").unwrap())
-        .unwrap();
-    assert_eq!(
-        *test_p.write(),
-        path_set(&["auth/test/login_test.rs"])
-    );
-    assert_eq!(
-        *test_p.read(),
-        path_set(&["auth/auth.spec.md", "auth/test/login_test.rs"])
-    );
+    let test_p = compiled.get(&PerspectiveName::new("AuthTester").unwrap()).unwrap();
+    assert_eq!(*test_p.write(), path_set(&["auth/test/login_test.rs"]));
+    assert_eq!(*test_p.read(), path_set(&["auth/auth.spec.md", "auth/test/login_test.rs"]));
 }
 
 #[test]
@@ -110,10 +93,7 @@ fn safety_rejects_write_write_overlap() {
     "#;
     let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
     let err = table.compile(&filesets).unwrap_err();
-    assert!(matches!(
-        err,
-        PerspectiveError::Safety(SafetyViolation::WriteWriteOverlap { .. })
-    ));
+    assert!(matches!(err, PerspectiveError::Safety(SafetyViolation::WriteWriteOverlap { .. })));
 }
 
 #[test]
@@ -133,10 +113,7 @@ fn safety_rejects_write_read_overlap() {
     "#;
     let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
     let err = table.compile(&filesets).unwrap_err();
-    assert!(matches!(
-        err,
-        PerspectiveError::Safety(SafetyViolation::WriteReadOverlap { .. })
-    ));
+    assert!(matches!(err, PerspectiveError::Safety(SafetyViolation::WriteReadOverlap { .. })));
 }
 
 #[test]
@@ -187,11 +164,7 @@ fn three_disjoint_perspectives() {
     assert_eq!(compiled.len(), 3);
 
     // Verify write sets are disjoint by checking sizes sum correctly.
-    let total_write_files: usize = compiled
-        .perspectives()
-        .values()
-        .map(|p| p.write().len())
-        .sum();
+    let total_write_files: usize = compiled.perspectives().values().map(|p| p.write().len()).sum();
     let union_size: usize = compiled
         .perspectives()
         .values()
@@ -222,12 +195,8 @@ fn shared_reads_are_allowed() {
     let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
     let compiled: CompiledPerspectives = table.compile(&filesets).unwrap();
 
-    let p = compiled
-        .get(&PerspectiveName::new("P").unwrap())
-        .unwrap();
-    let q = compiled
-        .get(&PerspectiveName::new("Q").unwrap())
-        .unwrap();
+    let p = compiled.get(&PerspectiveName::new("P").unwrap()).unwrap();
+    let q = compiled.get(&PerspectiveName::new("Q").unwrap()).unwrap();
 
     // Both read AuthSpecs.
     assert_eq!(*p.read(), path_set(&["auth/auth.spec.md"]));

@@ -42,7 +42,7 @@ impl Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     // ── Rulebook instructions ───────────────────────────────────
-
+    //
     /// Manage the active rulebook.
     Rulebook {
         #[command(subcommand)]
@@ -50,7 +50,7 @@ pub enum Command {
     },
 
     // ── Worker lifecycle instructions ───────────────────────────
-
+    //
     /// Create a sub-codebase for a perspective.
     ///
     /// Compiles the perspective's file sets, creates a git worktree at
@@ -91,7 +91,7 @@ pub enum Command {
     },
 
     // ── Integration instructions ────────────────────────────────
-
+    //
     /// Run the pre-merge pipeline and integrate a worker's commit.
     ///
     /// Gate 1 (file set check) always runs. Gate 2 (user-defined checks)
@@ -111,7 +111,7 @@ pub enum Command {
     },
 
     // ── Worker-facing instructions ──────────────────────────────
-
+    //
     /// Signal that a worker is blocked.
     ///
     /// Transitions the worker to BLOCKED and notifies the orchestrator.
@@ -127,7 +127,7 @@ pub enum Command {
     },
 
     // ── Query instructions ──────────────────────────────────────
-
+    //
     /// Query the current state of all workers.
     ///
     /// Returns the active rulebook commit hash, the state of each
@@ -164,10 +164,10 @@ impl RulebookCommand {
     /// Execute the rulebook instruction.
     pub fn execute(self) {
         match self {
-            Self::Switch { commit } => {
+            | Self::Switch { commit } => {
                 todo!("rulebook switch: activate rulebook at {commit}")
             }
-            Self::Validate { commit } => {
+            | Self::Validate { commit } => {
                 todo!("rulebook validate: dry-run validation at {commit}")
             }
         }
@@ -178,34 +178,28 @@ impl Command {
     /// Execute the orchestrator instruction.
     pub fn execute(self) {
         match self {
-            Self::Rulebook { command } => command.execute(),
-            Self::Provision { perspective } => {
+            | Self::Rulebook { command } => command.execute(),
+            | Self::Provision { perspective } => {
                 todo!("provision: create sub-codebase for {perspective}")
             }
-            Self::Resolve { perspective } => {
+            | Self::Resolve { perspective } => {
                 todo!("resolve: unblock worker {perspective}")
             }
-            Self::Revise { perspective } => {
+            | Self::Revise { perspective } => {
                 todo!("revise: return {perspective} to active")
             }
-            Self::Discard { perspective } => {
+            | Self::Discard { perspective } => {
                 todo!("discard: tear down {perspective}")
             }
-            Self::Integrate {
-                perspective,
-                skip_checks,
-            } => {
+            | Self::Integrate { perspective, skip_checks } => {
                 let _ = skip_checks;
                 todo!("integrate: run pre-merge pipeline for {perspective}")
             }
-            Self::Report {
-                perspective,
-                message,
-            } => {
+            | Self::Report { perspective, message } => {
                 let _ = message;
                 todo!("report: worker {perspective} is blocked")
             }
-            Self::Status => {
+            | Self::Status => {
                 todo!("status: query all worker states")
             }
         }

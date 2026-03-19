@@ -75,28 +75,22 @@ impl<'a> Validator<'a> {
         let mut path: Vec<&Name> = Vec::new();
 
         fn visit<'a>(
-            name: &'a Name,
-            definitions: &'a BTreeMap<Name, Definition>,
-            color: &mut BTreeMap<&'a Name, Color>,
-            order: &mut Vec<Name>,
-            path: &mut Vec<&'a Name>,
+            name: &'a Name, definitions: &'a BTreeMap<Name, Definition>,
+            color: &mut BTreeMap<&'a Name, Color>, order: &mut Vec<Name>, path: &mut Vec<&'a Name>,
         ) -> Result<(), ValidationError> {
             match color.get(name) {
-                Some(Color::Black) => return Ok(()),
-                Some(Color::Gray) => {
+                | Some(Color::Black) => return Ok(()),
+                | Some(Color::Gray) => {
                     // Build the cycle string from the path.
-                    let start =
-                        path.iter().position(|n| *n == name).unwrap();
+                    let start = path.iter().position(|n| *n == name).unwrap();
                     let cycle: Vec<&str> = path[start..]
                         .iter()
                         .map(|n| n.as_str())
                         .chain(std::iter::once(name.as_str()))
                         .collect();
-                    return Err(ValidationError::Cycle {
-                        cycle: cycle.join(" -> "),
-                    });
+                    return Err(ValidationError::Cycle { cycle: cycle.join(" -> ") });
                 }
-                _ => {}
+                | _ => {}
             }
 
             color.insert(name, Color::Gray);
@@ -122,13 +116,7 @@ impl<'a> Validator<'a> {
         let names: Vec<&Name> = self.definitions.keys().collect();
         for name in names {
             if color[name] == Color::White {
-                visit(
-                    name,
-                    self.definitions,
-                    &mut color,
-                    &mut order,
-                    &mut path,
-                )?;
+                visit(name, self.definitions, &mut color, &mut order, &mut path)?;
             }
         }
 
@@ -144,12 +132,10 @@ impl<'a> Validator<'a> {
 
     fn collect_refs_inner(expr: &Expr, refs: &mut BTreeSet<Name>) {
         match expr {
-            Expr::Ref(name) => {
+            | Expr::Ref(name) => {
                 refs.insert(name.clone());
             }
-            Expr::Union(a, b)
-            | Expr::Intersection(a, b)
-            | Expr::Difference(a, b) => {
+            | Expr::Union(a, b) | Expr::Intersection(a, b) | Expr::Difference(a, b) => {
                 Self::collect_refs_inner(a, refs);
                 Self::collect_refs_inner(b, refs);
             }
@@ -183,28 +169,21 @@ mod tests {
         ]);
         let order = Validator::new(&defs).validate().unwrap();
         // AuthSpecs must come after both AuthFiles and SpecFiles.
-        let pos =
-            |name: &str| order.iter().position(|n| n.as_str() == name).unwrap();
+        let pos = |name: &str| order.iter().position(|n| n.as_str() == name).unwrap();
         assert!(pos("AuthFiles") < pos("AuthSpecs"));
         assert!(pos("SpecFiles") < pos("AuthSpecs"));
     }
 
     #[test]
     fn all_primitives() {
-        let defs = BTreeMap::from([
-            (n("A"), prim("a/**")),
-            (n("B"), prim("b/**")),
-        ]);
+        let defs = BTreeMap::from([(n("A"), prim("a/**")), (n("B"), prim("b/**"))]);
         let order = Validator::new(&defs).validate().unwrap();
         assert_eq!(order.len(), 2);
     }
 
     #[test]
     fn undefined_reference() {
-        let defs = BTreeMap::from([(
-            n("X"),
-            compound("Y & Z"),
-        )]);
+        let defs = BTreeMap::from([(n("X"), compound("Y & Z"))]);
         let err = Validator::new(&defs).validate().unwrap_err();
         assert!(matches!(err, ValidationError::Undefined { .. }));
     }
@@ -227,13 +206,13 @@ mod tests {
         ]);
         let err = Validator::new(&defs).validate().unwrap_err();
         match &err {
-            ValidationError::Cycle { cycle } => {
+            | ValidationError::Cycle { cycle } => {
                 // The cycle should contain A, B, C.
                 assert!(cycle.contains("A"));
                 assert!(cycle.contains("B"));
                 assert!(cycle.contains("C"));
             }
-            _ => panic!("expected Cycle error"),
+            | _ => panic!("expected Cycle error"),
         }
     }
 
@@ -249,8 +228,7 @@ mod tests {
         let order = Validator::new(&defs).validate().unwrap();
         assert_eq!(order.len(), 5);
 
-        let pos =
-            |name: &str| order.iter().position(|n| n.as_str() == name).unwrap();
+        let pos = |name: &str| order.iter().position(|n| n.as_str() == name).unwrap();
         assert!(pos("AuthFiles") < pos("AuthSpecs"));
         assert!(pos("SpecFiles") < pos("AuthSpecs"));
         assert!(pos("AuthFiles") < pos("AuthTests"));

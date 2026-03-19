@@ -76,31 +76,19 @@ impl<'de> de::Deserialize<'de> for PerspectiveTable {
     where
         D: de::Deserializer<'de>,
     {
-        let raw: BTreeMap<String, RawPerspective> =
-            BTreeMap::deserialize(deserializer)?;
+        let raw: BTreeMap<String, RawPerspective> = BTreeMap::deserialize(deserializer)?;
 
         let mut declarations = BTreeMap::new();
         for (key, value) in raw {
-            let name =
-                PerspectiveName::new(&key).map_err(de::Error::custom)?;
+            let name = PerspectiveName::new(&key).map_err(de::Error::custom)?;
 
-            let read = ExprParser::new(&value.read)
-                .parse()
-                .map_err(|e| {
-                    de::Error::custom(PerspectiveError::Parse {
-                        perspective: name.clone(),
-                        source: e,
-                    })
-                })?;
+            let read = ExprParser::new(&value.read).parse().map_err(|e| {
+                de::Error::custom(PerspectiveError::Parse { perspective: name.clone(), source: e })
+            })?;
 
-            let write = ExprParser::new(&value.write)
-                .parse()
-                .map_err(|e| {
-                    de::Error::custom(PerspectiveError::Parse {
-                        perspective: name.clone(),
-                        source: e,
-                    })
-                })?;
+            let write = ExprParser::new(&value.write).parse().map_err(|e| {
+                de::Error::custom(PerspectiveError::Parse { perspective: name.clone(), source: e })
+            })?;
 
             declarations.insert(name, PerspectiveDecl { read, write });
         }
@@ -144,10 +132,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_read_expr() {
-        assert!(matches!(
-            ExprParser::new("A |").parse(),
-            Err(ParseError::UnexpectedEof)
-        ));
+        assert!(matches!(ExprParser::new("A |").parse(), Err(ParseError::UnexpectedEof)));
     }
 
     #[test]
@@ -164,10 +149,7 @@ mod tests {
             [Bad]
             read = "A"
         "#;
-        assert!(matches!(
-            toml::from_str::<PerspectiveTable>(toml_str),
-            Err(_)
-        ));
+        assert!(matches!(toml::from_str::<PerspectiveTable>(toml_str), Err(_)));
     }
 
     #[test]
@@ -176,10 +158,7 @@ mod tests {
             [Bad]
             write = "A"
         "#;
-        assert!(matches!(
-            toml::from_str::<PerspectiveTable>(toml_str),
-            Err(_)
-        ));
+        assert!(matches!(toml::from_str::<PerspectiveTable>(toml_str), Err(_)));
     }
 
     #[test]

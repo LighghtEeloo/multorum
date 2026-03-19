@@ -24,17 +24,11 @@ impl PerspectiveName {
     pub fn new(s: &str) -> Result<Self, PerspectiveNameError> {
         let first = s.chars().next().ok_or(PerspectiveNameError::Empty)?;
         if !first.is_ascii_uppercase() {
-            return Err(PerspectiveNameError::InvalidStart {
-                name: s.to_owned(),
-            });
+            return Err(PerspectiveNameError::InvalidStart { name: s.to_owned() });
         }
         for (pos, ch) in s.char_indices().skip(1) {
             if !ch.is_ascii_alphanumeric() {
-                return Err(PerspectiveNameError::InvalidChar {
-                    name: s.to_owned(),
-                    ch,
-                    pos,
-                });
+                return Err(PerspectiveNameError::InvalidChar { name: s.to_owned(), ch, pos });
             }
         }
         Ok(Self(s.to_owned()))
@@ -87,14 +81,7 @@ mod tests {
     #[test]
     fn underscore_is_rejected() {
         let err = PerspectiveName::new("Auth_Impl").unwrap_err();
-        assert!(matches!(
-            err,
-            PerspectiveNameError::InvalidChar {
-                ch: '_',
-                pos: 4,
-                ..
-            }
-        ));
+        assert!(matches!(err, PerspectiveNameError::InvalidChar { ch: '_', pos: 4, .. }));
     }
 
     #[test]

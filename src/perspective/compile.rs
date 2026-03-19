@@ -52,9 +52,7 @@ pub struct CompiledPerspectives {
 
 impl CompiledPerspectives {
     /// The compiled perspectives.
-    pub fn perspectives(
-        &self,
-    ) -> &BTreeMap<PerspectiveName, CompiledPerspective> {
+    pub fn perspectives(&self) -> &BTreeMap<PerspectiveName, CompiledPerspective> {
         &self.inner
     }
 
@@ -84,20 +82,13 @@ impl PerspectiveTable {
     /// Returns [`CompiledPerspectives`] on success, which is
     /// guaranteed to satisfy the safety property.
     pub fn compile(
-        &self,
-        compiled_filesets: &BTreeMap<fileset::Name, BTreeSet<PathBuf>>,
+        &self, compiled_filesets: &BTreeMap<fileset::Name, BTreeSet<PathBuf>>,
     ) -> Result<CompiledPerspectives, PerspectiveError> {
         let mut compiled = BTreeMap::new();
 
         for (name, decl) in self.declarations() {
-            let read = fileset::Compiler::evaluate(
-                decl.read(),
-                compiled_filesets,
-            );
-            let write = fileset::Compiler::evaluate(
-                decl.write(),
-                compiled_filesets,
-            );
+            let read = fileset::Compiler::evaluate(decl.read(), compiled_filesets);
+            let write = fileset::Compiler::evaluate(decl.write(), compiled_filesets);
 
             if write.is_empty() {
                 tracing::warn!(
@@ -121,8 +112,7 @@ mod tests {
     use crate::fileset;
 
     /// Build compiled file sets from the design doc example.
-    fn design_doc_filesets(
-    ) -> BTreeMap<fileset::Name, BTreeSet<PathBuf>> {
+    fn design_doc_filesets() -> BTreeMap<fileset::Name, BTreeSet<PathBuf>> {
         let files: Vec<PathBuf> = [
             "auth/login.rs",
             "auth/logout.rs",
@@ -170,25 +160,12 @@ mod tests {
 
         assert_eq!(compiled.len(), 2);
 
-        let impl_p = compiled
-            .get(&PerspectiveName::new("AuthImplementor").unwrap())
-            .unwrap();
-        assert_eq!(
-            *impl_p.write(),
-            path_set(&["auth/login.rs", "auth/logout.rs"])
-        );
-        assert_eq!(
-            *impl_p.read(),
-            path_set(&["auth/auth.spec.md"])
-        );
+        let impl_p = compiled.get(&PerspectiveName::new("AuthImplementor").unwrap()).unwrap();
+        assert_eq!(*impl_p.write(), path_set(&["auth/login.rs", "auth/logout.rs"]));
+        assert_eq!(*impl_p.read(), path_set(&["auth/auth.spec.md"]));
 
-        let test_p = compiled
-            .get(&PerspectiveName::new("AuthTester").unwrap())
-            .unwrap();
-        assert_eq!(
-            *test_p.write(),
-            path_set(&["auth/test/login_test.rs"])
-        );
+        let test_p = compiled.get(&PerspectiveName::new("AuthTester").unwrap()).unwrap();
+        assert_eq!(*test_p.write(), path_set(&["auth/test/login_test.rs"]));
     }
 
     #[test]
@@ -207,9 +184,10 @@ mod tests {
         let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
         let err = table.compile(&filesets).unwrap_err();
         assert!(
-            matches!(err, PerspectiveError::Safety(
-                super::super::SafetyViolation::WriteWriteOverlap { .. }
-            )),
+            matches!(
+                err,
+                PerspectiveError::Safety(super::super::SafetyViolation::WriteWriteOverlap { .. })
+            ),
             "expected WriteWriteOverlap, got: {err:?}"
         );
     }
@@ -231,9 +209,10 @@ mod tests {
         let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
         let err = table.compile(&filesets).unwrap_err();
         assert!(
-            matches!(err, PerspectiveError::Safety(
-                super::super::SafetyViolation::WriteReadOverlap { .. }
-            )),
+            matches!(
+                err,
+                PerspectiveError::Safety(super::super::SafetyViolation::WriteReadOverlap { .. })
+            ),
             "expected WriteReadOverlap, got: {err:?}"
         );
     }
