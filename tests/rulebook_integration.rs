@@ -5,10 +5,11 @@
 //! temporary directory → validation of compiled checks and perspectives.
 
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 
 use multorum::perspective::PerspectiveError;
-use multorum::rulebook::{CheckPolicy, Rulebook, RulebookError};
+use multorum::rulebook::{CheckName, Rulebook, RulebookError};
 
 /// Create a temporary workspace containing a canonical
 /// `.multorum/rulebook.toml` and a small project tree.
@@ -29,33 +30,19 @@ fn setup_workspace(rulebook_toml: &str, file_paths: &[&str]) -> tempfile::TempDi
     dir
 }
 
-fn design_doc_rulebook() -> &'static str {
-    r#"
-        [filesets]
-        SpecFiles.path = "**/*.spec.md"
-        TestFiles.path = "**/test/**"
-        AuthFiles.path = "auth/**"
-        AuthSpecs = "AuthFiles & SpecFiles"
-        AuthTests = "AuthFiles & TestFiles"
-
-        [perspectives.AuthImplementor]
-        read  = "AuthSpecs"
-        write = "AuthFiles - AuthSpecs - AuthTests"
-
-        [perspectives.AuthTester]
-        read  = "AuthSpecs"
-        write = "AuthTests"
-
-        [checks]
-        pipeline = ["lint", "test"]
-
-        [checks.lint]
-        command = "cargo clippy"
-
-        [checks.test]
-        command = "cargo test"
-        policy = "skippable"
-    "#
+/// Extract the fenced TOML rulebook example from `DESIGN.md`.
+///
+/// The integration tests compile the exact documented example so the
+/// architecture reference stays aligned with the rulebook parser.
+fn design_doc_rulebook() -> String {
+    let design_doc =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("DESIGN.md")).unwrap();
+    let (_, after_heading) =
+        design_doc.split_once("### Example Rulebook").expect("DESIGN.md must contain the example");
+    let (_, after_fence) =
+        after_heading.split_once("```toml").expect("example rulebook must be fenced as TOML");
+    let (rulebook, _) = after_fence.split_once("```").expect("example rulebook fence must close");
+    rulebook.trim().to_owned()
 }
 
 fn design_doc_files() -> &'static [&'static str] {
@@ -72,21 +59,22 @@ fn design_doc_files() -> &'static [&'static str] {
 
 #[test]
 fn full_pipeline_from_workspace_root() {
-    let workspace = setup_workspace(design_doc_rulebook(), design_doc_files());
+    let rulebook_toml = design_doc_rulebook();
+    let workspace = setup_workspace(&rulebook_toml, design_doc_files());
 
     let rulebook = Rulebook::from_workspace_root(workspace.path()).unwrap();
     let compiled = rulebook.compile_for_root(workspace.path()).unwrap();
 
     assert_eq!(compiled.filesets().len(), 5);
     assert_eq!(compiled.perspectives().len(), 2);
-    assert_eq!(compiled.checks().len(), 2);
+    assert_eq!(compiled.checks().len(), 3);
     assert_eq!(
-        compiled
-            .checks()
-            .get(&multorum::rulebook::CheckName::new("test").unwrap())
-            .unwrap()
-            .policy(),
-        CheckPolicy::Skippable
+        compiled.checks().pipeline(),
+        &[
+            CheckName::new("fmt").unwrap(),
+            CheckName::new("clippy").unwrap(),
+            CheckName::new("test").unwrap()
+        ]
     );
 
     let summaries = compiled.perspective_summaries();
@@ -95,7 +83,7 @@ fn full_pipeline_from_workspace_root() {
     assert_eq!(summaries[0].read_count, 1);
     assert_eq!(summaries[0].write_count, 2);
     assert_eq!(summaries[1].name.as_str(), "AuthTester");
-    assert_eq!(summaries[1].read_count, 1);
+    assert_eq!(summaries[1].read_count, 2);
     assert_eq!(summaries[1].write_count, 1);
 }
 
@@ -162,7 +150,8 @@ fn compile_surfaces_perspective_undefined_fileset_errors() {
 
 #[test]
 fn compile_with_explicit_file_list_matches_workspace_compilation() {
-    let workspace = setup_workspace(design_doc_rulebook(), design_doc_files());
+    let rulebook_toml = design_doc_rulebook();
+    let workspace = setup_workspace(&rulebook_toml, design_doc_files());
     let rulebook = Rulebook::from_workspace_root(workspace.path()).unwrap();
 
     let explicit_files = design_doc_files().iter().map(PathBuf::from).collect::<Vec<_>>();

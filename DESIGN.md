@@ -207,6 +207,42 @@ A rulebook contains:
 - **Perspective declarations** — named roles, each with a write set and a read set
 - **Project-level settings** — the pre-merge check pipeline and its policies
 
+### Example Rulebook
+
+The following example shows a small but complete rulebook:
+
+```toml
+[filesets]
+SpecFiles.path = "**/*.spec.md"
+TestFiles.path = "**/test/**"
+
+AuthFiles.path = "auth/**"
+AuthSpecs = "AuthFiles & SpecFiles"
+AuthTests = "AuthFiles & TestFiles"
+
+[perspectives.AuthImplementor]
+read  = "AuthSpecs"
+write = "AuthFiles - AuthSpecs - AuthTests"
+
+[perspectives.AuthTester]
+read  = "AuthSpecs | AuthTests"
+write = "AuthTests"
+
+[checks]
+pipeline = ["fmt", "clippy", "test"]
+
+[checks.fmt]
+command = "cargo fmt --check"
+
+[checks.clippy]
+command = "cargo clippy --workspace --all-targets -- -D warnings"
+
+[checks.test]
+command = "cargo test --workspace"
+```
+
+This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `checks` table to make the example complete. `AuthImplementor` and `AuthTester` may work in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across perspectives. The `checks` table defines the ordered pre-merge pipeline that every submitted change must pass before integration.
+
 ### Immutability via Version Control
 
 Because the rulebook is a version-controlled file, every historical state of it is addressable by a git commit hash. When Multorum activates a rulebook, it pins to a specific commit. This means the rulebook governing an active set of workers is immutable by construction — changing the file on disk does not affect active workers until the orchestrator explicitly instructs Multorum to switch rulebooks.
@@ -484,9 +520,15 @@ The project may define a pipeline of additional checks in the rulebook: building
 ```toml
 [checks]
 pipeline = ["lint", "build", "test"]
-lint     = "npm run lint"
-build    = "npm run build"
-test     = "npm run test"
+
+[checks.lint]
+command = "npm run lint"
+
+[checks.build]
+command = "npm run build"
+
+[checks.test]
+command = "npm run test"
 ```
 
 ### Evidence and Trust Negotiation
