@@ -19,7 +19,8 @@ use serde::{Deserialize, Serialize};
 use crate::perspective::PerspectiveName;
 use crate::rulebook::{CheckName, CheckPolicy, CompiledRulebook};
 use crate::runtime::{
-    MessageKind, MultorumPaths, RuntimeError, Sequence, WorkerPaths, WorkerState,
+    CanonicalCommitHash, MessageKind, MultorumPaths, RuntimeError, Sequence, WorkerPaths,
+    WorkerState,
 };
 
 pub(crate) const PROTOCOL_VERSION: u32 = 1;
@@ -56,10 +57,10 @@ impl RuntimeFileSystem {
 /// Active rulebook projection stored under `.multorum/orchestrator/`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ActiveRulebookRecord {
-    /// Git commit that owns the active committed rulebook.
-    pub rulebook_commit: String,
-    /// Pinned base commit for newly provisioned workers.
-    pub base_commit: String,
+    /// Canonical git commit that owns the active committed rulebook.
+    pub rulebook_commit: CanonicalCommitHash,
+    /// Canonical pinned base commit for newly provisioned workers.
+    pub base_commit: CanonicalCommitHash,
     /// Activation timestamp.
     pub activated_at: String,
 }
@@ -73,12 +74,12 @@ pub(crate) struct WorkerRecord {
     pub state: WorkerState,
     /// Absolute path to the managed worktree.
     pub worktree_path: PathBuf,
-    /// Rulebook commit pinned into the worker contract.
-    pub rulebook_commit: String,
-    /// Base code commit from which the worker was provisioned.
-    pub base_commit: String,
-    /// Submitted worker commit when the worker is in `COMMITTED`.
-    pub submitted_head_commit: Option<String>,
+    /// Canonical rulebook commit pinned into the worker contract.
+    pub rulebook_commit: CanonicalCommitHash,
+    /// Canonical base code commit from which the worker was provisioned.
+    pub base_commit: CanonicalCommitHash,
+    /// Canonical submitted worker commit when the worker is in `COMMITTED`.
+    pub submitted_head_commit: Option<CanonicalCommitHash>,
 }
 
 /// Acknowledgement metadata written to mailbox `ack/`.

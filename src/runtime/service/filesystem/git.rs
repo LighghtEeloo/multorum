@@ -5,41 +5,47 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::rulebook::{CheckName, RULEBOOK_RELATIVE_PATH};
-use crate::runtime::RuntimeError;
+use crate::runtime::{CanonicalCommitHash, RuntimeError};
 
 use super::RuntimeFileSystem;
 
 impl RuntimeFileSystem {
-    /// Ensure that the given commit exists in the worker repository.
-    pub(crate) fn ensure_commit_exists(
-        &self, worktree_root: &Path, commit: &str,
-    ) -> Result<(), RuntimeError> {
-        let mut command = self.git_command(worktree_root);
-        command.arg("cat-file").arg("-e").arg(format!("{commit}^{{commit}}"));
+    /// Resolve one user-facing revision to the canonical commit hash
+    /// stored by Multorum.
+    pub(crate) fn resolve_commit(
+        &self, repo_root: &Path, revision: &str, operation: &'static str,
+    ) -> Result<CanonicalCommitHash, RuntimeError> {
+        let mut command = self.git_command(repo_root);
+        command.arg("rev-parse").arg("--verify").arg(format!("{revision}^{{commit}}"));
         let output = command.output()?;
         if output.status.success() {
-            return Ok(());
+            let resolved = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            tracing::debug!(
+                root = %repo_root.display(),
+                revision,
+                resolved_commit = %resolved,
+                "resolved git revision to canonical commit"
+            );
+            return Ok(CanonicalCommitHash::new(resolved));
         }
 
         let details = command_failure_details(&output.stdout, &output.stderr);
         Err(RuntimeError::CommitNotFound {
-            operation: "verify submitted worker commit",
-            worktree_root: worktree_root.to_path_buf(),
-            commit: commit.to_owned(),
+            operation,
+            worktree_root: repo_root.to_path_buf(),
+            commit: revision.to_owned(),
             details,
         })
     }
 
     /// Return the repository HEAD commit for a workspace or worktree.
-    pub(crate) fn git_head(&self, root: &Path) -> Result<String, RuntimeError> {
-        let mut command = self.git_command(root);
-        command.arg("rev-parse").arg("HEAD");
-        Ok(self.run_command(command, "read HEAD")?.trim().to_owned())
+    pub(crate) fn git_head(&self, root: &Path) -> Result<CanonicalCommitHash, RuntimeError> {
+        self.resolve_commit(root, "HEAD", "read HEAD")
     }
 
     /// Return all changed files between two commits.
     pub(crate) fn git_changed_files(
-        &self, repo_root: &Path, from: &str, to: &str,
+        &self, repo_root: &Path, from: &CanonicalCommitHash, to: &CanonicalCommitHash,
     ) -> Result<std::collections::BTreeSet<PathBuf>, RuntimeError> {
         let mut command = self.git_command(repo_root);
         command.arg("diff").arg("--name-only").arg(format!("{from}..{to}"));
@@ -76,9 +82,9 @@ impl RuntimeFileSystem {
     }
 
     /// Cherry-pick one worker commit into the canonical workspace.
-    pub(crate) fn cherry_pick(&self, commit: &str) -> Result<(), RuntimeError> {
+    pub(crate) fn cherry_pick(&self, commit: &CanonicalCommitHash) -> Result<(), RuntimeError> {
         let mut command = self.git_command(self.workspace_root());
-        command.arg("cherry-pick").arg(commit);
+        command.arg("cherry-pick").arg(commit.as_str());
         self.run_command(command, "cherry-pick worker commit").map(|_| ())
     }
 
@@ -95,7 +101,7 @@ impl RuntimeFileSystem {
 
     /// Create a detached worktree rooted at the pinned base commit.
     pub(crate) fn add_worktree(
-        &self, worktree_root: &Path, base_commit: &str,
+        &self, worktree_root: &Path, base_commit: &CanonicalCommitHash,
     ) -> Result<(), RuntimeError> {
         if worktree_root.exists() {
             fs::remove_dir_all(worktree_root)?;
@@ -105,7 +111,12 @@ impl RuntimeFileSystem {
         }
 
         let mut command = self.git_command(self.workspace_root());
-        command.arg("worktree").arg("add").arg("--detach").arg(worktree_root).arg(base_commit);
+        command
+            .arg("worktree")
+            .arg("add")
+            .arg("--detach")
+            .arg(worktree_root)
+            .arg(base_commit.as_str());
         self.run_command(command, "create worktree").map(|_| ())
     }
 
@@ -208,15 +219,19 @@ done
         Ok(())
     }
 
-    pub(crate) fn git_show_rulebook(&self, commit: &str) -> Result<String, RuntimeError> {
+    pub(crate) fn git_show_rulebook(
+        &self, commit: &CanonicalCommitHash,
+    ) -> Result<String, RuntimeError> {
         let mut command = self.git_command(self.workspace_root());
         command.arg("show").arg(format!("{commit}:{RULEBOOK_RELATIVE_PATH}"));
         self.run_command(command, "load rulebook")
     }
 
-    pub(crate) fn git_list_files(&self, commit: &str) -> Result<Vec<PathBuf>, RuntimeError> {
+    pub(crate) fn git_list_files(
+        &self, commit: &CanonicalCommitHash,
+    ) -> Result<Vec<PathBuf>, RuntimeError> {
         let mut command = self.git_command(self.workspace_root());
-        command.arg("ls-tree").arg("-r").arg("--name-only").arg(commit);
+        command.arg("ls-tree").arg("-r").arg("--name-only").arg(commit.as_str());
         let output = self.run_command(command, "list commit files")?;
         Ok(output.lines().filter(|line| !line.trim().is_empty()).map(PathBuf::from).collect())
     }

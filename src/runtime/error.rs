@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::perspective::PerspectiveName;
 
-use super::state::WorkerState;
+use super::{CanonicalCommitHash, state::WorkerState};
 
 /// Result alias for runtime operations.
 pub type Result<T> = std::result::Result<T, RuntimeError>;
@@ -55,8 +55,8 @@ pub enum RuntimeError {
         blocking_workers = format_perspectives(blocking_workers)
     )]
     RulebookConflict {
-        /// Rulebook commit the caller attempted to activate.
-        commit: String,
+        /// Canonical rulebook commit the caller attempted to activate.
+        commit: CanonicalCommitHash,
         /// Live workers that still depend on the current rulebook.
         blocking_workers: Vec<PerspectiveName>,
     },
@@ -73,10 +73,10 @@ pub enum RuntimeError {
     WriteSetViolation {
         /// Worker whose submission touched unauthorized paths.
         perspective: PerspectiveName,
-        /// Base commit from which the worker was provisioned.
-        base_commit: String,
-        /// Submitted worker head commit.
-        head_commit: String,
+        /// Canonical base commit from which the worker was provisioned.
+        base_commit: CanonicalCommitHash,
+        /// Canonical submitted worker head commit.
+        head_commit: CanonicalCommitHash,
         /// Paths changed outside the compiled write set.
         violations: Vec<PathBuf>,
     },
@@ -110,10 +110,10 @@ pub enum RuntimeError {
     WorkerHeadMismatch {
         /// Worker whose worktree head changed unexpectedly.
         perspective: PerspectiveName,
-        /// Commit hash recorded in the worker submission.
-        submitted_head_commit: String,
-        /// Commit hash currently checked out in the worker worktree.
-        current_head_commit: String,
+        /// Canonical commit hash recorded in the worker submission.
+        submitted_head_commit: CanonicalCommitHash,
+        /// Canonical commit hash currently checked out in the worker worktree.
+        current_head_commit: CanonicalCommitHash,
     },
 
     /// A referenced commit is not reachable from the repository view

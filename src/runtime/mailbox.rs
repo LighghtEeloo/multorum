@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     BundleEnvelope, BundlePayload, MailboxMessageView, MessageKind, PublishedBundle,
     ReplyReference, RuntimeError,
+    commit::CanonicalCommitHash,
     bundle::{MessageRef, Sequence},
     service::filesystem::{
         ACK_EXTENSION, ARTIFACTS_DIR_NAME, AckRecord, BODY_FILE_NAME, ENVELOPE_FILE_NAME,
@@ -42,7 +43,7 @@ impl RuntimeFileSystem {
     pub(crate) fn publish_bundle(
         &self, worktree_root: &Path, direction: MailboxDirection, kind: MessageKind,
         perspective: &crate::perspective::PerspectiveName, reply: ReplyReference,
-        head_commit: Option<String>, payload: BundlePayload,
+        head_commit: Option<CanonicalCommitHash>, payload: BundlePayload,
     ) -> Result<PublishedBundle, RuntimeError> {
         if payload.body_text.is_some() && payload.body_path.is_some() {
             return Err(RuntimeError::InvalidPayload(

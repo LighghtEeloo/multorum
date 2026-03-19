@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use crate::perspective::PerspectiveName;
 
 use super::super::{
+    CanonicalCommitHash,
     MultorumPaths,
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference},
     error::{Result, RuntimeError},
@@ -96,6 +97,25 @@ impl FilesystemOrchestratorService {
         Self::new(workspace_root)
     }
 
+    fn validate_rulebook_commit(
+        &self, commit: &CanonicalCommitHash,
+    ) -> Result<RulebookValidation> {
+        let compiled = self.fs.load_compiled_rulebook(commit)?;
+        let target_paths = compiled_rulebook_paths(&compiled);
+
+        let mut blocking_workers = Vec::new();
+        for worker in self.active_workers()? {
+            let write_set = RuntimeFileSystem::read_path_list(
+                &self.fs.worker_paths(&worker.perspective).write_set(),
+            )?;
+            if !write_set.is_disjoint(&target_paths) {
+                blocking_workers.push(worker.perspective);
+            }
+        }
+
+        Ok(RulebookValidation { ok: blocking_workers.is_empty(), blocking_workers })
+    }
+
     fn ensure_live_worker_slot_is_free(&self, perspective: &PerspectiveName) -> Result<()> {
         match self.fs.load_worker_record(perspective) {
             | Ok(record) if is_live_worker_state(record.state) => Err(RuntimeError::InvalidState {
@@ -166,24 +186,15 @@ impl OrchestratorService for FilesystemOrchestratorService {
     }
 
     fn rulebook_validate(&self, commit: String) -> Result<RulebookValidation> {
-        let compiled = self.fs.load_compiled_rulebook(&commit)?;
-        let target_paths = compiled_rulebook_paths(&compiled);
-
-        let mut blocking_workers = Vec::new();
-        for worker in self.active_workers()? {
-            let write_set = RuntimeFileSystem::read_path_list(
-                &self.fs.worker_paths(&worker.perspective).write_set(),
-            )?;
-            if !write_set.is_disjoint(&target_paths) {
-                blocking_workers.push(worker.perspective);
-            }
-        }
-
-        Ok(RulebookValidation { ok: blocking_workers.is_empty(), blocking_workers })
+        let commit =
+            self.fs.resolve_commit(self.fs.workspace_root(), &commit, "resolve rulebook commit")?;
+        self.validate_rulebook_commit(&commit)
     }
 
     fn rulebook_switch(&self, commit: String) -> Result<RulebookSwitch> {
-        let validation = self.rulebook_validate(commit.clone())?;
+        let commit =
+            self.fs.resolve_commit(self.fs.workspace_root(), &commit, "resolve rulebook commit")?;
+        let validation = self.validate_rulebook_commit(&commit)?;
         if !validation.ok {
             return Err(RuntimeError::RulebookConflict {
                 commit,
@@ -197,7 +208,7 @@ impl OrchestratorService for FilesystemOrchestratorService {
             activated_at: super::filesystem::timestamp_now(),
         };
         self.fs.store_active_rulebook(&record)?;
-        tracing::info!(rulebook_commit = commit, "activated rulebook");
+        tracing::info!(rulebook_commit = %record.rulebook_commit, "activated rulebook");
         Ok(RulebookSwitch { active_commit: record.rulebook_commit })
     }
 
@@ -311,7 +322,11 @@ impl OrchestratorService for FilesystemOrchestratorService {
                 state: record.state,
             }
         })?;
-        self.fs.ensure_commit_exists(&record.worktree_path, &head_commit)?;
+        let head_commit = self.fs.resolve_commit(
+            &record.worktree_path,
+            head_commit.as_str(),
+            "verify submitted worker commit",
+        )?;
 
         let worker_head = self.fs.git_head(&record.worktree_path)?;
         if worker_head != head_commit {
@@ -363,7 +378,7 @@ impl OrchestratorService for FilesystemOrchestratorService {
         record.state = WorkerState::Integrated;
         self.fs.store_worker_record(&record)?;
 
-        tracing::info!(perspective = %perspective, head_commit = head_commit, "integrated worker");
+        tracing::info!(perspective = %perspective, head_commit = %head_commit, "integrated worker");
         Ok(IntegrateResult { perspective, state: record.state, ran_checks, skipped_checks })
     }
 

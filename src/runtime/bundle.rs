@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::perspective::PerspectiveName;
 
+use super::CanonicalCommitHash;
+
 /// Monotonic per-mailbox sequence number.
 ///
 /// Note: Sequence numbers are local to a single mailbox direction for a
@@ -96,8 +98,8 @@ pub struct BundleEnvelope {
     pub created_at: String,
     /// Optional answered message sequence number.
     pub in_reply_to: Option<Sequence>,
-    /// Optional commit hash relevant to the message.
-    pub head_commit: Option<String>,
+    /// Optional canonical commit hash relevant to the message.
+    pub head_commit: Option<CanonicalCommitHash>,
 }
 
 /// Result of publishing a mailbox bundle.

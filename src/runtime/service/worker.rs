@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::runtime::mailbox::AckRef;
 
 use super::super::{
+    CanonicalCommitHash,
     MultorumPaths, WorkerPaths,
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
@@ -91,7 +92,7 @@ impl FilesystemWorkerService {
     }
 
     fn update_submission_state(
-        &self, state: WorkerState, head_commit: Option<String>,
+        &self, state: WorkerState, head_commit: Option<CanonicalCommitHash>,
     ) -> Result<()> {
         let contract = self.contract_view()?;
         let mut record = self.fs.load_worker_record(&contract.perspective)?;
@@ -137,6 +138,16 @@ impl WorkerService for FilesystemWorkerService {
         &self, head_commit: Option<String>, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle> {
         let contract = self.contract_view()?;
+        let head_commit = head_commit
+            .as_deref()
+            .map(|revision| {
+                self.fs.resolve_commit(
+                    &self.worktree_root,
+                    revision,
+                    "verify reported worker commit",
+                )
+            })
+            .transpose()?;
         let message = self.fs.publish_bundle(
             &self.worktree_root,
             crate::runtime::MailboxDirection::Outbox,
@@ -151,7 +162,11 @@ impl WorkerService for FilesystemWorkerService {
     }
 
     fn send_commit(&self, head_commit: String, payload: BundlePayload) -> Result<PublishedBundle> {
-        self.fs.ensure_commit_exists(&self.worktree_root, &head_commit)?;
+        let head_commit = self.fs.resolve_commit(
+            &self.worktree_root,
+            &head_commit,
+            "verify submitted worker commit",
+        )?;
         let contract = self.contract_view()?;
         let message = self.fs.publish_bundle(
             &self.worktree_root,

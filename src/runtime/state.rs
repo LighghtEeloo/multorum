@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::perspective::PerspectiveName;
 
-use super::{Sequence, bundle::MessageKind, mailbox::MailboxDirection};
+use super::{CanonicalCommitHash, Sequence, bundle::MessageKind, mailbox::MailboxDirection};
 
 /// Worker lifecycle state as projected by Multorum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,8 +53,8 @@ pub struct RulebookValidation {
 /// Result of activating a rulebook switch.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RulebookSwitch {
-    /// Activated rulebook commit hash.
-    pub active_commit: String,
+    /// Activated canonical rulebook commit hash.
+    pub active_commit: CanonicalCommitHash,
 }
 
 /// Result of initializing `.multorum/` for a workspace.
@@ -106,8 +106,8 @@ pub struct IntegrateResult {
 /// Projected orchestrator view of all active workers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OrchestratorStatus {
-    /// Active rulebook commit hash.
-    pub active_rulebook_commit: String,
+    /// Active canonical rulebook commit hash.
+    pub active_rulebook_commit: CanonicalCommitHash,
     /// Current worker summaries.
     pub workers: Vec<WorkerSummary>,
 }
@@ -135,10 +135,10 @@ pub struct WorkerStatus {
 pub struct WorkerContractView {
     /// Worker identity.
     pub perspective: PerspectiveName,
-    /// Rulebook commit governing the worker.
-    pub rulebook_commit: String,
-    /// Base code commit from which the worktree was provisioned.
-    pub base_commit: String,
+    /// Canonical rulebook commit governing the worker.
+    pub rulebook_commit: CanonicalCommitHash,
+    /// Canonical base code commit from which the worktree was provisioned.
+    pub base_commit: CanonicalCommitHash,
     /// Path to the compiled read set file.
     pub read_set_path: PathBuf,
     /// Path to the compiled write set file.
@@ -160,8 +160,8 @@ pub struct MailboxMessageView {
     pub created_at: String,
     /// Whether the message has been acknowledged.
     pub acknowledged: bool,
-    /// Optional commit hash attached to the message.
-    pub head_commit: Option<String>,
+    /// Optional canonical commit hash attached to the message.
+    pub head_commit: Option<CanonicalCommitHash>,
     /// Short summary for compact listings.
     pub summary: String,
     /// Absolute path to the bundle directory.

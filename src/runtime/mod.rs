@@ -6,6 +6,7 @@
 //! through which frontends interact with that state.
 
 pub mod bundle;
+pub mod commit;
 pub mod error;
 pub mod mailbox;
 pub mod paths;
@@ -17,6 +18,7 @@ pub use bundle::{
     BundleEnvelope, BundlePayload, MessageKind, MessageRef, PublishedBundle, ReplyReference,
     Sequence,
 };
+pub use commit::CanonicalCommitHash;
 pub use error::{Result, RuntimeError};
 pub use mailbox::{AckRef, MailboxDirection};
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};

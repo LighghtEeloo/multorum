@@ -3,6 +3,7 @@ use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
+use toml::Value;
 
 use multorum::perspective::PerspectiveName;
 use multorum::rulebook::Rulebook;
@@ -59,6 +60,10 @@ fn setup_repo() -> (TempDir, FilesystemOrchestratorService, String) {
     let orchestrator = FilesystemOrchestratorService::new(dir.path()).unwrap();
     orchestrator.rulebook_switch(head.clone()).unwrap();
     (dir, orchestrator, head)
+}
+
+fn short_commit(commit: &str) -> String {
+    commit.chars().take(12).collect()
 }
 
 #[test]
@@ -184,6 +189,106 @@ fn integrate_worker_cherry_picks_allowed_changes() {
 }
 
 #[test]
+fn rulebook_switch_canonicalizes_symbolic_revision_before_persistence() {
+    let (repo, orchestrator, head) = setup_repo();
+
+    let switch = orchestrator.rulebook_switch("HEAD".to_owned()).unwrap();
+    assert_eq!(switch.active_commit.as_str(), head);
+
+    let status = orchestrator.status().unwrap();
+    assert_eq!(status.active_rulebook_commit.as_str(), head);
+
+    let active_rulebook = fs::read_to_string(
+        repo.path().join(".multorum/orchestrator/active-rulebook.toml"),
+    )
+    .unwrap();
+    assert!(active_rulebook.contains(&format!("rulebook_commit = \"{head}\"")));
+    assert!(active_rulebook.contains(&format!("base_commit = \"{head}\"")));
+    assert!(!active_rulebook.contains("\"HEAD\""));
+}
+
+#[test]
+fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let provision = orchestrator.provision_worker(perspective(), None).unwrap();
+    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+
+    fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
+        .unwrap();
+    git(&provision.worktree_path, &["add", "src/owned.rs"]);
+    git(&provision.worktree_path, &["commit", "-m", "incr: update owned implementation"]);
+    let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
+
+    worker.send_commit("HEAD".to_owned(), BundlePayload::default()).unwrap();
+
+    let worker_state = fs::read_to_string(
+        provision
+            .worktree_path
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("orchestrator/workers/AuthImplementor/state.toml"),
+    )
+    .unwrap();
+    let worker_state: Value = toml::from_str(&worker_state).unwrap();
+    assert_eq!(worker_state["submitted_head_commit"].as_str(), Some(head_commit.as_str()));
+
+    let integration = orchestrator.integrate_worker(perspective(), Vec::new()).unwrap();
+    assert_eq!(integration.state, WorkerState::Integrated);
+}
+
+#[test]
+fn send_commit_canonicalizes_short_hash_before_storage_and_integration() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let provision = orchestrator.provision_worker(perspective(), None).unwrap();
+    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+
+    fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
+        .unwrap();
+    git(&provision.worktree_path, &["add", "src/owned.rs"]);
+    git(&provision.worktree_path, &["commit", "-m", "incr: update owned implementation"]);
+    let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
+
+    worker.send_commit(short_commit(&head_commit), BundlePayload::default()).unwrap();
+
+    let outbox_envelope = fs::read_to_string(
+        provision.worktree_path.join(".multorum/outbox/new/0001-commit/envelope.toml"),
+    )
+    .unwrap();
+    let outbox_envelope: Value = toml::from_str(&outbox_envelope).unwrap();
+    assert_eq!(outbox_envelope["head_commit"].as_str(), Some(head_commit.as_str()));
+
+    let integration = orchestrator.integrate_worker(perspective(), Vec::new()).unwrap();
+    assert_eq!(integration.state, WorkerState::Integrated);
+}
+
+#[test]
+fn send_report_canonicalizes_optional_head_commit_before_storage() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let provision = orchestrator.provision_worker(perspective(), None).unwrap();
+    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+
+    fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
+        .unwrap();
+    git(&provision.worktree_path, &["add", "src/owned.rs"]);
+    git(&provision.worktree_path, &["commit", "-m", "incr: update owned implementation"]);
+    let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
+
+    let report = worker
+        .send_report(
+            Some(short_commit(&head_commit)),
+            ReplyReference::default(),
+            BundlePayload::default(),
+        )
+        .unwrap();
+
+    let envelope = fs::read_to_string(report.bundle_path.join("envelope.toml")).unwrap();
+    let envelope: Value = toml::from_str(&envelope).unwrap();
+    assert_eq!(envelope["head_commit"].as_str(), Some(head_commit.as_str()));
+}
+
+#[test]
 fn integrate_rejects_paths_outside_the_compiled_write_set() {
     let (_repo, orchestrator, _) = setup_repo();
     let provision = orchestrator.provision_worker(perspective(), None).unwrap();
@@ -210,7 +315,7 @@ fn integrate_rejects_paths_outside_the_compiled_write_set() {
             violations,
         } if actual_perspective == perspective()
             && actual_base_commit == base_commit
-            && actual_head_commit == head_commit
+            && actual_head_commit.as_str() == head_commit
             && violations == vec![Path::new("src/other.rs").to_path_buf()]
     ));
 }
@@ -242,8 +347,8 @@ fn integrate_rejects_when_worker_head_moves_after_submission() {
             submitted_head_commit: actual_submitted_head_commit,
             current_head_commit: actual_current_head_commit,
         } if actual_perspective == perspective()
-            && actual_submitted_head_commit == submitted_head_commit
-            && actual_current_head_commit == current_head_commit
+            && actual_submitted_head_commit.as_str() == submitted_head_commit
+            && actual_current_head_commit.as_str() == current_head_commit
     ));
 }
 

@@ -9,7 +9,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::perspective::{CompiledPerspective, PerspectiveName};
 use crate::rulebook::{CompiledRulebook, Rulebook};
-use crate::runtime::{RulebookInit, RuntimeError, WorkerContractView};
+use crate::runtime::{CanonicalCommitHash, RulebookInit, RuntimeError, WorkerContractView};
 
 use super::{ActiveRulebookRecord, RuntimeFileSystem, STATE_FILE_NAME, WorkerRecord};
 
@@ -64,7 +64,7 @@ impl RuntimeFileSystem {
 
     /// Load and compile a rulebook at one git commit.
     pub(crate) fn load_compiled_rulebook(
-        &self, commit: &str,
+        &self, commit: &CanonicalCommitHash,
     ) -> Result<CompiledRulebook, RuntimeError> {
         let rulebook_text = self.git_show_rulebook(commit)?;
         let files = self.git_list_files(commit)?;
