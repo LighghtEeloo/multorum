@@ -16,7 +16,7 @@ use super::error::PerspectiveNameError;
 ///
 /// Note: These are the same lexical rules as [`fileset::Name`](crate::fileset::Name),
 /// but a distinct type to prevent mixing file set names with perspective names.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize)]
 pub struct PerspectiveName(String);
 
 impl PerspectiveName {
