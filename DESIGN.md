@@ -73,45 +73,52 @@ Multorum manages file permissions through a small algebra of *file sets*. This a
 
 A naive approach to file permissions might assign raw glob patterns directly to each perspective. This breaks down quickly in practice: the same pattern appears in multiple places, changes require updating every occurrence, and the relationship between permission sets is implicit rather than explicit. The file set algebra solves this by giving the project a shared vocabulary for describing regions of the codebase.
 
-### Primitives
+### Syntax
 
-The two primitive forms of a file set are:
+```
+path  ::= <glob pattern>              e.g. "src/auth/**", "**/*.spec.md"
+name  ::= <identifier>                e.g. AuthFiles, SpecFiles
+expr  ::= name                        reference
+        | expr "|" expr               union
+        | expr "&" expr               intersection
+        | expr "-" expr               difference
+        | "(" expr ")"                grouping
 
-- **Explicit path** — a single file path, e.g. `src/auth/login.ts`
-- **Glob** — a pattern matching multiple paths, e.g. `src/auth/**`
+definition ::= name ".path" "=" path  primitive — binds a name to a glob
+             | name "=" expr          compound — binds a name to an expression
+```
 
-### Operations
-
-File sets can be composed using three operations:
-
-- **Union** (`A | B`) — all files in A, all files in B, or both
-- **Intersection** (`A & B`) — only files that appear in both A and B
-- **Difference** (`A - B`) — files in A that do not appear in B
-
-These operations can be nested arbitrarily to express complex permission boundaries.
+`A | B` produces every file in either set. `A & B` keeps only files present in both. `A - B` keeps files in A that are not in B. Expressions nest arbitrarily; precedence is flat, so use parentheses to disambiguate.
 
 ### Named Definitions
 
-A file set expression can be given a name, making it referenceable by other file sets or by perspective declarations. Named file sets and inline file sets are structurally identical; naming is purely a convenience for legibility and reuse.
+File set expressions are given names, making them referenceable by other file sets and by perspective declarations. Naming a file set creates a shared vocabulary for the project — a single place to update when boundaries change, and a readable shorthand in perspective declarations.
+
+Names are defined in the `[filesets]` table. A name may bind either a primitive (a glob or explicit path) or a compound expression that references other names. Perspectives then reference these names in their `read` and `write` fields.
+
+Consider a project with specification files, test files, and an authentication module:
 
 ```toml
 # Named file set definitions
 [filesets]
-AuthFiles  = "src/auth/**"
-TestFiles  = "tests/**"
-AuthTests  = "AuthFiles & TestFiles"
+SpecFiles.path = "**/*.spec.md"
+TestFiles.path = "**/test/**"
+
+AuthFiles.path = "auth/**"
+AuthSpecs = "AuthFiles & SpecFiles"
+AuthTests = "AuthFiles & TestFiles"
 
 # Used in a perspective
-[perspectives.WorkerA]
-write = "AuthFiles - AuthTests"
-read  = "AuthTests"
+[perspectives.AuthImplementor]
+read  = "AuthSpecs | AuthTests"
+write = "AuthFiles - AuthSpecs - AuthTests"
 
-[perspectives.WorkerB]
+[perspectives.AuthTester]
+read  = "AuthSpecs | AuthTests"
 write = "AuthTests"
-read  = "AuthFiles"
 ```
 
-In this example, `AuthTests` is defined once and used in two places. The intent is legible, and a change to the definition of `AuthFiles` propagates automatically to everything derived from it.
+Primitive names bind globs via the `.path` key (`SpecFiles.path`, `AuthFiles.path`). Compound names (`AuthSpecs`, `AuthTests`) reference other names through set expressions, narrowing a module to a cross-cutting concern via intersection. Perspectives then use union and difference to partition the module: `AuthImplementor` writes only production code by subtracting specs and tests from the full auth set, while `AuthTester` writes only tests. The two write sets are disjoint, satisfying the safety property.
 
 ### Compilation
 

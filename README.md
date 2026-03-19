@@ -19,18 +19,23 @@ Parallel development faces a fundamental tension: workers need *isolation* to ma
 The project maintains a single `.multorum/rulebook.toml`, versioned in git. The rulebook declares *perspectives* — named roles, each with an explicit write set and read set of files. File permissions are expressed using a small algebra of *file sets*: explicit paths and globs as primitives, composed via union, intersection, and difference, and optionally given names for reuse across the rulebook.
 
 ```toml
+# Named file set definitions
 [filesets]
-AuthFiles  = "src/auth/**"
-TestFiles  = "tests/**"
-AuthTests  = "AuthFiles & TestFiles"
+SpecFiles = "**/*.spec.md"
+TestFiles = "**/test/**"
 
-[perspectives.AuthWorker]
-write = "AuthFiles - AuthTests"
-read  = "AuthTests"
+AuthFiles = "auth/**"
+AuthSpecs = "AuthFiles & SpecFiles"
+AuthTests = "AuthFiles & TestFiles"
 
-[perspectives.TestWorker]
+# Used in a perspective
+[perspectives.AuthImplementor]
+read  = "AuthSpecs | AuthTests"
+write = "AuthFiles - AuthSpecs - AuthTests"
+
+[perspectives.AuthTester]
+read  = "AuthSpecs | AuthTests"
 write = "AuthTests"
-read  = "AuthFiles"
 ```
 
 The rulebook is immutable once active — its versioning is handled entirely by git. The orchestrator evolves it by committing changes and explicitly instructing Multorum to switch to a new version.
