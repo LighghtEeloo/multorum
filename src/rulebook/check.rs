@@ -74,18 +74,14 @@ impl<'de> de::Deserialize<'de> for CheckName {
 /// The skip policy for a user-defined check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum CheckPolicy {
     /// The check always runs during integration.
+    #[default]
     Always,
     /// The check may be skipped when the orchestrator accepts worker
     /// evidence for that specific integration.
     Skippable,
-}
-
-impl Default for CheckPolicy {
-    fn default() -> Self {
-        Self::Always
-    }
 }
 
 /// One declared check from the rulebook.

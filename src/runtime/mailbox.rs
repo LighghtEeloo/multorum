@@ -116,10 +116,10 @@ impl RuntimeFileSystem {
             }
 
             let envelope: BundleEnvelope = Self::read_toml(&bundle_path.join(ENVELOPE_FILE_NAME))?;
-            if let Some(after) = after {
-                if envelope.sequence <= after {
-                    continue;
-                }
+            if let Some(after) = after
+                && envelope.sequence <= after
+            {
+                continue;
             }
 
             let acknowledged = ack_root.join(Self::ack_file_name(envelope.sequence)).exists();
@@ -225,10 +225,10 @@ impl RuntimeFileSystem {
 
     fn bundle_summary(&self, bundle_path: &Path, kind: &MessageKind) -> String {
         let body_path = bundle_path.join(BODY_FILE_NAME);
-        if let Ok(body) = fs::read_to_string(body_path) {
-            if let Some(line) = body.lines().map(str::trim).find(|line| !line.is_empty()) {
-                return line.to_owned();
-            }
+        if let Ok(body) = fs::read_to_string(body_path)
+            && let Some(line) = body.lines().map(str::trim).find(|line| !line.is_empty())
+        {
+            return line.to_owned();
         }
         kind.slug().to_owned()
     }

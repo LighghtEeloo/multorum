@@ -194,7 +194,7 @@ done
     pub(crate) fn git_show_rulebook(&self, commit: &str) -> Result<String, RuntimeError> {
         let mut command = self.git_command(self.workspace_root());
         command.arg("show").arg(format!("{commit}:{RULEBOOK_RELATIVE_PATH}"));
-        Ok(self.run_command(command, "load rulebook")?)
+        self.run_command(command, "load rulebook")
     }
 
     pub(crate) fn git_list_files(&self, commit: &str) -> Result<Vec<PathBuf>, RuntimeError> {
