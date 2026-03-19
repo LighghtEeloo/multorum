@@ -14,17 +14,17 @@ Parallel development faces a fundamental tension: workers need *isolation* to ma
 
 ## How It Works
 
-### Perspectives and the Rulebook
+### Rulebook, File Sets, and Perspectives
 
 The project maintains a single `.multorum/rulebook.toml`, versioned in git. The rulebook declares *perspectives* — named roles, each with an explicit write set and read set of files. File permissions are expressed using a small algebra of *file sets*: explicit paths and globs as primitives, composed via union, intersection, and difference, and optionally given names for reuse across the rulebook.
 
 ```toml
 # Named file set definitions
 [filesets]
-SpecFiles = "**/*.spec.md"
-TestFiles = "**/test/**"
+SpecFiles.path = "**/*.spec.md"
+TestFiles.path = "**/test/**"
 
-AuthFiles = "auth/**"
+AuthFiles.path = "auth/**"
 AuthSpecs = "AuthFiles & SpecFiles"
 AuthTests = "AuthFiles & TestFiles"
 
