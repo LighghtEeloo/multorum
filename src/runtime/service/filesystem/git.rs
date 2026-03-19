@@ -16,7 +16,18 @@ impl RuntimeFileSystem {
     ) -> Result<(), RuntimeError> {
         let mut command = self.git_command(worktree_root);
         command.arg("cat-file").arg("-e").arg(format!("{commit}^{{commit}}"));
-        self.run_command(command, "verify commit").map(|_| ())
+        let output = command.output()?;
+        if output.status.success() {
+            return Ok(());
+        }
+
+        let details = command_failure_details(&output.stdout, &output.stderr);
+        Err(RuntimeError::CommitNotFound {
+            operation: "verify submitted worker commit",
+            worktree_root: worktree_root.to_path_buf(),
+            commit: commit.to_owned(),
+            details,
+        })
     }
 
     /// Return the repository HEAD commit for a workspace or worktree.
@@ -108,9 +119,15 @@ impl RuntimeFileSystem {
             return Ok(());
         }
 
-        Err(RuntimeError::CheckFailed(
-            "canonical workspace has uncommitted tracked changes".to_owned(),
-        ))
+        let changed_paths = output
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(", ");
+        Err(RuntimeError::CheckFailed(format!(
+            "canonical workspace has uncommitted tracked changes: {changed_paths}"
+        )))
     }
 
     pub(crate) fn install_worker_exclude(&self, worktree_root: &Path) -> Result<(), RuntimeError> {
@@ -210,24 +227,33 @@ done
         command
     }
 
-    fn run_command(&self, mut command: Command, action: &str) -> Result<String, RuntimeError> {
+    fn run_command(
+        &self, mut command: Command, action: &'static str,
+    ) -> Result<String, RuntimeError> {
+        let cwd = command
+            .get_current_dir()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| self.workspace_root().to_path_buf());
         let output = command.output()?;
         if output.status.success() {
             return Ok(String::from_utf8_lossy(&output.stdout).trim_end().to_owned());
         }
 
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let details = if stderr.trim().is_empty() {
-            stdout.trim().to_owned()
-        } else {
-            stderr.trim().to_owned()
-        };
-        Err(RuntimeError::Git(format!("{action}: {details}")))
+        Err(RuntimeError::Git {
+            action,
+            cwd,
+            details: command_failure_details(&output.stdout, &output.stderr),
+        })
     }
 }
 
 fn absolutize_git_path(worktree_root: &Path, path: &str) -> PathBuf {
     let candidate = PathBuf::from(path);
     if candidate.is_absolute() { candidate } else { worktree_root.join(candidate) }
+}
+
+fn command_failure_details(stdout: &[u8], stderr: &[u8]) -> String {
+    let stderr = String::from_utf8_lossy(stderr);
+    let stdout = String::from_utf8_lossy(stdout);
+    if stderr.trim().is_empty() { stdout.trim().to_owned() } else { stderr.trim().to_owned() }
 }

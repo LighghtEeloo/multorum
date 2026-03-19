@@ -96,7 +96,11 @@ impl FilesystemWorkerService {
         let contract = self.contract_view()?;
         let mut record = self.fs.load_worker_record(&contract.perspective)?;
         if !can_submit_from_state(record.state) {
-            return Err(RuntimeError::InvalidState);
+            return Err(RuntimeError::InvalidState {
+                operation: "publish worker submission",
+                expected: "PROVISIONED or ACTIVE",
+                actual: record.state,
+            });
         }
         record.state = state;
         record.submitted_head_commit = head_commit;

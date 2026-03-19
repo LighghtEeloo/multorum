@@ -188,6 +188,7 @@ fn integrate_rejects_paths_outside_the_compiled_write_set() {
     let (_repo, orchestrator, _) = setup_repo();
     let provision = orchestrator.provision_worker(perspective(), None).unwrap();
     let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+    let base_commit = worker.contract().unwrap().base_commit;
 
     fs::write(provision.worktree_path.join("src/other.rs"), "pub fn other() -> i32 { 99 }\n")
         .unwrap();
@@ -198,7 +199,70 @@ fn integrate_rejects_paths_outside_the_compiled_write_set() {
     );
     let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
-    worker.send_commit(head_commit, BundlePayload::default()).unwrap();
+    worker.send_commit(head_commit.clone(), BundlePayload::default()).unwrap();
     let error = orchestrator.integrate_worker(perspective(), Vec::new()).unwrap_err();
-    assert!(matches!(error, RuntimeError::WriteSetViolation));
+    assert!(matches!(
+        error,
+        RuntimeError::WriteSetViolation {
+            perspective: actual_perspective,
+            base_commit: actual_base_commit,
+            head_commit: actual_head_commit,
+            violations,
+        } if actual_perspective == perspective()
+            && actual_base_commit == base_commit
+            && actual_head_commit == head_commit
+            && violations == vec![Path::new("src/other.rs").to_path_buf()]
+    ));
+}
+
+#[test]
+fn integrate_rejects_when_worker_head_moves_after_submission() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let provision = orchestrator.provision_worker(perspective(), None).unwrap();
+    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+
+    fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
+        .unwrap();
+    git(&provision.worktree_path, &["add", "src/owned.rs"]);
+    git(&provision.worktree_path, &["commit", "-m", "incr: update owned implementation"]);
+    let submitted_head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
+    worker.send_commit(submitted_head_commit.clone(), BundlePayload::default()).unwrap();
+
+    fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 4 }\n")
+        .unwrap();
+    git(&provision.worktree_path, &["add", "src/owned.rs"]);
+    git(&provision.worktree_path, &["commit", "-m", "incr: move worker head after submission"]);
+    let current_head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
+
+    let error = orchestrator.integrate_worker(perspective(), Vec::new()).unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::WorkerHeadMismatch {
+            perspective: actual_perspective,
+            submitted_head_commit: actual_submitted_head_commit,
+            current_head_commit: actual_current_head_commit,
+        } if actual_perspective == perspective()
+            && actual_submitted_head_commit == submitted_head_commit
+            && actual_current_head_commit == current_head_commit
+    ));
+}
+
+#[test]
+fn send_commit_reports_missing_commit_with_worktree_context() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let provision = orchestrator.provision_worker(perspective(), None).unwrap();
+    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+
+    let error = worker.send_commit("deadbeef".to_owned(), BundlePayload::default()).unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::CommitNotFound {
+            operation,
+            worktree_root,
+            commit,
+            ..
+        } if operation == "verify submitted worker commit"
+            && worktree_root == provision.worktree_path
+            && commit == "deadbeef"
+    ));
 }

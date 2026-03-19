@@ -1,6 +1,12 @@
 //! Runtime errors for Multorum orchestration services.
 
+use std::path::PathBuf;
+
 use thiserror::Error;
+
+use crate::perspective::PerspectiveName;
+
+use super::state::WorkerState;
 
 /// Result alias for runtime operations.
 pub type Result<T> = std::result::Result<T, RuntimeError>;
@@ -22,8 +28,18 @@ pub enum RuntimeError {
     UnknownPerspective(String),
 
     /// The worker state machine does not permit the requested action.
-    #[error("invalid worker state for operation")]
-    InvalidState,
+    #[error(
+        "{operation} requires worker state {expected}; found {actual}",
+        actual = worker_state_name(*actual)
+    )]
+    InvalidState {
+        /// Operation that rejected the current state.
+        operation: &'static str,
+        /// Worker state or state set required by the operation.
+        expected: &'static str,
+        /// Projected worker state observed at the time of the failure.
+        actual: WorkerState,
+    },
 
     /// The requested message bundle does not exist.
     #[error("message not found")]
@@ -34,16 +50,36 @@ pub enum RuntimeError {
     AlreadyAcknowledged,
 
     /// The requested rulebook switch conflicts with active workers.
-    #[error("rulebook switch conflicts with active workers")]
-    RulebookConflict,
+    #[error(
+        "cannot activate rulebook commit `{commit}` while workers are still live: {blocking_workers}",
+        blocking_workers = format_perspectives(blocking_workers)
+    )]
+    RulebookConflict {
+        /// Rulebook commit the caller attempted to activate.
+        commit: String,
+        /// Live workers that still depend on the current rulebook.
+        blocking_workers: Vec<PerspectiveName>,
+    },
 
     /// A pre-merge or lifecycle check failed.
     #[error("check failed: {0}")]
     CheckFailed(String),
 
     /// The worker touched files outside its compiled write set.
-    #[error("write set violation")]
-    WriteSetViolation,
+    #[error(
+        "write-set violation for perspective `{perspective}` between `{base_commit}` and `{head_commit}`: {violations}",
+        violations = format_paths(violations)
+    )]
+    WriteSetViolation {
+        /// Worker whose submission touched unauthorized paths.
+        perspective: PerspectiveName,
+        /// Base commit from which the worker was provisioned.
+        base_commit: String,
+        /// Submitted worker head commit.
+        head_commit: String,
+        /// Paths changed outside the compiled write set.
+        violations: Vec<PathBuf>,
+    },
 
     /// A mailbox operation observed inconsistent or conflicting state.
     #[error("mailbox conflict")]
@@ -52,6 +88,50 @@ pub enum RuntimeError {
     /// The runtime surface for the requested perspective was not found.
     #[error("worker runtime is missing for perspective: {0}")]
     MissingWorkerRuntime(String),
+
+    /// A worker submission expected a recorded head commit, but the
+    /// worker record did not contain one.
+    #[error(
+        "worker `{perspective}` is in state {state} but has no submitted head commit recorded",
+        state = worker_state_name(*state)
+    )]
+    MissingSubmittedHeadCommit {
+        /// Worker whose committed submission lost its recorded head.
+        perspective: PerspectiveName,
+        /// Worker state observed when the missing head was detected.
+        state: WorkerState,
+    },
+
+    /// A worker worktree moved away from the submitted commit before
+    /// integration started.
+    #[error(
+        "worker `{perspective}` head changed after submission: submitted `{submitted_head_commit}`, current `{current_head_commit}`"
+    )]
+    WorkerHeadMismatch {
+        /// Worker whose worktree head changed unexpectedly.
+        perspective: PerspectiveName,
+        /// Commit hash recorded in the worker submission.
+        submitted_head_commit: String,
+        /// Commit hash currently checked out in the worker worktree.
+        current_head_commit: String,
+    },
+
+    /// A referenced commit is not reachable from the repository view
+    /// used for one operation.
+    #[error(
+        "cannot {operation}: commit `{commit}` is not available from `{worktree_root}` ({details})",
+        worktree_root = worktree_root.display()
+    )]
+    CommitNotFound {
+        /// Operation that required the commit to exist.
+        operation: &'static str,
+        /// Repository or worktree root used to resolve the commit.
+        worktree_root: PathBuf,
+        /// Commit hash that could not be resolved.
+        commit: String,
+        /// Git-provided failure details.
+        details: String,
+    },
 
     /// The operation is intentionally stubbed during the current
     /// scaffolding phase.
@@ -67,8 +147,15 @@ pub enum RuntimeError {
     PerspectiveMismatch { expected: String, found: String },
 
     /// Git command execution failed.
-    #[error("git command failed: {0}")]
-    Git(String),
+    #[error("git command failed while attempting to {action} in `{cwd}`: {details}", cwd = cwd.display())]
+    Git {
+        /// Human-readable description of the git action.
+        action: &'static str,
+        /// Working directory used for the git command.
+        cwd: PathBuf,
+        /// Git-provided failure details.
+        details: String,
+    },
 
     /// Rulebook loading or compilation failed.
     #[error(transparent)]
@@ -85,4 +172,23 @@ pub enum RuntimeError {
     /// TOML encoding failure.
     #[error(transparent)]
     TomlEncode(#[from] toml::ser::Error),
+}
+
+fn worker_state_name(state: WorkerState) -> &'static str {
+    match state {
+        | WorkerState::Provisioned => "PROVISIONED",
+        | WorkerState::Active => "ACTIVE",
+        | WorkerState::Blocked => "BLOCKED",
+        | WorkerState::Committed => "COMMITTED",
+        | WorkerState::Integrated => "INTEGRATED",
+        | WorkerState::Discarded => "DISCARDED",
+    }
+}
+
+fn format_perspectives(perspectives: &[PerspectiveName]) -> String {
+    perspectives.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")
+}
+
+fn format_paths(paths: &[PathBuf]) -> String {
+    paths.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", ")
 }

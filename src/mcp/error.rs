@@ -44,18 +44,21 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::MissingActiveRulebook => McpErrorCode::InvalidState,
             | RuntimeError::RulebookExists(_) => McpErrorCode::InvalidState,
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,
-            | RuntimeError::InvalidState => McpErrorCode::InvalidState,
+            | RuntimeError::InvalidState { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,
             | RuntimeError::AlreadyAcknowledged => McpErrorCode::AlreadyAcknowledged,
-            | RuntimeError::RulebookConflict => McpErrorCode::RulebookConflict,
+            | RuntimeError::RulebookConflict { .. } => McpErrorCode::RulebookConflict,
             | RuntimeError::CheckFailed(_) => McpErrorCode::CheckFailed,
-            | RuntimeError::WriteSetViolation => McpErrorCode::WriteSetViolation,
+            | RuntimeError::WriteSetViolation { .. } => McpErrorCode::WriteSetViolation,
             | RuntimeError::MailboxConflict => McpErrorCode::MailboxConflict,
             | RuntimeError::MissingWorkerRuntime(_) => McpErrorCode::MissingWorkerRuntime,
             | RuntimeError::Unimplemented(_) => McpErrorCode::Unimplemented,
             | RuntimeError::InvalidPayload(_)
+            | RuntimeError::MissingSubmittedHeadCommit { .. }
+            | RuntimeError::WorkerHeadMismatch { .. }
+            | RuntimeError::CommitNotFound { .. }
             | RuntimeError::PerspectiveMismatch { .. }
-            | RuntimeError::Git(_)
+            | RuntimeError::Git { .. }
             | RuntimeError::Rulebook(_)
             | RuntimeError::Io(_)
             | RuntimeError::TomlDecode(_)

@@ -98,7 +98,11 @@ impl FilesystemOrchestratorService {
 
     fn ensure_live_worker_slot_is_free(&self, perspective: &PerspectiveName) -> Result<()> {
         match self.fs.load_worker_record(perspective) {
-            | Ok(record) if is_live_worker_state(record.state) => Err(RuntimeError::InvalidState),
+            | Ok(record) if is_live_worker_state(record.state) => Err(RuntimeError::InvalidState {
+                operation: "provision worker",
+                expected: "DISCARDED or INTEGRATED",
+                actual: record.state,
+            }),
             | Ok(_) | Err(RuntimeError::UnknownPerspective(_)) => Ok(()),
             | Err(error) => Err(error),
         }
@@ -127,19 +131,32 @@ impl FilesystemOrchestratorService {
             }
             | _ => None,
         };
-        if expected_state.is_none() {
-            return Err(RuntimeError::InvalidState);
+        if expected_state.is_some() {
+            return self.fs.publish_bundle(
+                &record.worktree_path,
+                crate::runtime::MailboxDirection::Inbox,
+                kind,
+                perspective,
+                reply,
+                None,
+                payload,
+            );
         }
 
-        self.fs.publish_bundle(
-            &record.worktree_path,
-            crate::runtime::MailboxDirection::Inbox,
-            kind,
-            perspective,
-            reply,
-            None,
-            payload,
-        )
+        let expected = match kind {
+            | MessageKind::Resolve => "BLOCKED",
+            | MessageKind::Revise => "COMMITTED",
+            | _ => "a state that accepts inbox publication",
+        };
+        Err(RuntimeError::InvalidState {
+            operation: match kind {
+                | MessageKind::Resolve => "publish resolve bundle",
+                | MessageKind::Revise => "publish revise bundle",
+                | _ => "publish inbox bundle",
+            },
+            expected,
+            actual: record.state,
+        })
     }
 }
 
@@ -168,7 +185,10 @@ impl OrchestratorService for FilesystemOrchestratorService {
     fn rulebook_switch(&self, commit: String) -> Result<RulebookSwitch> {
         let validation = self.rulebook_validate(commit.clone())?;
         if !validation.ok {
-            return Err(RuntimeError::RulebookConflict);
+            return Err(RuntimeError::RulebookConflict {
+                commit,
+                blocking_workers: validation.blocking_workers,
+            });
         }
 
         let record = ActiveRulebookRecord {
@@ -257,7 +277,11 @@ impl OrchestratorService for FilesystemOrchestratorService {
             record.state,
             WorkerState::Provisioned | WorkerState::Active | WorkerState::Committed
         ) {
-            return Err(RuntimeError::InvalidState);
+            return Err(RuntimeError::InvalidState {
+                operation: "discard worker",
+                expected: "PROVISIONED, ACTIVE, or COMMITTED",
+                actual: record.state,
+            });
         }
 
         self.fs.remove_worktree(&record.worktree_path)?;
@@ -274,19 +298,28 @@ impl OrchestratorService for FilesystemOrchestratorService {
     ) -> Result<IntegrateResult> {
         let mut record = self.fs.load_worker_record(&perspective)?;
         if record.state != WorkerState::Committed {
-            return Err(RuntimeError::InvalidState);
+            return Err(RuntimeError::InvalidState {
+                operation: "integrate worker",
+                expected: "COMMITTED",
+                actual: record.state,
+            });
         }
 
         let head_commit = record.submitted_head_commit.clone().ok_or_else(|| {
-            RuntimeError::CheckFailed("worker has no submitted commit".to_owned())
+            RuntimeError::MissingSubmittedHeadCommit {
+                perspective: perspective.clone(),
+                state: record.state,
+            }
         })?;
         self.fs.ensure_commit_exists(&record.worktree_path, &head_commit)?;
 
         let worker_head = self.fs.git_head(&record.worktree_path)?;
         if worker_head != head_commit {
-            return Err(RuntimeError::CheckFailed(
-                "worker worktree head changed after commit submission".to_owned(),
-            ));
+            return Err(RuntimeError::WorkerHeadMismatch {
+                perspective: perspective.clone(),
+                submitted_head_commit: head_commit,
+                current_head_commit: worker_head,
+            });
         }
 
         let worker_rulebook = self.fs.load_compiled_rulebook(&record.rulebook_commit)?;
@@ -299,7 +332,12 @@ impl OrchestratorService for FilesystemOrchestratorService {
         let violations = changed_files.difference(&write_set).cloned().collect::<BTreeSet<_>>();
         if !violations.is_empty() {
             tracing::warn!(perspective = %perspective, count = violations.len(), "write-set violation");
-            return Err(RuntimeError::WriteSetViolation);
+            return Err(RuntimeError::WriteSetViolation {
+                perspective: perspective.clone(),
+                base_commit: record.base_commit.clone(),
+                head_commit: head_commit.clone(),
+                violations: violations.into_iter().collect(),
+            });
         }
 
         let mut ran_checks = Vec::new();
