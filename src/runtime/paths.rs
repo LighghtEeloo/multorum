@@ -3,9 +3,12 @@
 //! These helpers centralize `.multorum/` path construction so the rest
 //! of the runtime layer does not duplicate stringly-typed path logic.
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use crate::perspective::PerspectiveName;
+
+use super::{MailboxDirection, RuntimeError};
 
 /// Root path helper for a Multorum workspace.
 #[derive(Debug, Clone)]
@@ -15,27 +18,69 @@ pub struct MultorumPaths {
 
 impl MultorumPaths {
     /// Construct path helpers for a workspace root.
-    pub fn new(workspace_root: impl Into<PathBuf>) -> std::io::Result<Self> {
-        Ok(Self { workspace_root: workspace_root.into().canonicalize()? })
+    ///
+    /// Note: This type only centralizes deterministic path construction.
+    /// Callers that require an absolute or canonical root must normalize
+    /// `workspace_root` before constructing `MultorumPaths`.
+    pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
+        Self { workspace_root: workspace_root.into() }
     }
 
-    /// Absolute path to the workspace root.
+    /// Construct path helpers from a canonicalized workspace root.
+    pub fn new_canonical(workspace_root: impl Into<PathBuf>) -> std::io::Result<Self> {
+        Ok(Self::new(workspace_root.into().canonicalize()?))
+    }
+
+    /// Resolve the canonical workspace root for a path in either the
+    /// canonical workspace or a managed worker worktree.
+    pub(crate) fn canonical_workspace_root(path: &Path) -> PathBuf {
+        let components = path.components().collect::<Vec<_>>();
+        for index in 0..components.len().saturating_sub(2) {
+            if components[index].as_os_str() == OsStr::new(".multorum")
+                && components[index + 1].as_os_str() == OsStr::new("worktrees")
+            {
+                let mut root = PathBuf::new();
+                for component in &components[..index] {
+                    root.push(component.as_os_str());
+                }
+                if !root.as_os_str().is_empty() {
+                    return root;
+                }
+            }
+        }
+
+        path.to_path_buf()
+    }
+
+    /// Resolve the git worktree root containing `path`.
+    pub(crate) fn find_git_root(path: &Path) -> PathBuf {
+        let mut current = Some(path);
+        while let Some(candidate) = current {
+            if candidate.join(".git").exists() {
+                return candidate.to_path_buf();
+            }
+            current = candidate.parent();
+        }
+        path.to_path_buf()
+    }
+
+    /// Workspace root path used for derived runtime locations.
     pub fn workspace_root(&self) -> &Path {
         &self.workspace_root
     }
 
-    /// Absolute path to the workspace `.multorum/` directory.
+    /// Path to the workspace `.multorum/` directory.
     pub fn multorum_root(&self) -> PathBuf {
         self.workspace_root.join(".multorum")
     }
 
-    /// Absolute path helper for orchestrator-local runtime state.
-    pub fn orchestrator(&self) -> std::io::Result<OrchestratorPaths> {
+    /// Path helper for orchestrator-local runtime state.
+    pub fn orchestrator(&self) -> OrchestratorPaths {
         OrchestratorPaths::new(self.multorum_root().join("orchestrator"))
     }
 
-    /// Absolute path helper for the managed worker worktree.
-    pub fn worker(&self, perspective: &PerspectiveName) -> std::io::Result<WorkerPaths> {
+    /// Path helper for the managed worker worktree.
+    pub fn worker(&self, perspective: &PerspectiveName) -> WorkerPaths {
         WorkerPaths::new(self.multorum_root().join("worktrees").join(perspective.as_str()))
     }
 }
@@ -48,11 +93,14 @@ pub struct OrchestratorPaths {
 
 impl OrchestratorPaths {
     /// Construct orchestrator path helpers from the runtime root.
-    pub fn new(root: impl Into<PathBuf>) -> std::io::Result<Self> {
-        Ok(Self { root: root.into().canonicalize()? })
+    ///
+    /// Note: This constructor does not canonicalize because the runtime
+    /// directory is created lazily during activation and provisioning.
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
     }
 
-    /// Absolute path to `.multorum/orchestrator/`.
+    /// Path to `.multorum/orchestrator/`.
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -72,6 +120,11 @@ impl OrchestratorPaths {
         self.workers().join(perspective.as_str())
     }
 
+    /// Worker state projection file.
+    pub fn worker_state(&self, perspective: &PerspectiveName) -> PathBuf {
+        self.worker(perspective).join("state.toml")
+    }
+
     /// Audit log directory.
     pub fn audit(&self) -> PathBuf {
         self.root.join("audit")
@@ -86,16 +139,43 @@ pub struct WorkerPaths {
 
 impl WorkerPaths {
     /// Construct worker path helpers from the worktree root.
-    pub fn new(worktree_root: impl Into<PathBuf>) -> std::io::Result<Self> {
-        Ok(Self { worktree_root: worktree_root.into().canonicalize()? })
+    ///
+    /// Note: This constructor does not canonicalize because the managed
+    /// worktree path is reserved before `git worktree add` creates it.
+    pub fn new(worktree_root: impl Into<PathBuf>) -> Self {
+        Self { worktree_root: worktree_root.into() }
     }
 
-    /// Absolute path to the worker worktree root.
+    /// Derive the canonical workspace root from a managed worker
+    /// worktree path.
+    pub(crate) fn workspace_root(&self) -> Result<PathBuf, RuntimeError> {
+        let worktrees_root = self.worktree_root.parent().ok_or_else(|| {
+            RuntimeError::MissingWorkerRuntime(self.worktree_root.display().to_string())
+        })?;
+        let multorum_root = worktrees_root.parent().ok_or_else(|| {
+            RuntimeError::MissingWorkerRuntime(self.worktree_root.display().to_string())
+        })?;
+        let workspace_root = multorum_root.parent().ok_or_else(|| {
+            RuntimeError::MissingWorkerRuntime(self.worktree_root.display().to_string())
+        })?;
+
+        if worktrees_root.file_name() != Some(OsStr::new("worktrees"))
+            || multorum_root.file_name() != Some(OsStr::new(".multorum"))
+        {
+            return Err(RuntimeError::MissingWorkerRuntime(
+                self.worktree_root.display().to_string(),
+            ));
+        }
+
+        Ok(workspace_root.to_path_buf())
+    }
+
+    /// Path to the worker worktree root.
     pub fn worktree_root(&self) -> &Path {
         &self.worktree_root
     }
 
-    /// Absolute path to the worker-local `.multorum/` directory.
+    /// Path to the worker-local `.multorum/` directory.
     pub fn multorum_root(&self) -> PathBuf {
         self.worktree_root.join(".multorum")
     }
@@ -125,6 +205,14 @@ impl WorkerPaths {
         self.multorum_root().join("outbox")
     }
 
+    /// Mailbox root for a direction relative to the worker.
+    pub fn mailbox(&self, direction: MailboxDirection) -> PathBuf {
+        match direction {
+            | MailboxDirection::Inbox => self.inbox(),
+            | MailboxDirection::Outbox => self.outbox(),
+        }
+    }
+
     /// Pending inbox bundles.
     pub fn inbox_new(&self) -> PathBuf {
         self.inbox().join("new")
@@ -143,6 +231,16 @@ impl WorkerPaths {
     /// Outbox acknowledgement directory.
     pub fn outbox_ack(&self) -> PathBuf {
         self.outbox().join("ack")
+    }
+
+    /// Pending bundles for a mailbox direction.
+    pub fn mailbox_new(&self, direction: MailboxDirection) -> PathBuf {
+        self.mailbox(direction).join("new")
+    }
+
+    /// Acknowledgement directory for a mailbox direction.
+    pub fn mailbox_ack(&self, direction: MailboxDirection) -> PathBuf {
+        self.mailbox(direction).join("ack")
     }
 
     /// Runtime artifacts root.

@@ -25,7 +25,10 @@ use crate::{
     perspective::PerspectiveName,
     runtime::{
         self,
-        service::{NoopOrchestratorService, NoopWorkerService, OrchestratorService, WorkerService},
+        service::{
+            FilesystemOrchestratorService, FilesystemWorkerService, OrchestratorService,
+            WorkerService,
+        },
     },
 };
 
@@ -45,7 +48,13 @@ impl Cli {
     /// Parse command-line arguments and execute the instruction.
     pub fn run() {
         let cli = Self::parse();
-        let services = CliServices::default();
+        let services = match CliServices::from_current_dir() {
+            | Ok(services) => services,
+            | Err(error) => {
+                eprintln!("error: {error}");
+                std::process::exit(1);
+            }
+        };
         if let Err(error) = cli.command.execute(&services) {
             eprintln!("error: {error}");
             std::process::exit(1);
@@ -55,12 +64,21 @@ impl Cli {
 
 /// Runtime service container used by the CLI frontend.
 ///
-/// Note: The current runtime implementation is still scaffolded, so the
-/// default services return `RuntimeError::Unimplemented`.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CliServices {
-    orchestrator: NoopOrchestratorService,
-    worker: NoopWorkerService,
+    orchestrator: FilesystemOrchestratorService,
+}
+
+impl CliServices {
+    /// Build CLI services from the current directory.
+    pub fn from_current_dir() -> runtime::Result<Self> {
+        Ok(Self { orchestrator: FilesystemOrchestratorService::from_current_dir()? })
+    }
+
+    /// Construct the worker service for the current worktree.
+    pub fn worker(&self) -> runtime::Result<FilesystemWorkerService> {
+        FilesystemWorkerService::from_current_dir()
+    }
 }
 
 /// Shared payload options for commands that publish mailbox bundles.
@@ -330,13 +348,27 @@ impl Command {
                 println!("{result:#?}");
             }
             | Self::Commit { perspective, head_commit, payload } => {
-                let _ = perspective;
-                let result = services.worker.send_commit(head_commit, payload.into_runtime())?;
+                let worker = services.worker()?;
+                let contract = worker.contract()?;
+                if contract.perspective != perspective {
+                    return Err(runtime::RuntimeError::PerspectiveMismatch {
+                        expected: perspective.to_string(),
+                        found: contract.perspective.to_string(),
+                    });
+                }
+                let result = worker.send_commit(head_commit, payload.into_runtime())?;
                 println!("{result:#?}");
             }
             | Self::Report { perspective, head_commit, payload } => {
-                let _ = perspective;
-                let result = services.worker.send_report(
+                let worker = services.worker()?;
+                let contract = worker.contract()?;
+                if contract.perspective != perspective {
+                    return Err(runtime::RuntimeError::PerspectiveMismatch {
+                        expected: perspective.to_string(),
+                        found: contract.perspective.to_string(),
+                    });
+                }
+                let result = worker.send_report(
                     head_commit,
                     runtime::ReplyReference::default(),
                     payload.into_runtime(),

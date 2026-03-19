@@ -41,6 +41,7 @@ pub struct McpToolError {
 impl From<RuntimeError> for McpToolError {
     fn from(value: RuntimeError) -> Self {
         let code = match value {
+            | RuntimeError::MissingActiveRulebook => McpErrorCode::InvalidState,
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,
             | RuntimeError::InvalidState => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,
@@ -51,9 +52,13 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::MailboxConflict => McpErrorCode::MailboxConflict,
             | RuntimeError::MissingWorkerRuntime(_) => McpErrorCode::MissingWorkerRuntime,
             | RuntimeError::Unimplemented(_) => McpErrorCode::Unimplemented,
-            | RuntimeError::Io(_) | RuntimeError::TomlDecode(_) | RuntimeError::TomlEncode(_) => {
-                McpErrorCode::Internal
-            }
+            | RuntimeError::InvalidPayload(_)
+            | RuntimeError::PerspectiveMismatch { .. }
+            | RuntimeError::Git(_)
+            | RuntimeError::Rulebook(_)
+            | RuntimeError::Io(_)
+            | RuntimeError::TomlDecode(_)
+            | RuntimeError::TomlEncode(_) => McpErrorCode::Internal,
         };
         Self { code, message: value.to_string() }
     }

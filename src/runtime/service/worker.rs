@@ -1,12 +1,16 @@
 //! Worker-facing runtime service surface.
 
+use std::path::PathBuf;
+
 use crate::runtime::mailbox::AckRef;
 
 use super::super::{
-    bundle::{BundlePayload, PublishedBundle, ReplyReference, Sequence},
+    MultorumPaths, WorkerPaths,
+    bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
-    state::{MailboxMessageView, WorkerContractView, WorkerStatus},
+    state::{MailboxMessageView, WorkerContractView, WorkerState, WorkerStatus},
 };
+use super::filesystem::{RuntimeFileSystem, can_submit_from_state};
 
 /// Typed operations available to a worker frontend.
 pub trait WorkerService {
@@ -37,36 +41,130 @@ pub trait WorkerService {
     fn status(&self) -> Result<WorkerStatus>;
 }
 
-/// Placeholder worker service used while the runtime is scaffolded.
-#[derive(Debug, Default)]
-pub struct NoopWorkerService;
+/// Filesystem-backed worker runtime service.
+///
+/// The service is bound to one provisioned worktree and derives the
+/// canonical orchestrator control plane from the managed
+/// `.multorum/worktrees/<perspective>` location created during
+/// provisioning.
+#[derive(Debug, Clone)]
+pub struct FilesystemWorkerService {
+    fs: RuntimeFileSystem,
+    worktree_root: PathBuf,
+}
 
-impl WorkerService for NoopWorkerService {
+impl FilesystemWorkerService {
+    /// Construct the worker service for an explicit worktree root.
+    pub fn new(worktree_root: impl Into<PathBuf>) -> Result<Self> {
+        let worktree_root = worktree_root.into().canonicalize()?;
+        let workspace_root = WorkerPaths::new(worktree_root.clone()).workspace_root()?;
+        Ok(Self { fs: RuntimeFileSystem::new(workspace_root)?, worktree_root })
+    }
+
+    /// Construct the worker service from the current directory.
+    pub fn from_current_dir() -> Result<Self> {
+        let cwd = std::env::current_dir()?;
+        Self::new(MultorumPaths::find_git_root(&cwd))
+    }
+
+    fn contract_view(&self) -> Result<WorkerContractView> {
+        self.fs.load_worker_contract(&self.worktree_root)
+    }
+
+    fn update_state_after_ack(&self, message: &AckRef) -> Result<()> {
+        let mut record = self.fs.load_worker_record(&message.message.perspective)?;
+        if record.worktree_path != self.worktree_root {
+            return Err(RuntimeError::MissingWorkerRuntime(
+                self.worktree_root.display().to_string(),
+            ));
+        }
+
+        match message.message.kind {
+            | MessageKind::Task | MessageKind::Resolve | MessageKind::Revise => {
+                record.state = WorkerState::Active;
+                self.fs.store_worker_record(&record)?;
+            }
+            | MessageKind::Report | MessageKind::Commit => {}
+        }
+
+        Ok(())
+    }
+
+    fn update_submission_state(
+        &self, state: WorkerState, head_commit: Option<String>,
+    ) -> Result<()> {
+        let contract = self.contract_view()?;
+        let mut record = self.fs.load_worker_record(&contract.perspective)?;
+        if !can_submit_from_state(record.state) {
+            return Err(RuntimeError::InvalidState);
+        }
+        record.state = state;
+        record.submitted_head_commit = head_commit;
+        self.fs.store_worker_record(&record)
+    }
+}
+
+impl WorkerService for FilesystemWorkerService {
     fn contract(&self) -> Result<WorkerContractView> {
-        Err(RuntimeError::Unimplemented("worker_contract"))
+        self.contract_view()
     }
 
-    fn read_inbox(&self, _after: Option<Sequence>) -> Result<Vec<MailboxMessageView>> {
-        Err(RuntimeError::Unimplemented("read_inbox"))
+    fn read_inbox(&self, after: Option<Sequence>) -> Result<Vec<MailboxMessageView>> {
+        let contract = self.contract_view()?;
+        self.fs.list_mailbox_messages(
+            &self.worktree_root,
+            &contract.perspective,
+            crate::runtime::MailboxDirection::Inbox,
+            after,
+        )
     }
 
-    fn ack_inbox(&self, _sequence: Sequence) -> Result<AckRef> {
-        Err(RuntimeError::Unimplemented("ack_inbox"))
+    fn ack_inbox(&self, sequence: Sequence) -> Result<AckRef> {
+        let ack = self.fs.acknowledge_message(
+            &self.worktree_root,
+            crate::runtime::MailboxDirection::Inbox,
+            sequence,
+        )?;
+        self.update_state_after_ack(&ack)?;
+        Ok(ack)
     }
 
     fn send_report(
-        &self, _head_commit: Option<String>, _reply: ReplyReference, _payload: BundlePayload,
+        &self, head_commit: Option<String>, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle> {
-        Err(RuntimeError::Unimplemented("send_report"))
+        let contract = self.contract_view()?;
+        let message = self.fs.publish_bundle(
+            &self.worktree_root,
+            crate::runtime::MailboxDirection::Outbox,
+            MessageKind::Report,
+            &contract.perspective,
+            reply,
+            head_commit,
+            payload,
+        )?;
+        self.update_submission_state(WorkerState::Blocked, None)?;
+        Ok(message)
     }
 
-    fn send_commit(
-        &self, _head_commit: String, _payload: BundlePayload,
-    ) -> Result<PublishedBundle> {
-        Err(RuntimeError::Unimplemented("send_commit"))
+    fn send_commit(&self, head_commit: String, payload: BundlePayload) -> Result<PublishedBundle> {
+        self.fs.ensure_commit_exists(&self.worktree_root, &head_commit)?;
+        let contract = self.contract_view()?;
+        let message = self.fs.publish_bundle(
+            &self.worktree_root,
+            crate::runtime::MailboxDirection::Outbox,
+            MessageKind::Commit,
+            &contract.perspective,
+            ReplyReference::default(),
+            Some(head_commit.clone()),
+            payload,
+        )?;
+        self.update_submission_state(WorkerState::Committed, Some(head_commit))?;
+        Ok(message)
     }
 
     fn status(&self) -> Result<WorkerStatus> {
-        Err(RuntimeError::Unimplemented("worker_status"))
+        let contract = self.contract_view()?;
+        let record = self.fs.load_worker_record(&contract.perspective)?;
+        Ok(WorkerStatus { perspective: contract.perspective, state: record.state })
     }
 }

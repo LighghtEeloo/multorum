@@ -8,6 +8,10 @@ pub type Result<T> = std::result::Result<T, RuntimeError>;
 /// Errors produced by the runtime application layer.
 #[derive(Debug, Error)]
 pub enum RuntimeError {
+    /// The runtime has not activated a rulebook yet.
+    #[error("no active rulebook; run `multorum rulebook switch <commit>` first")]
+    MissingActiveRulebook,
+
     /// The requested perspective does not exist in the active rulebook
     /// or runtime state.
     #[error("unknown perspective: {0}")]
@@ -49,6 +53,22 @@ pub enum RuntimeError {
     /// scaffolding phase.
     #[error("operation is not implemented yet: {0}")]
     Unimplemented(&'static str),
+
+    /// The caller supplied an invalid bundle payload.
+    #[error("invalid bundle payload: {0}")]
+    InvalidPayload(&'static str),
+
+    /// The current worktree does not belong to the named perspective.
+    #[error("worker perspective mismatch: expected `{expected}`, found `{found}`")]
+    PerspectiveMismatch { expected: String, found: String },
+
+    /// Git command execution failed.
+    #[error("git command failed: {0}")]
+    Git(String),
+
+    /// Rulebook loading or compilation failed.
+    #[error(transparent)]
+    Rulebook(#[from] crate::rulebook::RulebookError),
 
     /// Filesystem I/O failure.
     #[error(transparent)]

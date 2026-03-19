@@ -6,14 +6,14 @@
 
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::perspective::PerspectiveName;
 
 use super::{Sequence, bundle::MessageKind, mailbox::MailboxDirection};
 
 /// Worker lifecycle state as projected by Multorum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum WorkerState {
     /// The worktree and runtime surface have been created.
@@ -120,7 +120,7 @@ pub struct WorkerStatus {
 }
 
 /// Worker contract view exported to frontends.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkerContractView {
     /// Worker identity.
     pub perspective: PerspectiveName,
