@@ -24,7 +24,7 @@ Multorum is a programming tool that manages multiple simultaneous perspectives o
 
 Parallel development — whether by humans or AI agents — faces a fundamental tension: workers need *isolation* to make progress independently, but they need *integration context* to validate that their work is correct. Without isolation, workers interfere with each other. Without integration context, workers produce code that may be syntactically valid but semantically broken in the context of the whole system.
 
-Existing tools address one side of this tension or the other. Multorum addresses both simultaneously by separating *authoring scope* (what a worker may write) from *execution scope* (what a worker runs against). A worker may only write to its declared files, but it compiles, tests, and queries language services against the full codebase.
+Existing tools address one side of this tension or the other. Multorum addresses both simultaneously by separating *authoring scope* (what a worker may write) from *execution scope* (what a worker runs against). A worker may only write to its declared files, but it compiles, tests, and uses language services against the full codebase.
 
 ### Design Philosophy
 
@@ -41,7 +41,7 @@ The orchestrator is the sole coordination authority in a Multorum workflow. It m
 - Decomposing development goals into discrete tasks
 - Declaring the rulebook that governs which workers exist and what they may access
 - Issuing instructions to Multorum to provision, resume, and integrate workers
-- Receiving and resolving worker report-backs
+- Receiving and resolving worker reports
 - Evolving the rulebook as the project matures
 
 The orchestrator communicates downward to Multorum and to individual workers. Workers never communicate with each other; the communication topology is a strict star with the orchestrator at the center.
@@ -55,7 +55,7 @@ The orchestrator communicates downward to Multorum and to individual workers. Wo
 
 ### Workers and Perspectives
 
-A *perspective* is a declaration in the rulebook that defines a named role, its write scope, and its read scope. A *worker* is an agent actively holding a perspective — executing a task within the environment that Multorum provisions for that perspective.
+A *perspective* is a declaration in the rulebook that defines a named role, its write scope, and its read scope. A *worker* is an agent currently assigned to a perspective and executing a task within the environment that Multorum provisions for that perspective.
 
 The distinction matters: perspectives are static declarations that live in the rulebook; workers are runtime entities with lifecycle state. A perspective can exist in the rulebook without a worker currently holding it.
 
@@ -174,7 +174,7 @@ Perspectives are static declarations; workers are runtime entities. A perspectiv
 
 ### Write Semantics
 
-The write set is a closed, compiled list of files. A perspective may only modify files that existed in the codebase at rulebook activation time and that fall within its write set expression. Creating new files requires orchestrator intervention — the worker reports back, the orchestrator amends the rulebook, and the worker is re-provisioned.
+The write set is a closed, compiled list of files. A perspective may only modify files that existed in the codebase at rulebook activation time and that appear in its compiled write set. Creating new files requires orchestrator intervention — the worker reports back, the orchestrator amends the rulebook, and the worker is re-provisioned.
 
 ### Read Semantics
 
@@ -278,7 +278,7 @@ If the check fails, Multorum rejects the switch and reports which active workers
 
 ## Project Layout
 
-A Multorum project adds a `.multorum/` directory to the project root. Every worker worktree also has its own `.multorum/` directory because it is a full checkout of the repository plus local runtime files. The orchestrator and each worker therefore have separate `.multorum/` directories with different responsibilities.
+A Multorum project adds a `.multorum/` directory to the project root. Every worker worktree also has its own `.multorum/` directory because each worktree is a full checkout of the repository plus local runtime files. The orchestrator and each worker therefore have separate `.multorum/` directories with different responsibilities.
 
 ```
 <project-root>/
@@ -301,7 +301,7 @@ In the main workspace, **`.multorum/orchestrator/`** contains the orchestrator's
 
 **`.multorum/worktrees/`** contains one subdirectory per active worker, each being a git worktree. These are created and destroyed by Multorum as workers are provisioned and integrated or discarded.
 
-Inside each worker worktree, the worker-local **`.multorum/`** directory contains the runtime contract, the compiled read and write sets, the inbox and outbox mailboxes, and any runtime artifacts attached to messages. These files are authoritative for orchestrator-worker communication, but they are local runtime state rather than project configuration. When the orchestrator or worker submits payloads by filesystem path, Multorum moves those files into this runtime area and becomes responsible for retaining them.
+Inside each worker worktree, the worker-local **`.multorum/`** directory contains the runtime contract, the compiled read and write sets, the inbox and outbox mailboxes, and any runtime artifacts attached to messages. These files are authoritative for orchestrator-worker communication, but they are local runtime state rather than project configuration. When the orchestrator or worker submits payloads by filesystem path, Multorum moves them into this runtime area and becomes responsible for retaining them.
 
 ### Gitignore
 
@@ -331,10 +331,10 @@ Multorum addresses this by making the authoring constraint a matter of enforceme
 
 ### Git Worktrees
 
-Each sub-codebase is a git worktree, created from the canonical codebase at the commit hash active when the rulebook was activated:
+Each sub-codebase is a git worktree, created from the canonical codebase at the commit hash pinned when the rulebook was activated:
 
 ```
-git worktree add .multorum/worktrees/<perspective-name> <HEAD-commit>
+git worktree add .multorum/worktrees/<perspective-name> <pinned-base-commit>
 ```
 
 All worktrees are created from the same pinned commit. This means every worker starts from an identical snapshot of the codebase, and that snapshot does not change for the lifetime of the worker's task — even if the orchestrator integrates other workers' commits into HEAD in the meantime.
@@ -376,7 +376,7 @@ A client-side git hook may additionally be installed in the worktree as an early
 
 A worker's read set is not enforced at the filesystem level. The worker has access to the full codebase in its worktree and may read any file. The read set serves a different purpose: it communicates to the worker which files are the expected sources of information for the task, and guarantees that those files will not change during the session. It is a contract of stability and relevance, not a restriction.
 
-This design acknowledges that LLM-based agents often need to navigate the codebase freely to understand context — chasing imports, reading interfaces, understanding patterns. Hard-walling the read set would make agents brittle. What matters is controlling what they *write*, not what they *read*.
+This design acknowledges that LLM-based agents often need to navigate the codebase freely to understand context — chasing imports, reading interfaces, understanding patterns. Strictly enforcing the read set would make agents brittle. What matters is controlling what they *write*, not what they *read*.
 
 ### New Files
 
@@ -481,9 +481,9 @@ Because a perspective may have at most one active worker at a time, the perspect
 
 Provisioning may seed the worker inbox with an initial `task` bundle carrying the orchestrator's assignment and any supporting material. This keeps the initial task description in the same transport as later resolutions and revisions.
 
-### Report-Back
+### Worker Reports
 
-Report-back is a first-class primitive and one message kind within the mailbox protocol. It is not a special side channel.
+Worker reporting is a first-class primitive and one message kind within the mailbox protocol. It is not a special side channel.
 
 Workers may send `report` bundles for any reason that prevents confident, correct completion of the task. Common categories include:
 
@@ -501,7 +501,7 @@ The same mailbox protocol is used for post-review feedback and final submission:
 - a worker writes a `commit` bundle to the outbox to submit its git commit and any evidence
 - the orchestrator writes a `revise` bundle to the inbox to request changes after review or failed checks
 
-`discard` is an orchestrator-local teardown action, not a content-carrying mailbox message. This unifies initial task delivery, blocker resolution, revision requests, and final submission into one transport. There is no separate mechanism for "real" content outside the protocol.
+`discard` is an orchestrator-local teardown action, not a content-carrying mailbox message. This unifies initial task delivery, blocker resolution, revision requests, and final submission into one transport. There is no separate out-of-band channel for task content.
 
 ---
 
@@ -583,7 +583,7 @@ Publishes a `resolve` bundle into the worker's inbox. The bundle carries both th
 Publishes a `revise` bundle into the worker's inbox. The bundle carries the required changes. Once the worker acknowledges it, Multorum returns the committed worker to ACTIVE state so it can address the feedback.
 
 **`discard <perspective-name>`**
-Tears down a worker's worktree without integrating its work. Valid from ACTIVE or COMMITTED states.
+Tears down a worker's worktree without integrating its work. It may be issued while the worker is ACTIVE or COMMITTED.
 
 ### Integration Instructions
 

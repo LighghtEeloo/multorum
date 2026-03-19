@@ -32,7 +32,7 @@ use crate::{
     },
 };
 
-/// Multorum — multi-perspective codebase orchestration.
+/// Multorum — multi-perspective conflict-free codebase orchestration.
 ///
 /// Infrastructure for managing multiple simultaneous perspectives on a
 /// single codebase.

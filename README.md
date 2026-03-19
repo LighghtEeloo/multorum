@@ -1,14 +1,12 @@
 # Multorum
 
-Multorum is a tool for managing multiple simultaneous perspectives on a single codebase, designed for AI agent orchestration workflows. A coordinating agent — the *orchestrator* — decomposes a development goal into discrete tasks and assigns each to an independent agent — a *worker* — that operates in an isolated environment with precisely scoped file access.
-
-Belua multorum es capitums!
+Multorum is a tool for managing multiple simultaneous, conflict-free perspectives on a single codebase, designed for AI agent orchestration workflows. A coordinating agent, the *orchestrator*, decomposes a development goal into discrete tasks and assigns each to an independent *worker* that operates in an isolated environment with precisely scoped file access.
 
 ---
 
 ## The Core Idea
 
-Parallel development faces a fundamental tension: workers need *isolation* to make progress independently, but they need *integration context* to validate that their work is correct. Multorum threads this needle by separating authoring scope (what a worker may write) from execution scope (what a worker runs against). A worker may only write to its declared files, but it compiles, tests, and queries the LSP against the full codebase.
+Parallel development faces a fundamental tension: workers need *isolation* to make progress independently, but they need *integration context* to validate that their work is correct. Multorum resolves this tension by separating authoring scope (what a worker may write) from execution scope (what a worker runs against). A worker may only write to its declared files, but it compiles, tests, and uses the LSP against the full codebase.
 
 ---
 
@@ -16,7 +14,7 @@ Parallel development faces a fundamental tension: workers need *isolation* to ma
 
 ### Rulebook, File Sets, and Perspectives
 
-The project maintains a single `.multorum/rulebook.toml`, versioned in git. The rulebook declares *perspectives* — named roles, each with an explicit write set and read set of files. File permissions are expressed using a small algebra of *file sets*: explicit paths and globs as primitives, composed via union, intersection, and difference, and optionally given names for reuse across the rulebook.
+The project maintains a single `.multorum/rulebook.toml`, versioned in git. The rulebook declares *perspectives* — named roles, each with explicit read and write sets. File permissions are expressed using a small algebra of *file sets*: explicit paths and globs as primitives, composed via union, intersection, and difference, and optionally given names for reuse across the rulebook.
 
 ```toml
 # Named file set definitions
@@ -38,7 +36,7 @@ read  = "AuthSpecs | AuthTests"
 write = "AuthTests"
 ```
 
-The rulebook is immutable once active — its versioning is handled entirely by git. The orchestrator evolves it by committing changes and explicitly instructing Multorum to switch to a new version.
+The rulebook is immutable once active; git provides its versioning. The orchestrator evolves it by committing changes and explicitly instructing Multorum to switch to a new version.
 
 ### Multorum-Managed Project Layout
 
@@ -60,7 +58,7 @@ Multorum enforces one core invariant at compile time: **a file may either be wri
 
 ### Sub-Codebase Provisioning
 
-Each worker receives a git worktree — a full checkout of the codebase, pinned to the commit hash active when the session began. The worktree never updates during the worker's task, even if other workers finish and their changes are integrated. Stability is deliberate: each worker operates on a predictable, immutable world.
+Each worker receives a git worktree: a full checkout of the codebase pinned to the commit active when the worker was provisioned. The worktree never updates during the worker's task, even if other workers finish and their changes are integrated. This stability is deliberate: each worker operates on a predictable, immutable world.
 
 The write set is enforced server-side when Multorum integrates the worker's commit. The read set is not enforced at the filesystem level — it is guidance, communicating which files are relevant and guaranteeing they will not change. Workers may navigate the full codebase freely; what matters is controlling what they write.
 
@@ -75,13 +73,13 @@ All orchestrator-to-worker and worker-to-orchestrator communication is file-base
 
 Messages are published as directory bundles with an `envelope.toml` plus opaque payload files such as `body.md` and attached artifacts. Publication is atomic, and acknowledgement is recorded separately so each mailbox directory has exactly one writer. When a body file or artifact is supplied by path, Multorum consumes that path and moves the file into `.multorum/` bundle storage instead of copying it.
 
-Report-back is one message kind within this protocol. Workers publish a `report` bundle whenever they cannot complete their task confidently: a missing file permission, an ambiguous specification, a vague function signature, nowhere appropriate to write tests — anything requiring orchestrator judgment. The orchestrator answers with `resolve` or `revise` bundles in the worker inbox. Initial task delivery, blocker resolution, revision requests, and final commit submission all use the same transport.
+Worker reporting is one message kind within this protocol. Workers publish a `report` bundle whenever they cannot complete their task confidently: a missing file permission, an ambiguous specification, a vague function signature, no appropriate place to write tests, or any other issue requiring orchestrator judgment. The orchestrator answers with `resolve` or `revise` bundles in the worker inbox. Initial task delivery, blocker resolution, revision requests, and final commit submission all use the same transport.
 
 Workers never communicate with each other. The communication topology is a strict star with the orchestrator at the center.
 
 ### Pre-Merge Pipeline
 
-Before integration, every commit passes through a pipeline of gates. The first — a server-side file set check — is mandatory and non-negotiable. The remainder are project-defined checks configured in the rulebook: build, test, lint, format, or any arbitrary command.
+Before integration, every commit passes through a pipeline of gates. The first, a server-side file set check, is mandatory and non-negotiable. The remainder are project-defined checks configured in the rulebook: build, test, lint, format, or any other command.
 
 Workers may submit evidence (e.g. test output from their worktree) to request that specific checks be skipped. The orchestrator reviews the evidence and decides whether to trust it. The file set check cannot be skipped under any circumstances.
 
