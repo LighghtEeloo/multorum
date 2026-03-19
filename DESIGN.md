@@ -432,6 +432,9 @@ Runs the pre-merge pipeline against the worker's commit. If all checks pass, int
 
 ### Worker-Facing Instructions
 
+**`commit <perspective-name>`**
+Issued by the worker to declare its task complete and submit its work for review. Multorum freezes the worktree and transitions the worker from ACTIVE to COMMITTED. The orchestrator then decides whether to `integrate`, `revise`, or `discard` the submission.
+
 **`report <perspective-name>`**
 Issued by the worker to signal that it is blocked. Multorum transitions the worker to BLOCKED and notifies the orchestrator. An optional structured payload carries the evidence, request, or description — this content is opaque to Multorum.
 

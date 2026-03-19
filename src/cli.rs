@@ -11,14 +11,14 @@
 //! - **Integration** — `integrate`
 //! - **Query** — `status`
 //!
-//! Workers issue a single instruction back: `report`.
+//! Workers issue two instructions back: `commit` and `report`.
 
 use clap::{Parser, Subcommand};
 
 /// Multorum — multi-perspective codebase orchestration.
 ///
 /// Infrastructure for managing multiple simultaneous perspectives on a
-/// single codebase. See `DESIGN.md` for the full architecture reference.
+/// single codebase.
 #[derive(Debug, Parser)]
 #[command(name = "multorum", version, about)]
 pub struct Cli {
@@ -51,7 +51,7 @@ pub enum Command {
 
     // ── Worker lifecycle instructions ───────────────────────────
     //
-    /// Create a sub-codebase for a perspective.
+    /// Create a sub-codebase with a perspective.
     ///
     /// Compiles the perspective's file sets, creates a git worktree at
     /// the pinned commit, installs the client-side write hook, and
@@ -112,6 +112,16 @@ pub enum Command {
 
     // ── Worker-facing instructions ──────────────────────────────
     //
+    /// Submit the worker's task as complete.
+    ///
+    /// Freezes the worktree and transitions the worker from ACTIVE to
+    /// COMMITTED. The orchestrator then decides whether to `integrate`,
+    /// `revise`, or `discard` the submission.
+    Commit {
+        /// The perspective name of the committing worker.
+        perspective: String,
+    },
+
     /// Signal that a worker is blocked.
     ///
     /// Transitions the worker to BLOCKED and notifies the orchestrator.
@@ -194,6 +204,9 @@ impl Command {
             | Self::Integrate { perspective, skip_checks } => {
                 let _ = skip_checks;
                 todo!("integrate: run pre-merge pipeline for {perspective}")
+            }
+            | Self::Commit { perspective } => {
+                todo!("commit: freeze worktree and submit {perspective}")
             }
             | Self::Report { perspective, message } => {
                 let _ = message;
