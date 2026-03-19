@@ -1,6 +1,6 @@
 //! The [`PerspectiveName`] newtype — a validated perspective identifier.
 
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use serde::de;
 
@@ -37,6 +37,14 @@ impl PerspectiveName {
     /// The identifier as a string slice.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl FromStr for PerspectiveName {
+    type Err = PerspectiveNameError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s)
     }
 }
 

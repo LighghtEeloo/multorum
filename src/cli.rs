@@ -12,14 +12,22 @@
 //! - **Query** — `status`
 //!
 //! Worker-originated instructions (`commit` and `report`) are represented
-//! here as CLI commands because the current implementation is a stub.
-//! In the mailbox-based design, these commands publish message bundles
-//! into the worker outbox, while `resolve` and `revise` publish bundles
-//! into the worker inbox.
+//! here as CLI commands so the same typed runtime service layer can back
+//! both sides of the mailbox protocol. In the mailbox-based design,
+//! these commands publish message bundles into the worker outbox, while
+//! `resolve` and `revise` publish bundles into the worker inbox.
 
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+
+use crate::{
+    perspective::PerspectiveName,
+    runtime::{
+        self,
+        service::{NoopOrchestratorService, NoopWorkerService, OrchestratorService, WorkerService},
+    },
+};
 
 /// Multorum — multi-perspective codebase orchestration.
 ///
@@ -37,8 +45,22 @@ impl Cli {
     /// Parse command-line arguments and execute the instruction.
     pub fn run() {
         let cli = Self::parse();
-        cli.command.execute();
+        let services = CliServices::default();
+        if let Err(error) = cli.command.execute(&services) {
+            eprintln!("error: {error}");
+            std::process::exit(1);
+        }
     }
+}
+
+/// Runtime service container used by the CLI frontend.
+///
+/// Note: The current runtime implementation is still scaffolded, so the
+/// default services return `RuntimeError::Unimplemented`.
+#[derive(Debug, Default)]
+pub struct CliServices {
+    orchestrator: NoopOrchestratorService,
+    worker: NoopWorkerService,
 }
 
 /// Shared payload options for commands that publish mailbox bundles.
@@ -46,7 +68,7 @@ impl Cli {
 /// The stub CLI models bundle contents as filesystem paths so the command
 /// surface matches the file-based protocol in `DESIGN.md`.
 #[derive(Debug, Clone, Args)]
-pub struct BundlePayload {
+pub struct BundlePayloadArgs {
     /// Optional Markdown body file to copy into `body.md`.
     #[arg(long, value_name = "FILE")]
     pub body: Option<PathBuf>,
@@ -56,12 +78,26 @@ pub struct BundlePayload {
     pub artifacts: Vec<PathBuf>,
 }
 
+impl BundlePayloadArgs {
+    /// Convert CLI payload arguments into runtime bundle payload.
+    pub fn into_runtime(self) -> runtime::BundlePayload {
+        runtime::BundlePayload { body_text: None, body_path: self.body, artifacts: self.artifacts }
+    }
+}
+
 /// Shared reply metadata for mailbox bundles that answer earlier messages.
 #[derive(Debug, Clone, Args)]
-pub struct ReplyReference {
+pub struct ReplyReferenceArgs {
     /// Sequence number of the message this bundle answers.
     #[arg(long = "reply-to", value_name = "SEQUENCE")]
     pub in_reply_to: Option<u64>,
+}
+
+impl ReplyReferenceArgs {
+    /// Convert CLI reply metadata into runtime reply metadata.
+    pub fn into_runtime(self) -> runtime::ReplyReference {
+        runtime::ReplyReference { in_reply_to: self.in_reply_to.map(runtime::Sequence) }
+    }
 }
 
 /// The orchestrator instruction set.
@@ -89,11 +125,11 @@ pub enum Command {
     /// worker inbox with an initial `task` bundle.
     Provision {
         /// The perspective name to provision.
-        perspective: String,
+        perspective: PerspectiveName,
 
         /// Optional payload for the initial `task` bundle.
         #[command(flatten)]
-        payload: BundlePayload,
+        payload: BundlePayloadArgs,
     },
 
     /// Unblock a worker after orchestrator resolution.
@@ -103,15 +139,15 @@ pub enum Command {
     /// ACTIVE.
     Resolve {
         /// The perspective name of the blocked worker.
-        perspective: String,
+        perspective: PerspectiveName,
 
         /// Optional payload for the `resolve` bundle.
         #[command(flatten)]
-        payload: BundlePayload,
+        payload: BundlePayloadArgs,
 
         /// Optional reply metadata for the `resolve` bundle.
         #[command(flatten)]
-        reply: ReplyReference,
+        reply: ReplyReferenceArgs,
     },
 
     /// Return a committed worker to active state for rework.
@@ -121,15 +157,15 @@ pub enum Command {
     /// to ACTIVE and resumes with the preserved worktree.
     Revise {
         /// The perspective name of the committed worker.
-        perspective: String,
+        perspective: PerspectiveName,
 
         /// Optional payload for the `revise` bundle.
         #[command(flatten)]
-        payload: BundlePayload,
+        payload: BundlePayloadArgs,
 
         /// Optional reply metadata for the `revise` bundle.
         #[command(flatten)]
-        reply: ReplyReference,
+        reply: ReplyReferenceArgs,
     },
 
     /// Tear down a worker's worktree without integrating.
@@ -138,7 +174,7 @@ pub enum Command {
     /// and the worktree is released. Transitions to DISCARDED.
     Discard {
         /// The perspective name to discard.
-        perspective: String,
+        perspective: PerspectiveName,
     },
 
     // ── Integration instructions ────────────────────────────────
@@ -150,7 +186,7 @@ pub enum Command {
     /// instructions from the orchestrator.
     Integrate {
         /// The perspective name to integrate.
-        perspective: String,
+        perspective: PerspectiveName,
 
         /// Checks to skip based on trusted worker evidence.
         ///
@@ -171,7 +207,7 @@ pub enum Command {
     /// whether to `integrate`, `revise`, or `discard` the submission.
     Commit {
         /// The perspective name of the committing worker.
-        perspective: String,
+        perspective: PerspectiveName,
 
         /// The git commit hash submitted by the worker.
         #[arg(long = "head-commit", value_name = "COMMIT")]
@@ -179,7 +215,7 @@ pub enum Command {
 
         /// Optional payload for the `commit` bundle.
         #[command(flatten)]
-        payload: BundlePayload,
+        payload: BundlePayloadArgs,
     },
 
     /// Signal that a worker is blocked.
@@ -190,7 +226,7 @@ pub enum Command {
     /// interpretation.
     Report {
         /// The perspective name of the reporting worker.
-        perspective: String,
+        perspective: PerspectiveName,
 
         /// Optional git commit hash relevant to the report.
         #[arg(long = "head-commit", value_name = "COMMIT")]
@@ -198,7 +234,7 @@ pub enum Command {
 
         /// Optional payload for the `report` bundle.
         #[command(flatten)]
-        payload: BundlePayload,
+        payload: BundlePayloadArgs,
     },
 
     // ── Query instructions ──────────────────────────────────────
@@ -237,53 +273,75 @@ pub enum RulebookCommand {
 
 impl RulebookCommand {
     /// Execute the rulebook instruction.
-    pub fn execute(self) {
+    pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
             | Self::Switch { commit } => {
-                todo!("rulebook switch: activate rulebook at {commit}")
+                let result = services.orchestrator.rulebook_switch(commit)?;
+                println!("{result:#?}");
             }
             | Self::Validate { commit } => {
-                todo!("rulebook validate: dry-run validation at {commit}")
+                let result = services.orchestrator.rulebook_validate(commit)?;
+                println!("{result:#?}");
             }
         }
+        Ok(())
     }
 }
 
 impl Command {
     /// Execute the orchestrator instruction.
-    pub fn execute(self) {
+    pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
-            | Self::Rulebook { command } => command.execute(),
+            | Self::Rulebook { command } => command.execute(services)?,
             | Self::Provision { perspective, payload } => {
-                let _ = payload;
-                todo!("provision: create sub-codebase and optional task bundle for {perspective}")
+                let task =
+                    (!payload.clone().into_runtime().is_empty()).then(|| payload.into_runtime());
+                let result = services.orchestrator.provision_worker(perspective, task)?;
+                println!("{result:#?}");
             }
             | Self::Resolve { perspective, payload, reply } => {
-                let _ = (payload, reply);
-                todo!("resolve: publish inbox bundle for {perspective}")
+                let result = services.orchestrator.resolve_worker(
+                    perspective,
+                    reply.into_runtime(),
+                    payload.into_runtime(),
+                )?;
+                println!("{result:#?}");
             }
             | Self::Revise { perspective, payload, reply } => {
-                let _ = (payload, reply);
-                todo!("revise: publish inbox bundle for {perspective}")
+                let result = services.orchestrator.revise_worker(
+                    perspective,
+                    reply.into_runtime(),
+                    payload.into_runtime(),
+                )?;
+                println!("{result:#?}");
             }
             | Self::Discard { perspective } => {
-                todo!("discard: tear down {perspective}")
+                let result = services.orchestrator.discard_worker(perspective)?;
+                println!("{result:#?}");
             }
             | Self::Integrate { perspective, skip_checks } => {
-                let _ = skip_checks;
-                todo!("integrate: run pre-merge pipeline for {perspective}")
+                let result = services.orchestrator.integrate_worker(perspective, skip_checks)?;
+                println!("{result:#?}");
             }
             | Self::Commit { perspective, head_commit, payload } => {
-                let _ = (head_commit, payload);
-                todo!("commit: publish outbox submission bundle for {perspective}")
+                let _ = perspective;
+                let result = services.worker.send_commit(head_commit, payload.into_runtime())?;
+                println!("{result:#?}");
             }
             | Self::Report { perspective, head_commit, payload } => {
-                let _ = (head_commit, payload);
-                todo!("report: publish outbox blocker bundle for {perspective}")
+                let _ = perspective;
+                let result = services.worker.send_report(
+                    head_commit,
+                    runtime::ReplyReference::default(),
+                    payload.into_runtime(),
+                )?;
+                println!("{result:#?}");
             }
             | Self::Status => {
-                todo!("status: query all worker states")
+                let result = services.orchestrator.status()?;
+                println!("{result:#?}");
             }
         }
+        Ok(())
     }
 }
