@@ -20,11 +20,17 @@ pub trait WorkerService {
     fn ack_inbox(&self, sequence: Sequence) -> Result<AckRef>;
 
     /// Publish a worker blocker report.
+    ///
+    /// Any path-backed payload files are moved into `.multorum/`
+    /// storage if publication succeeds.
     fn send_report(
         &self, head_commit: Option<String>, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;
 
     /// Publish a completed worker commit submission.
+    ///
+    /// Any path-backed payload files are moved into `.multorum/`
+    /// storage if publication succeeds.
     fn send_commit(&self, head_commit: String, payload: BundlePayload) -> Result<PublishedBundle>;
 
     /// Return the current worker status projection.

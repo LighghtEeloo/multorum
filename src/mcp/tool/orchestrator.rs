@@ -19,15 +19,15 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "provision_worker",
-            description: "Provision a worker worktree and optional initial task bundle.",
+            description: "Provision a worker worktree and optional initial task bundle; path-backed payload files are moved into .multorum storage.",
         },
         ToolDescriptor {
             name: "resolve_worker",
-            description: "Publish a resolve bundle to a blocked worker inbox.",
+            description: "Publish a resolve bundle to a blocked worker inbox; path-backed payload files are moved into .multorum storage.",
         },
         ToolDescriptor {
             name: "revise_worker",
-            description: "Publish a revise bundle to a committed worker inbox.",
+            description: "Publish a revise bundle to a committed worker inbox; path-backed payload files are moved into .multorum storage.",
         },
         ToolDescriptor {
             name: "discard_worker",

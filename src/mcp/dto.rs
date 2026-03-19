@@ -2,6 +2,10 @@
 //!
 //! These descriptors are transport-neutral. A real MCP adapter can map
 //! them to protocol registrations later.
+//!
+//! Bundle-publishing tools inherit Multorum's ownership-transfer
+//! semantics for path-backed payloads: successful publication moves the
+//! supplied files into `.multorum/` storage.
 
 /// Description of one exposed MCP tool.
 #[derive(Debug, Clone, PartialEq, Eq)]

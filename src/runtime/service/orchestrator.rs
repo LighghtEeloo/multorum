@@ -23,16 +23,25 @@ pub trait OrchestratorService {
     fn list_perspectives(&self) -> Result<Vec<PerspectiveSummary>>;
 
     /// Provision a worker worktree and optional initial task bundle.
+    ///
+    /// Any path-backed payload files are moved into `.multorum/`
+    /// storage if publication succeeds.
     fn provision_worker(
         &self, perspective: PerspectiveName, task: Option<BundlePayload>,
     ) -> Result<ProvisionResult>;
 
     /// Publish a `resolve` bundle to the worker inbox.
+    ///
+    /// Any path-backed payload files are moved into `.multorum/`
+    /// storage if publication succeeds.
     fn resolve_worker(
         &self, perspective: PerspectiveName, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;
 
     /// Publish a `revise` bundle to the worker inbox.
+    ///
+    /// Any path-backed payload files are moved into `.multorum/`
+    /// storage if publication succeeds.
     fn revise_worker(
         &self, perspective: PerspectiveName, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;

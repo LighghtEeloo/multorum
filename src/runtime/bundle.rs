@@ -4,6 +4,11 @@
 //! Multorum. The filesystem layout is authoritative; these types capture
 //! the stable metadata that both the runtime services and transport
 //! adapters share.
+//!
+//! Path-backed payload inputs transfer ownership into Multorum. When a
+//! bundle is published successfully, the runtime moves the referenced
+//! body file and artifact files into the bundle directory under
+//! `.multorum/` instead of copying them.
 
 use std::path::PathBuf;
 
@@ -48,13 +53,17 @@ pub struct MessageRef {
 /// User-supplied content to place into a bundle.
 ///
 /// `body_text` and `body_path` are mutually exclusive.
+///
+/// Path-backed fields are consumed on successful publication. Multorum
+/// moves those files into its managed `.multorum/` bundle storage so the
+/// runtime, not the caller, becomes responsible for retaining them.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BundlePayload {
     /// Inline Markdown content for `body.md`.
     pub body_text: Option<String>,
-    /// Existing file to copy into `body.md`.
+    /// Existing file to move into `body.md`.
     pub body_path: Option<PathBuf>,
-    /// Files to copy into `artifacts/`.
+    /// Existing files to move into `artifacts/`.
     pub artifacts: Vec<PathBuf>,
 }
 

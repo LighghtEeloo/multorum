@@ -265,7 +265,7 @@ In the main workspace, **`.multorum/orchestrator/`** contains the orchestrator's
 
 **`.multorum/worktrees/`** contains one subdirectory per active worker, each being a git worktree. These are created and destroyed by Multorum as workers are provisioned and integrated or discarded.
 
-Inside each worker worktree, the worker-local **`.multorum/`** directory contains the runtime contract, the compiled read and write sets, the inbox and outbox mailboxes, and any runtime artifacts attached to messages. These files are authoritative for orchestrator-worker communication, but they are local runtime state rather than project configuration.
+Inside each worker worktree, the worker-local **`.multorum/`** directory contains the runtime contract, the compiled read and write sets, the inbox and outbox mailboxes, and any runtime artifacts attached to messages. These files are authoritative for orchestrator-worker communication, but they are local runtime state rather than project configuration. When the orchestrator or worker submits payloads by filesystem path, Multorum moves those files into this runtime area and becomes responsible for retaining them.
 
 ### Gitignore
 
@@ -327,6 +327,8 @@ At provisioning time, Multorum creates the following runtime files inside the wo
 ```
 
 `contract.toml`, the mailbox directories, and `artifacts/` are runtime-only files. They are not part of the canonical codebase and must never be committed by the worker. Multorum installs local ignore rules in the worktree so these paths remain invisible to normal version-control operations.
+
+Any payload passed by path during mailbox publication is **consumed** rather than copied. On successful publish, Multorum atomically moves the supplied body file into `body.md` and moves each supplied artifact into runtime-managed storage under `.multorum/`. This transfer makes Multorum, not the caller, responsible for retaining the published payload.
 
 ### Write Enforcement
 
@@ -423,6 +425,8 @@ Every message is represented as a directory bundle published atomically into a m
 - `head_commit` — optional git commit hash relevant to the message
 
 `body.md` and `artifacts/` are opaque payloads. They may contain natural-language instructions, structured evidence, test output, or any other worker-orchestrator content. Multorum validates the envelope and records the bundle, but it does not interpret the body.
+
+When a payload is supplied by path, publication transfers ownership of that file to Multorum. The runtime moves the file into `.multorum/` bundle storage instead of copying it, so callers must not assume the original path remains populated after a successful publish.
 
 Messages are published by writing the bundle under a temporary name and atomically renaming it into `new/`. This guarantees that readers either see the complete message or do not see it at all.
 

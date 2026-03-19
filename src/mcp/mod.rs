@@ -4,6 +4,10 @@
 //! tool and resource surface Multorum intends to expose. The real MCP
 //! transport can be added later without changing the runtime service
 //! layer or the CLI.
+//!
+//! Path-backed bundle payloads follow the same ownership-transfer model
+//! as the CLI: once publication succeeds, Multorum moves those files
+//! into `.multorum/` storage instead of copying them.
 
 pub mod dto;
 pub mod error;

@@ -16,11 +16,11 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "send_report",
-            description: "Publish a worker blocker report bundle to the outbox.",
+            description: "Publish a worker blocker report bundle to the outbox; path-backed payload files are moved into .multorum storage.",
         },
         ToolDescriptor {
             name: "send_commit",
-            description: "Publish a completed worker submission bundle to the outbox.",
+            description: "Publish a completed worker submission bundle to the outbox; path-backed payload files are moved into .multorum storage.",
         },
         ToolDescriptor { name: "get_status", description: "Return the worker status projection." },
     ]

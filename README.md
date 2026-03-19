@@ -52,7 +52,7 @@ The main workspace and every active worker worktree each have a `.multorum/` dir
     worktrees/           # gitignored — active worker worktrees
 ```
 
-Inside each worker worktree, Multorum materializes runtime files such as the compiled read and write sets, a runtime contract, and the worker's inbox and outbox mailboxes. These files are local runtime state, not project configuration, and are ignored through the worktree's local exclude configuration.
+Inside each worker worktree, Multorum materializes runtime files such as the compiled read and write sets, a runtime contract, and the worker's inbox and outbox mailboxes. These files are local runtime state, not project configuration, and are ignored through the worktree's local exclude configuration. Path-backed message payloads are moved into this `.multorum/` runtime area on successful publication, so Multorum becomes responsible for storing them.
 
 ### The Safety Property
 
@@ -73,7 +73,7 @@ All orchestrator-to-worker and worker-to-orchestrator communication is file-base
 - `inbox/` for messages authored by the orchestrator and consumed by the worker
 - `outbox/` for messages authored by the worker and consumed by the orchestrator
 
-Messages are published as directory bundles with an `envelope.toml` plus opaque payload files such as `body.md` and attached artifacts. Publication is atomic, and acknowledgement is recorded separately so each mailbox directory has exactly one writer.
+Messages are published as directory bundles with an `envelope.toml` plus opaque payload files such as `body.md` and attached artifacts. Publication is atomic, and acknowledgement is recorded separately so each mailbox directory has exactly one writer. When a body file or artifact is supplied by path, Multorum consumes that path and moves the file into `.multorum/` bundle storage instead of copying it.
 
 Report-back is one message kind within this protocol. Workers publish a `report` bundle whenever they cannot complete their task confidently: a missing file permission, an ambiguous specification, a vague function signature, nowhere appropriate to write tests — anything requiring orchestrator judgment. The orchestrator answers with `resolve` or `revise` bundles in the worker inbox. Initial task delivery, blocker resolution, revision requests, and final commit submission all use the same transport.
 

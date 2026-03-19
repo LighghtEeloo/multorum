@@ -69,11 +69,17 @@ pub struct CliServices {
 /// surface matches the file-based protocol in `DESIGN.md`.
 #[derive(Debug, Clone, Args)]
 pub struct BundlePayloadArgs {
-    /// Optional Markdown body file to copy into `body.md`.
+    /// Optional Markdown body file to move into `body.md`.
+    ///
+    /// On successful publication, Multorum consumes the path and stores
+    /// the moved file under its managed `.multorum/` runtime state.
     #[arg(long, value_name = "FILE")]
     pub body: Option<PathBuf>,
 
-    /// Files to attach under the bundle's `artifacts/` directory.
+    /// Files to move under the bundle's `artifacts/` directory.
+    ///
+    /// On successful publication, Multorum consumes each path and keeps
+    /// the moved artifact under `.multorum/`.
     #[arg(long = "artifact", value_name = "FILE")]
     pub artifacts: Vec<PathBuf>,
 }
