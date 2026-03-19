@@ -215,7 +215,7 @@ This approach deliberately delegates immutability enforcement to git rather than
 
 ### Rulebook Lifecycle
 
-The orchestrator evolves the rulebook by committing changes to `rulebook.toml` in the normal git workflow. Multorum never automatically acts on a new commit. When the orchestrator is ready to advance to a new rulebook version, it issues an explicit `switch-rulebook` instruction with the target commit hash. Multorum then validates the switch and, if valid, activates the new rulebook.
+The orchestrator evolves the rulebook by committing changes to `rulebook.toml` in the normal git workflow. Multorum never automatically acts on a new commit. When the orchestrator is ready to advance to a new rulebook version, it issues an explicit `rulebook switch` instruction with the target commit hash. Multorum then validates the switch and, if valid, activates the new rulebook.
 
 The history of rulebook evolution is inspectable with standard git tooling:
 
@@ -405,10 +405,10 @@ Multorum exposes a set of instructions that the orchestrator may issue. Every st
 
 ### Rulebook Instructions
 
-**`switch-rulebook <commit-hash>`**
+**`rulebook switch <commit-hash>`**
 Validates and activates a new version of the rulebook. Multorum runs the file-level safety check against all active workers. If the check passes, the new rulebook is compiled and activated. If it fails, the instruction is rejected and Multorum reports which active workers are blocking the switch.
 
-**`validate-rulebook <commit-hash>`**
+**`rulebook validate <commit-hash>`**
 Performs a dry run of the switch validation without making any changes. Useful for the orchestrator to check whether a switch is currently possible before committing to it.
 
 ### Worker Lifecycle Instructions
