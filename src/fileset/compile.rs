@@ -85,7 +85,10 @@ impl<'a> Compiler<'a> {
     }
 
     /// Recursively evaluate an expression against already-resolved sets.
-    fn evaluate(
+    ///
+    /// This is also used by the perspective module to resolve read/write
+    /// expressions against compiled file sets.
+    pub fn evaluate(
         expr: &Expr,
         resolved: &BTreeMap<Name, BTreeSet<PathBuf>>,
     ) -> BTreeSet<PathBuf> {
