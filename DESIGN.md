@@ -5,8 +5,8 @@
 1. [Introduction](#introduction)
 2. [Core Concepts](#core-concepts)
 3. [File Set Algebra](#file-set-algebra)
-4. [The Rulebook](#the-rulebook)
-5. [The Safety Property](#the-safety-property)
+4. [Perspectives](#perspectives)
+5. [The Rulebook](#the-rulebook)
 6. [Sub-Codebase Provisioning](#sub-codebase-provisioning)
 7. [The Worker State Machine](#the-worker-state-machine)
 8. [The Report-Back Protocol](#the-report-back-protocol)
@@ -152,6 +152,49 @@ The file set algebra imposes a few constraints that Multorum validates at compil
 
 ---
 
+## Perspectives
+
+A *perspective* is a named declaration in the rulebook that defines a role's relationship to the codebase. It specifies three things: a name, a write set, and a read set.
+
+### Anatomy of a Perspective
+
+```toml
+[perspectives.AuthImplementor]
+read  = "AuthSpecs | AuthTests"
+write = "AuthFiles - AuthSpecs - AuthTests"
+```
+
+- *Name*: an identifier (`AuthImplementor`) that the orchestrator uses to reference the perspective in instructions.
+- *Write Set*: a file set expression that compiles to the exact list of files this perspective may modify. Write enforcement is absolute: changes to files outside the write set are rejected at integration time.
+- *Read Set*: a file set expression identifying files that are relevant to the perspective's task and guaranteed stable for the duration of the session. The read set is guidance, not a hard restriction — workers can read any file in the codebase, but the read set communicates what the orchestrator considers relevant and promises not to change.
+
+### Perspectives vs. Workers
+
+Perspectives are static declarations; workers are runtime entities. A perspective exists in the rulebook whether or not a worker currently holds it. Multiple provisioning cycles may use the same perspective at different times, but at most one worker may hold a given perspective at any time.
+
+### Write Semantics
+
+The write set is a closed, compiled list of files. A perspective may only modify files that existed in the codebase at rulebook activation time and that fall within its write set expression. Creating new files requires orchestrator intervention — the worker reports back, the orchestrator amends the rulebook, and the worker is re-provisioned.
+
+### Read Semantics
+
+The read set is a stability contract. Files in a perspective's read set are guaranteed not to be written by any other perspective (enforced by the safety property below). A worker can rely on those files being unchanged for the entire session. The read set also signals relevance — it tells the worker where to look for context.
+
+### The Safety Property
+
+The safety property is the core correctness invariant governing perspectives:
+
+> **A file may either be written by exactly one perspective, or read by any number of perspectives — never both.**
+
+For any two distinct perspectives P and Q in a compiled rulebook:
+
+- `write(P) ∩ write(Q) = ∅` — write sets are pairwise disjoint
+- `write(P) ∩ read(Q) = ∅` — no file is written by one perspective and read by another
+
+This is enforced statically at rulebook compile time. Once a valid rulebook is active, workers execute in full parallel with no runtime conflict detection, arbitration, or rollback. Integration of worker commits into the canonical codebase is always conflict-free — each written file has exactly one authoritative source.
+
+---
+
 ## The Rulebook
 
 The rulebook is the central configuration artifact of a Multorum project. It declares all perspectives, their file set permissions, and project-level settings. It lives at `.multorum/rulebook.toml` in the project root and is versioned in git alongside the codebase it governs.
@@ -194,34 +237,6 @@ A rulebook switch is valid if and only if it does not conflict with any currentl
 If this check passes, the switch is valid regardless of how extensively the rest of the rulebook has changed. Perspectives may be renamed, restructured, or entirely replaced — as long as the files actively being worked on are undisturbed, the switch proceeds.
 
 If the check fails, Multorum rejects the switch and reports which active workers are blocking it. The orchestrator must wait for those workers to complete and integrate before retrying.
-
----
-
-## The Safety Property
-
-The safety property is the core correctness invariant of Multorum:
-
-> **A file may either be written exclusively by one perspective, or read by any number of perspectives — never both.**
-
-This is a static, structural guarantee enforced at rulebook compile time. It means that write conflicts between workers are impossible by construction during execution, not merely unlikely or managed at runtime.
-
-### Formal Statement
-
-For any two distinct perspectives P and Q in a compiled rulebook:
-
-- `write(P) ∩ write(Q) = ∅` — write sets are strictly disjoint
-- `write(P) ∩ read(Q) = ∅` — a file written by P cannot be in Q's read set
-- `write(Q) ∩ read(P) = ∅` — symmetrically
-
-A file may appear in `read(P)` and `read(Q)` simultaneously without restriction.
-
-### Why Static Enforcement Matters
-
-Dynamic conflict detection — catching conflicts when they occur at runtime — forces workers to coordinate, introduces ordering dependencies, and requires rollback mechanisms. Static enforcement eliminates this entire problem class. The orchestrator's task decomposition is the only place where conflicts need to be reasoned about; once a valid rulebook is in place, workers can execute in full parallel with no runtime arbitration.
-
-### Conflict-Free Merging
-
-A consequence of the safety property is that integrating workers' commits into the canonical codebase is always conflict-free. Each written file has exactly one source of truth — the worker whose write set contains it. The orchestrator can integrate commits in any order without merge conflicts.
 
 ---
 
