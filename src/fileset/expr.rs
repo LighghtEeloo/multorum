@@ -84,7 +84,7 @@ pub enum Definition {
 /// `[filesets]` table.
 ///
 /// Wraps `BTreeMap<Name, Definition>` for deterministic ordering.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FileSetTable {
     definitions: BTreeMap<Name, Definition>,
 }

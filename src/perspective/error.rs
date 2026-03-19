@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+use crate::fileset;
+
 use super::name::PerspectiveName;
 
 /// Errors produced when constructing a [`PerspectiveName`].
@@ -50,6 +52,11 @@ pub enum PerspectiveError {
     /// A file set expression failed to parse.
     #[error("in perspective `{perspective}`: {source}")]
     Parse { perspective: PerspectiveName, source: crate::fileset::ParseError },
+
+    /// A perspective references a file set name that is not defined in
+    /// the compiled rulebook.
+    #[error("perspective `{perspective}` references undefined file set `{name}`")]
+    UndefinedFileSet { perspective: PerspectiveName, name: fileset::Name },
 
     /// The safety property was violated.
     #[error("{0}")]

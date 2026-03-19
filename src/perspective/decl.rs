@@ -41,7 +41,7 @@ impl PerspectiveDecl {
 ///
 /// Wraps `BTreeMap<PerspectiveName, PerspectiveDecl>` for
 /// deterministic ordering.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PerspectiveTable {
     declarations: BTreeMap<PerspectiveName, PerspectiveDecl>,
 }

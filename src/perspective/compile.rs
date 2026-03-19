@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use crate::fileset;
+use crate::fileset::Expr;
 
 use super::decl::PerspectiveTable;
 use super::error::PerspectiveError;
@@ -84,6 +85,8 @@ impl PerspectiveTable {
     pub fn compile(
         &self, compiled_filesets: &BTreeMap<fileset::Name, BTreeSet<PathBuf>>,
     ) -> Result<CompiledPerspectives, PerspectiveError> {
+        self.validate_fileset_references(compiled_filesets)?;
+
         let mut compiled = BTreeMap::new();
 
         for (name, decl) in self.declarations() {
@@ -103,6 +106,42 @@ impl PerspectiveTable {
         SafetyValidator::new(&compiled).validate()?;
 
         Ok(CompiledPerspectives { inner: compiled })
+    }
+
+    /// Validate that every read/write expression references a defined
+    /// compiled file set before evaluation.
+    fn validate_fileset_references(
+        &self, compiled_filesets: &BTreeMap<fileset::Name, BTreeSet<PathBuf>>,
+    ) -> Result<(), PerspectiveError> {
+        for (perspective, decl) in self.declarations() {
+            Self::validate_expr_references(perspective, decl.read(), compiled_filesets)?;
+            Self::validate_expr_references(perspective, decl.write(), compiled_filesets)?;
+        }
+        Ok(())
+    }
+
+    fn validate_expr_references(
+        perspective: &PerspectiveName, expr: &Expr,
+        compiled_filesets: &BTreeMap<fileset::Name, BTreeSet<PathBuf>>,
+    ) -> Result<(), PerspectiveError> {
+        match expr {
+            | Expr::Ref(name) => {
+                if compiled_filesets.contains_key(name) {
+                    Ok(())
+                } else {
+                    Err(PerspectiveError::UndefinedFileSet {
+                        perspective: perspective.clone(),
+                        name: name.clone(),
+                    })
+                }
+            }
+            | Expr::Union(left, right)
+            | Expr::Intersection(left, right)
+            | Expr::Difference(left, right) => {
+                Self::validate_expr_references(perspective, left, compiled_filesets)?;
+                Self::validate_expr_references(perspective, right, compiled_filesets)
+            }
+        }
     }
 }
 
@@ -256,5 +295,19 @@ mod tests {
         let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
         let compiled = table.compile(&filesets).unwrap();
         assert_eq!(compiled.len(), 2);
+    }
+
+    #[test]
+    fn undefined_fileset_reference_is_rejected() {
+        let filesets = design_doc_filesets();
+        let toml_str = r#"
+            [P]
+            read  = "UnknownFiles"
+            write = "AuthFiles"
+        "#;
+        let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
+        let err = table.compile(&filesets).unwrap_err();
+
+        assert!(matches!(err, PerspectiveError::UndefinedFileSet { .. }));
     }
 }
