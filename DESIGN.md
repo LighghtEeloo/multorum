@@ -290,11 +290,18 @@ This constraint keeps the compiled file lists authoritative and ensures that eve
 A worker progresses through a defined set of states during its lifecycle. Multorum enforces valid state transitions and rejects instructions that would produce invalid ones.
 
 ```
-PROVISIONED ──► ACTIVE ──► BLOCKED ──► ACTIVE ──► COMMITTED
-                                                       │
-                                               ┌───────┴───────┐
-                                               ▼               ▼
-                                           INTEGRATED       DISCARDED
+                    ┌──► BLOCKED ──┐
+             report │              │ resolve
+                    │              │
+PROVISIONED ──► ACTIVE ◄───────────┘
+                 │  ▲
+          commit │  │ revise
+                 ▼  │
+              COMMITTED
+                  │
+          ┌───────┴───────┐
+          ▼               ▼
+      INTEGRATED       DISCARDED
 ```
 
 ### States
@@ -302,7 +309,7 @@ PROVISIONED ──► ACTIVE ──► BLOCKED ──► ACTIVE ──► COMMIT
 - **PROVISIONED** — the worktree has been created and the worker's environment is ready. The worker has not yet begun execution.
 - **ACTIVE** — the worker is executing its task.
 - **BLOCKED** — the worker has reported a blocker and is awaiting orchestrator resolution. The worker is suspended; no execution occurs in this state.
-- **COMMITTED** — the worker has completed its task and submitted a commit to Multorum. The worktree is frozen pending integration.
+- **COMMITTED** — the worker has completed its task and submitted a commit to Multorum. The worktree is frozen pending orchestrator action: integration, revision, or discard.
 - **INTEGRATED** — the worker's commit has passed the pre-merge pipeline and been integrated into the canonical codebase. The worktree is released.
 - **DISCARDED** — the worker's worktree has been torn down without integration. The work is abandoned.
 
@@ -314,6 +321,7 @@ PROVISIONED ──► ACTIVE ──► BLOCKED ──► ACTIVE ──► COMMIT
 | ACTIVE | BLOCKED | Worker issues `report` |
 | ACTIVE | COMMITTED | Worker submits commit |
 | BLOCKED | ACTIVE | Orchestrator issues `resolve` |
+| COMMITTED | ACTIVE | Orchestrator issues `revise`; worker resumes to address problems |
 | COMMITTED | INTEGRATED | Orchestrator issues `integrate`; pre-merge checks pass |
 | COMMITTED | DISCARDED | Orchestrator issues `discard` |
 | ACTIVE | DISCARDED | Orchestrator issues `discard` |
@@ -410,6 +418,9 @@ Compiles the file sets for the named perspective, creates a git worktree at the 
 
 **`resolve <perspective-name>`**
 Signals that a blocked worker's report has been resolved. Transitions the worker from BLOCKED to ACTIVE. The orchestrator is responsible for separately communicating the resolution content to the worker.
+
+**`revise <perspective-name>`**
+Returns a committed worker to ACTIVE state so it can address problems identified by the orchestrator. The worktree is unfrozen and the worker resumes execution. The orchestrator is responsible for communicating the required changes to the worker.
 
 **`discard <perspective-name>`**
 Tears down a worker's worktree without integrating its work. Valid from ACTIVE or COMMITTED states.
