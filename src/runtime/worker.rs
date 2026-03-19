@@ -1,17 +1,19 @@
 //! Worker-facing runtime service surface.
+//!
+//! This module defines the typed operations available to worker
+//! frontends and the default storage-backed implementation used by
+//! the CLI.
 
 use std::path::PathBuf;
 
-use crate::runtime::mailbox::AckRef;
-
-use super::super::{
-    CanonicalCommitHash,
-    MultorumPaths, WorkerPaths,
+use super::{
+    CanonicalCommitHash, MailboxDirection, MultorumPaths, WorkerPaths,
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
+    mailbox::AckRef,
     state::{MailboxMessageView, WorkerContractView, WorkerState, WorkerStatus},
+    storage::{RuntimeFs, can_submit_from_state},
 };
-use super::filesystem::{RuntimeFileSystem, can_submit_from_state};
 
 /// Typed operations available to a worker frontend.
 pub trait WorkerService {
@@ -42,24 +44,24 @@ pub trait WorkerService {
     fn status(&self) -> Result<WorkerStatus>;
 }
 
-/// Filesystem-backed worker runtime service.
+/// Storage-backed worker runtime service.
 ///
 /// The service is bound to one provisioned worktree and derives the
 /// canonical orchestrator control plane from the managed
 /// `.multorum/worktrees/<perspective>` location created during
 /// provisioning.
 #[derive(Debug, Clone)]
-pub struct FilesystemWorkerService {
-    fs: RuntimeFileSystem,
+pub struct FsWorkerService {
+    fs: RuntimeFs,
     worktree_root: PathBuf,
 }
 
-impl FilesystemWorkerService {
+impl FsWorkerService {
     /// Construct the worker service for an explicit worktree root.
     pub fn new(worktree_root: impl Into<PathBuf>) -> Result<Self> {
         let worktree_root = worktree_root.into().canonicalize()?;
         let workspace_root = WorkerPaths::new(worktree_root.clone()).workspace_root()?;
-        Ok(Self { fs: RuntimeFileSystem::new(workspace_root)?, worktree_root })
+        Ok(Self { fs: RuntimeFs::new(workspace_root)?, worktree_root })
     }
 
     /// Construct the worker service from the current directory.
@@ -109,7 +111,7 @@ impl FilesystemWorkerService {
     }
 }
 
-impl WorkerService for FilesystemWorkerService {
+impl WorkerService for FsWorkerService {
     fn contract(&self) -> Result<WorkerContractView> {
         self.contract_view()
     }
@@ -119,17 +121,14 @@ impl WorkerService for FilesystemWorkerService {
         self.fs.list_mailbox_messages(
             &self.worktree_root,
             &contract.perspective,
-            crate::runtime::MailboxDirection::Inbox,
+            MailboxDirection::Inbox,
             after,
         )
     }
 
     fn ack_inbox(&self, sequence: Sequence) -> Result<AckRef> {
-        let ack = self.fs.acknowledge_message(
-            &self.worktree_root,
-            crate::runtime::MailboxDirection::Inbox,
-            sequence,
-        )?;
+        let ack =
+            self.fs.acknowledge_message(&self.worktree_root, MailboxDirection::Inbox, sequence)?;
         self.update_state_after_ack(&ack)?;
         Ok(ack)
     }
@@ -150,7 +149,7 @@ impl WorkerService for FilesystemWorkerService {
             .transpose()?;
         let message = self.fs.publish_bundle(
             &self.worktree_root,
-            crate::runtime::MailboxDirection::Outbox,
+            MailboxDirection::Outbox,
             MessageKind::Report,
             &contract.perspective,
             reply,
@@ -170,7 +169,7 @@ impl WorkerService for FilesystemWorkerService {
         let contract = self.contract_view()?;
         let message = self.fs.publish_bundle(
             &self.worktree_root,
-            crate::runtime::MailboxDirection::Outbox,
+            MailboxDirection::Outbox,
             MessageKind::Commit,
             &contract.perspective,
             ReplyReference::default(),

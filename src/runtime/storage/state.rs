@@ -1,4 +1,4 @@
-//! Persisted state and local runtime materialization for the filesystem runtime.
+//! Persisted state and local runtime materialization for the storage runtime.
 
 use std::collections::BTreeSet;
 use std::fs::{self, File};
@@ -9,13 +9,15 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::perspective::{CompiledPerspective, PerspectiveName};
 use crate::rulebook::{CompiledRulebook, Rulebook};
-use crate::runtime::{CanonicalCommitHash, RulebookInit, RuntimeError, WorkerContractView};
+use crate::runtime::{
+    CanonicalCommitHash, RulebookInit, RuntimeError, WorkerContractView, WorkerPaths,
+};
 
-use super::{ActiveRulebookRecord, RuntimeFileSystem, STATE_FILE_NAME, WorkerRecord};
+use super::{ActiveRulebookRecord, RuntimeFs, STATE_FILE_NAME, WorkerRecord};
 
 const MULTORUM_GITIGNORE_ENTRIES: [&str; 2] = ["orchestrator/", "worktrees/"];
 
-impl RuntimeFileSystem {
+impl RuntimeFs {
     /// Initialize the committed `.multorum/` project surface.
     pub(crate) fn initialize_rulebook(&self) -> Result<RulebookInit, RuntimeError> {
         let multorum_root = self.paths.multorum_root();
@@ -127,7 +129,7 @@ impl RuntimeFileSystem {
     pub(crate) fn load_worker_contract(
         &self, worktree_root: &Path,
     ) -> Result<WorkerContractView, RuntimeError> {
-        let path = crate::runtime::WorkerPaths::new(worktree_root.to_path_buf()).contract();
+        let path = WorkerPaths::new(worktree_root.to_path_buf()).contract();
         if !path.exists() {
             return Err(RuntimeError::MissingWorkerRuntime(worktree_root.display().to_string()));
         }
@@ -138,7 +140,7 @@ impl RuntimeFileSystem {
     pub(crate) fn prepare_worker_runtime(
         &self, record: &WorkerRecord, perspective: &CompiledPerspective,
     ) -> Result<(), RuntimeError> {
-        let worker_paths = crate::runtime::WorkerPaths::new(record.worktree_path.clone());
+        let worker_paths = WorkerPaths::new(record.worktree_path.clone());
 
         fs::create_dir_all(worker_paths.inbox_new())?;
         fs::create_dir_all(worker_paths.inbox_ack())?;

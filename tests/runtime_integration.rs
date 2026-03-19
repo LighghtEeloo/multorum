@@ -8,10 +8,8 @@ use toml::Value;
 use multorum::perspective::PerspectiveName;
 use multorum::rulebook::Rulebook;
 use multorum::runtime::{
-    BundlePayload, MessageKind, ReplyReference, RuntimeError, WorkerState,
-    service::{
-        FilesystemOrchestratorService, FilesystemWorkerService, OrchestratorService, WorkerService,
-    },
+    BundlePayload, FsOrchestratorService, FsWorkerService, MessageKind, OrchestratorService,
+    ReplyReference, RuntimeError, WorkerService, WorkerState,
 };
 
 fn perspective() -> PerspectiveName {
@@ -41,7 +39,7 @@ fn git(root: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-fn setup_repo() -> (TempDir, FilesystemOrchestratorService, String) {
+fn setup_repo() -> (TempDir, FsOrchestratorService, String) {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join("src")).unwrap();
     fs::create_dir_all(dir.path().join(".multorum")).unwrap();
@@ -57,7 +55,7 @@ fn setup_repo() -> (TempDir, FilesystemOrchestratorService, String) {
     git(dir.path(), &["commit", "-m", "feat: initialize runtime fixture"]);
 
     let head = git(dir.path(), &["rev-parse", "HEAD"]);
-    let orchestrator = FilesystemOrchestratorService::new(dir.path()).unwrap();
+    let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
     orchestrator.rulebook_switch(head.clone()).unwrap();
     (dir, orchestrator, head)
 }
@@ -69,7 +67,7 @@ fn short_commit(commit: &str) -> String {
 #[test]
 fn rulebook_init_creates_default_committed_files() {
     let dir = tempfile::tempdir().unwrap();
-    let orchestrator = FilesystemOrchestratorService::new(dir.path()).unwrap();
+    let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
     let canonical_root = dir.path().canonicalize().unwrap();
 
     let init = orchestrator.rulebook_init().unwrap();
@@ -94,7 +92,7 @@ fn rulebook_init_refuses_to_overwrite_existing_rulebook() {
     let rulebook_path = dir.path().join(".multorum/rulebook.toml");
     fs::create_dir_all(rulebook_path.parent().unwrap()).unwrap();
     fs::write(&rulebook_path, "[checks]\npipeline = []\n").unwrap();
-    let orchestrator = FilesystemOrchestratorService::new(dir.path()).unwrap();
+    let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
     let canonical_rulebook_path = rulebook_path.canonicalize().unwrap();
 
     let error = orchestrator.rulebook_init().unwrap_err();
@@ -117,10 +115,15 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
         .unwrap();
     assert_eq!(provision.state, WorkerState::Provisioned);
     assert!(provision.worktree_path.is_absolute());
-    assert!(provision.seeded_task_path.as_ref().is_some_and(|path| path.is_absolute()));
+    assert!(
+        provision
+            .seeded_task_path
+            .as_ref()
+            .is_some_and(|path: &std::path::PathBuf| path.is_absolute())
+    );
     assert!(!task_body.exists(), "task body should be moved into the runtime bundle");
 
-    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
     let contract = worker.contract().unwrap();
     assert!(contract.read_set_path.is_absolute());
     assert!(contract.write_set_path.is_absolute());
@@ -167,7 +170,7 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
 fn integrate_worker_cherry_picks_allowed_changes() {
     let (repo, orchestrator, _) = setup_repo();
     let provision = orchestrator.provision_worker(perspective(), None).unwrap();
-    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
         .unwrap();
@@ -198,10 +201,9 @@ fn rulebook_switch_canonicalizes_symbolic_revision_before_persistence() {
     let status = orchestrator.status().unwrap();
     assert_eq!(status.active_rulebook_commit.as_str(), head);
 
-    let active_rulebook = fs::read_to_string(
-        repo.path().join(".multorum/orchestrator/active-rulebook.toml"),
-    )
-    .unwrap();
+    let active_rulebook =
+        fs::read_to_string(repo.path().join(".multorum/orchestrator/active-rulebook.toml"))
+            .unwrap();
     assert!(active_rulebook.contains(&format!("rulebook_commit = \"{head}\"")));
     assert!(active_rulebook.contains(&format!("base_commit = \"{head}\"")));
     assert!(!active_rulebook.contains("\"HEAD\""));
@@ -211,7 +213,7 @@ fn rulebook_switch_canonicalizes_symbolic_revision_before_persistence() {
 fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() {
     let (_repo, orchestrator, _) = setup_repo();
     let provision = orchestrator.provision_worker(perspective(), None).unwrap();
-    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
         .unwrap();
@@ -242,7 +244,7 @@ fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() 
 fn send_commit_canonicalizes_short_hash_before_storage_and_integration() {
     let (_repo, orchestrator, _) = setup_repo();
     let provision = orchestrator.provision_worker(perspective(), None).unwrap();
-    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
         .unwrap();
@@ -267,7 +269,7 @@ fn send_commit_canonicalizes_short_hash_before_storage_and_integration() {
 fn send_report_canonicalizes_optional_head_commit_before_storage() {
     let (_repo, orchestrator, _) = setup_repo();
     let provision = orchestrator.provision_worker(perspective(), None).unwrap();
-    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
         .unwrap();
@@ -292,7 +294,7 @@ fn send_report_canonicalizes_optional_head_commit_before_storage() {
 fn integrate_rejects_paths_outside_the_compiled_write_set() {
     let (_repo, orchestrator, _) = setup_repo();
     let provision = orchestrator.provision_worker(perspective(), None).unwrap();
-    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
     let base_commit = worker.contract().unwrap().base_commit;
 
     fs::write(provision.worktree_path.join("src/other.rs"), "pub fn other() -> i32 { 99 }\n")
@@ -324,7 +326,7 @@ fn integrate_rejects_paths_outside_the_compiled_write_set() {
 fn integrate_rejects_when_worker_head_moves_after_submission() {
     let (_repo, orchestrator, _) = setup_repo();
     let provision = orchestrator.provision_worker(perspective(), None).unwrap();
-    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
         .unwrap();
@@ -356,7 +358,7 @@ fn integrate_rejects_when_worker_head_moves_after_submission() {
 fn send_commit_reports_missing_commit_with_worktree_context() {
     let (_repo, orchestrator, _) = setup_repo();
     let provision = orchestrator.provision_worker(perspective(), None).unwrap();
-    let worker = FilesystemWorkerService::new(&provision.worktree_path).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     let error = worker.send_commit("deadbeef".to_owned(), BundlePayload::default()).unwrap_err();
     assert!(matches!(

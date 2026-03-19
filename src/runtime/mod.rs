@@ -8,11 +8,13 @@
 pub mod bundle;
 pub mod commit;
 pub mod error;
+pub(crate) mod storage;
 pub mod mailbox;
+pub mod orchestrator;
 pub mod paths;
 pub mod projection;
-pub mod service;
 pub mod state;
+pub mod worker;
 
 pub use bundle::{
     BundleEnvelope, BundlePayload, MessageKind, MessageRef, PublishedBundle, ReplyReference,
@@ -21,6 +23,7 @@ pub use bundle::{
 pub use commit::CanonicalCommitHash;
 pub use error::{Result, RuntimeError};
 pub use mailbox::{AckRef, MailboxDirection};
+pub use orchestrator::{FsOrchestratorService, OrchestratorService};
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};
 pub use projection::TranscriptView;
 pub use state::{
@@ -28,3 +31,4 @@ pub use state::{
     ProvisionResult, RulebookInit, RulebookSwitch, RulebookValidation, WorkerContractView,
     WorkerState, WorkerStatus, WorkerSummary,
 };
+pub use worker::{FsWorkerService, WorkerService};

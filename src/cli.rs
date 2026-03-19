@@ -23,13 +23,7 @@ use clap::{Args, Parser, Subcommand};
 
 use crate::{
     perspective::PerspectiveName,
-    runtime::{
-        self,
-        service::{
-            FilesystemOrchestratorService, FilesystemWorkerService, OrchestratorService,
-            WorkerService,
-        },
-    },
+    runtime::{self, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerService},
 };
 
 /// Multorum — multi-perspective conflict-free codebase orchestration.
@@ -66,18 +60,18 @@ impl Cli {
 ///
 #[derive(Debug)]
 pub struct CliServices {
-    orchestrator: FilesystemOrchestratorService,
+    orchestrator: FsOrchestratorService,
 }
 
 impl CliServices {
     /// Build CLI services from the current directory.
     pub fn from_current_dir() -> runtime::Result<Self> {
-        Ok(Self { orchestrator: FilesystemOrchestratorService::from_current_dir()? })
+        Ok(Self { orchestrator: FsOrchestratorService::from_current_dir()? })
     }
 
     /// Construct the worker service for the current worktree.
-    pub fn worker(&self) -> runtime::Result<FilesystemWorkerService> {
-        FilesystemWorkerService::from_current_dir()
+    pub fn worker(&self) -> runtime::Result<FsWorkerService> {
+        FsWorkerService::from_current_dir()
     }
 }
 

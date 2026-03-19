@@ -1,4 +1,4 @@
-//! Git and process helpers for the filesystem runtime.
+//! Git and process helpers for the storage runtime.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -7,9 +7,9 @@ use std::process::Command;
 use crate::rulebook::{CheckName, RULEBOOK_RELATIVE_PATH};
 use crate::runtime::{CanonicalCommitHash, RuntimeError};
 
-use super::RuntimeFileSystem;
+use super::RuntimeFs;
 
-impl RuntimeFileSystem {
+impl RuntimeFs {
     /// Resolve one user-facing revision to the canonical commit hash
     /// stored by Multorum.
     pub(crate) fn resolve_commit(

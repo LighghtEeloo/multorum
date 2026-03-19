@@ -1,43 +1,47 @@
-//! Filesystem-backed runtime helpers shared by the service layer.
+//! Storage helpers shared by the runtime entry points.
 //!
-//! The runtime model in `DESIGN.md` is intentionally filesystem-first:
-//! `.multorum/` stores the authoritative control plane, worker contract,
-//! compiled file sets, and mailbox bundles. These helpers centralize the
-//! on-disk layout and the small amount of git orchestration needed to
-//! provision worktrees and integrate submitted commits.
+//! The runtime model is intentionally filesystem-first: `.multorum/`
+//! stores the authoritative control plane, worker contract, compiled
+//! file sets, and mailbox bundles. This module centralizes that on-disk
+//! layout and the small amount of git orchestration needed to provision
+//! worktrees and integrate submitted commits.
 
 mod git;
+mod mailbox;
+mod records;
 mod state;
 
 use std::collections::BTreeSet;
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use serde::{Deserialize, Serialize};
 
 use crate::perspective::PerspectiveName;
 use crate::rulebook::{CheckName, CheckPolicy, CompiledRulebook};
-use crate::runtime::{
-    CanonicalCommitHash, MessageKind, MultorumPaths, RuntimeError, Sequence, WorkerPaths,
-    WorkerState,
-};
+use crate::runtime::{MessageKind, MultorumPaths, RuntimeError, WorkerPaths, WorkerState};
 
+pub(crate) use records::{AckRecord, ActiveRulebookRecord, WorkerRecord};
+
+/// Protocol version written into persisted mailbox envelopes.
 pub(crate) const PROTOCOL_VERSION: u32 = 1;
 
-const STATE_FILE_NAME: &str = "state.toml";
+/// Canonical worker state file name under orchestrator projections.
+pub(crate) const STATE_FILE_NAME: &str = "state.toml";
+/// Canonical mailbox envelope file name within one bundle directory.
 pub(crate) const ENVELOPE_FILE_NAME: &str = "envelope.toml";
+/// Canonical mailbox body file name within one bundle directory.
 pub(crate) const BODY_FILE_NAME: &str = "body.md";
+/// Canonical artifacts directory name within one bundle directory.
 pub(crate) const ARTIFACTS_DIR_NAME: &str = "artifacts";
+/// Canonical acknowledgement file extension for mailbox bundles.
 pub(crate) const ACK_EXTENSION: &str = "ack";
 
-/// Filesystem-backed runtime access rooted at the canonical workspace.
+/// Storage access rooted at the canonical workspace.
 #[derive(Debug, Clone)]
-pub(crate) struct RuntimeFileSystem {
+pub(crate) struct RuntimeFs {
     paths: MultorumPaths,
 }
 
-impl RuntimeFileSystem {
+impl RuntimeFs {
     /// Build runtime helpers for the canonical workspace root.
     pub(crate) fn new(workspace_root: impl Into<PathBuf>) -> Result<Self, RuntimeError> {
         Ok(Self { paths: MultorumPaths::new_canonical(workspace_root.into())? })
@@ -54,43 +58,11 @@ impl RuntimeFileSystem {
     }
 }
 
-/// Active rulebook projection stored under `.multorum/orchestrator/`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct ActiveRulebookRecord {
-    /// Canonical git commit that owns the active committed rulebook.
-    pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical pinned base commit for newly provisioned workers.
-    pub base_commit: CanonicalCommitHash,
-    /// Activation timestamp.
-    pub activated_at: String,
-}
-
-/// Orchestrator-local projection for one provisioned worker.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct WorkerRecord {
-    /// Perspective currently held by the worker.
-    pub perspective: PerspectiveName,
-    /// Current lifecycle state.
-    pub state: WorkerState,
-    /// Absolute path to the managed worktree.
-    pub worktree_path: PathBuf,
-    /// Canonical rulebook commit pinned into the worker contract.
-    pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical base code commit from which the worker was provisioned.
-    pub base_commit: CanonicalCommitHash,
-    /// Canonical submitted worker commit when the worker is in `COMMITTED`.
-    pub submitted_head_commit: Option<CanonicalCommitHash>,
-}
-
-/// Acknowledgement metadata written to mailbox `ack/`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct AckRecord {
-    pub(crate) sequence: Sequence,
-    pub(crate) acknowledged_at: String,
-}
-
 impl MessageKind {
-    /// The filesystem slug for bundle directory names.
+    /// The storage slug for bundle directory names.
+    ///
+    /// Note: Mailbox bundles use stable directory names so they can be
+    /// inspected directly from disk and safely referenced by tests.
     pub(crate) fn slug(self) -> &'static str {
         match self {
             | Self::Task => "task",

@@ -1,23 +1,26 @@
 //! Orchestrator-facing runtime service surface.
+//!
+//! This module defines the typed operations available to orchestrator
+//! frontends and the default storage-backed implementation used by
+//! the CLI.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::perspective::PerspectiveName;
 
-use super::super::{
-    CanonicalCommitHash,
-    MultorumPaths,
+use super::{
+    CanonicalCommitHash, MailboxDirection, MultorumPaths,
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference},
     error::{Result, RuntimeError},
     state::{
         DiscardResult, IntegrateResult, OrchestratorStatus, PerspectiveSummary, ProvisionResult,
         RulebookInit, RulebookSwitch, RulebookValidation, WorkerState, WorkerSummary,
     },
-};
-use super::filesystem::{
-    ActiveRulebookRecord, RuntimeFileSystem, WorkerRecord, compiled_rulebook_paths,
-    is_live_worker_state, validate_skip_request,
+    storage::{
+        ActiveRulebookRecord, RuntimeFs, WorkerRecord, compiled_rulebook_paths,
+        is_live_worker_state, timestamp_now, validate_skip_request,
+    },
 };
 
 /// Typed operations available to the orchestrator frontend.
@@ -70,21 +73,21 @@ pub trait OrchestratorService {
     fn status(&self) -> Result<OrchestratorStatus>;
 }
 
-/// Filesystem-backed orchestrator runtime service.
+/// Storage-backed orchestrator runtime service.
 ///
 /// The canonical `.multorum/` tree under the workspace root remains the
-/// source of truth. This service simply validates operations, projects
-/// their effects into runtime files, and delegates repository actions to
-/// git where required by the design.
+/// source of truth. This service validates operations, projects their
+/// effects into runtime files, and delegates repository actions to git
+/// where required by the design.
 #[derive(Debug, Clone)]
-pub struct FilesystemOrchestratorService {
-    fs: RuntimeFileSystem,
+pub struct FsOrchestratorService {
+    fs: RuntimeFs,
 }
 
-impl FilesystemOrchestratorService {
+impl FsOrchestratorService {
     /// Construct the orchestrator service for a workspace root.
     pub fn new(workspace_root: impl Into<PathBuf>) -> Result<Self> {
-        Ok(Self { fs: RuntimeFileSystem::new(workspace_root.into())? })
+        Ok(Self { fs: RuntimeFs::new(workspace_root.into())? })
     }
 
     /// Construct the orchestrator service from the current directory.
@@ -97,17 +100,14 @@ impl FilesystemOrchestratorService {
         Self::new(workspace_root)
     }
 
-    fn validate_rulebook_commit(
-        &self, commit: &CanonicalCommitHash,
-    ) -> Result<RulebookValidation> {
+    fn validate_rulebook_commit(&self, commit: &CanonicalCommitHash) -> Result<RulebookValidation> {
         let compiled = self.fs.load_compiled_rulebook(commit)?;
         let target_paths = compiled_rulebook_paths(&compiled);
 
         let mut blocking_workers = Vec::new();
         for worker in self.active_workers()? {
-            let write_set = RuntimeFileSystem::read_path_list(
-                &self.fs.worker_paths(&worker.perspective).write_set(),
-            )?;
+            let write_set =
+                RuntimeFs::read_path_list(&self.fs.worker_paths(&worker.perspective).write_set())?;
             if !write_set.is_disjoint(&target_paths) {
                 blocking_workers.push(worker.perspective);
             }
@@ -154,7 +154,7 @@ impl FilesystemOrchestratorService {
         if expected_state.is_some() {
             return self.fs.publish_bundle(
                 &record.worktree_path,
-                crate::runtime::MailboxDirection::Inbox,
+                MailboxDirection::Inbox,
                 kind,
                 perspective,
                 reply,
@@ -180,7 +180,7 @@ impl FilesystemOrchestratorService {
     }
 }
 
-impl OrchestratorService for FilesystemOrchestratorService {
+impl OrchestratorService for FsOrchestratorService {
     fn rulebook_init(&self) -> Result<RulebookInit> {
         self.fs.initialize_rulebook()
     }
@@ -205,7 +205,7 @@ impl OrchestratorService for FilesystemOrchestratorService {
         let record = ActiveRulebookRecord {
             rulebook_commit: commit.clone(),
             base_commit: commit.clone(),
-            activated_at: super::filesystem::timestamp_now(),
+            activated_at: timestamp_now(),
         };
         self.fs.store_active_rulebook(&record)?;
         tracing::info!(rulebook_commit = %record.rulebook_commit, "activated rulebook");
@@ -247,7 +247,7 @@ impl OrchestratorService for FilesystemOrchestratorService {
                 self.fs
                     .publish_bundle(
                         &worktree_path,
-                        crate::runtime::MailboxDirection::Inbox,
+                        MailboxDirection::Inbox,
                         MessageKind::Task,
                         &perspective,
                         ReplyReference::default(),
@@ -341,9 +341,8 @@ impl OrchestratorService for FilesystemOrchestratorService {
         let allowed_skips = validate_skip_request(&worker_rulebook, &skip_checks)?;
         let changed_files =
             self.fs.git_changed_files(&record.worktree_path, &record.base_commit, &head_commit)?;
-        let write_set = RuntimeFileSystem::read_path_list(
-            &self.fs.worker_paths(&record.perspective).write_set(),
-        )?;
+        let write_set =
+            RuntimeFs::read_path_list(&self.fs.worker_paths(&record.perspective).write_set())?;
         let violations = changed_files.difference(&write_set).cloned().collect::<BTreeSet<_>>();
         if !violations.is_empty() {
             tracing::warn!(perspective = %perspective, count = violations.len(), "write-set violation");
