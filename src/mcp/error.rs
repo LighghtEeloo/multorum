@@ -57,7 +57,6 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::MissingSubmittedHeadCommit { .. }
             | RuntimeError::WorkerHeadMismatch { .. }
             | RuntimeError::CommitNotFound { .. }
-            | RuntimeError::PerspectiveMismatch { .. }
             | RuntimeError::Git { .. }
             | RuntimeError::Rulebook(_)
             | RuntimeError::Io(_)

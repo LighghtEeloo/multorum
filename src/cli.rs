@@ -219,14 +219,12 @@ pub enum Command {
     //
     /// Submit the worker's task as complete.
     ///
-    /// Publishes a `commit` bundle into the worker outbox. Once
-    /// accepted, Multorum freezes the worktree and transitions the
-    /// worker from ACTIVE to COMMITTED. The orchestrator then decides
-    /// whether to `integrate`, `revise`, or `discard` the submission.
+    /// Must be run from within the worker worktree. Publishes a `commit`
+    /// bundle into the worker outbox. Once accepted, Multorum freezes
+    /// the worktree and transitions the worker from ACTIVE to COMMITTED.
+    /// The orchestrator then decides whether to `integrate`, `revise`,
+    /// or `discard` the submission.
     Commit {
-        /// The perspective name of the committing worker.
-        perspective: PerspectiveName,
-
         /// The git commit hash submitted by the worker.
         #[arg(long = "head-commit", value_name = "COMMIT")]
         head_commit: String,
@@ -238,17 +236,18 @@ pub enum Command {
 
     /// Signal that a worker is blocked.
     ///
-    /// Publishes a `report` bundle into the worker outbox. Once
-    /// accepted, Multorum transitions the worker to BLOCKED. The
-    /// payload is opaque to Multorum — it is recorded without
-    /// interpretation.
+    /// Must be run from within the worker worktree. Publishes a `report`
+    /// bundle into the worker outbox. Once accepted, Multorum transitions
+    /// the worker to BLOCKED. The payload is opaque to Multorum — it is
+    /// recorded without interpretation.
     Report {
-        /// The perspective name of the reporting worker.
-        perspective: PerspectiveName,
-
         /// Optional git commit hash relevant to the report.
         #[arg(long = "head-commit", value_name = "COMMIT")]
         head_commit: Option<String>,
+
+        /// Optional reply metadata for the `report` bundle.
+        #[command(flatten)]
+        reply: ReplyReferenceArgs,
 
         /// Optional payload for the `report` bundle.
         #[command(flatten)]
@@ -354,32 +353,15 @@ impl Command {
                 let result = services.orchestrator.integrate_worker(perspective, skip_checks)?;
                 println!("{result:#?}");
             }
-            | Self::Commit { perspective, head_commit, payload } => {
+            | Self::Commit { head_commit, payload } => {
                 let worker = services.worker()?;
-                let contract = worker.contract()?;
-                if contract.perspective != perspective {
-                    return Err(runtime::RuntimeError::PerspectiveMismatch {
-                        expected: perspective.to_string(),
-                        found: contract.perspective.to_string(),
-                    });
-                }
                 let result = worker.send_commit(head_commit, payload.into_runtime())?;
                 println!("{result:#?}");
             }
-            | Self::Report { perspective, head_commit, payload } => {
+            | Self::Report { head_commit, reply, payload } => {
                 let worker = services.worker()?;
-                let contract = worker.contract()?;
-                if contract.perspective != perspective {
-                    return Err(runtime::RuntimeError::PerspectiveMismatch {
-                        expected: perspective.to_string(),
-                        found: contract.perspective.to_string(),
-                    });
-                }
-                let result = worker.send_report(
-                    head_commit,
-                    runtime::ReplyReference::default(),
-                    payload.into_runtime(),
-                )?;
+                let result =
+                    worker.send_report(head_commit, reply.into_runtime(), payload.into_runtime())?;
                 println!("{result:#?}");
             }
             | Self::Status => {

@@ -142,10 +142,6 @@ pub enum RuntimeError {
     #[error("invalid bundle payload: {0}")]
     InvalidPayload(&'static str),
 
-    /// The current worktree does not belong to the named perspective.
-    #[error("worker perspective mismatch: expected `{expected}`, found `{found}`")]
-    PerspectiveMismatch { expected: String, found: String },
-
     /// Git command execution failed.
     #[error("git command failed while attempting to {action} in `{cwd}`: {details}", cwd = cwd.display())]
     Git {
