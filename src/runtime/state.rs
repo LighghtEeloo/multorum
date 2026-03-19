@@ -57,6 +57,17 @@ pub struct RulebookSwitch {
     pub active_commit: String,
 }
 
+/// Result of initializing `.multorum/` for a workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RulebookInit {
+    /// Absolute path to the created or reused `.multorum/` directory.
+    pub multorum_root: PathBuf,
+    /// Absolute path to the committed `.multorum/rulebook.toml`.
+    pub rulebook_path: PathBuf,
+    /// Absolute path to the committed `.multorum/.gitignore`.
+    pub gitignore_path: PathBuf,
+}
+
 /// Result of provisioning a worker.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProvisionResult {

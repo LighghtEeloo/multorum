@@ -9,11 +9,39 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::perspective::{CompiledPerspective, PerspectiveName};
 use crate::rulebook::{CompiledRulebook, Rulebook};
-use crate::runtime::{RuntimeError, WorkerContractView};
+use crate::runtime::{RulebookInit, RuntimeError, WorkerContractView};
 
 use super::{ActiveRulebookRecord, RuntimeFileSystem, STATE_FILE_NAME, WorkerRecord};
 
+const MULTORUM_GITIGNORE_ENTRIES: [&str; 2] = ["orchestrator/", "worktrees/"];
+
 impl RuntimeFileSystem {
+    /// Initialize the committed `.multorum/` project surface.
+    pub(crate) fn initialize_rulebook(&self) -> Result<RulebookInit, RuntimeError> {
+        let multorum_root = self.paths.multorum_root();
+        let gitignore_path = self.paths.multorum_gitignore();
+        let rulebook_path = Rulebook::rulebook_path(self.workspace_root());
+
+        if rulebook_path.exists() {
+            return Err(RuntimeError::RulebookExists(rulebook_path));
+        }
+
+        fs::create_dir_all(&multorum_root)?;
+        fs::create_dir_all(self.paths.orchestrator().root())?;
+        fs::create_dir_all(multorum_root.join("worktrees"))?;
+
+        self.ensure_multorum_gitignore()?;
+        fs::write(&rulebook_path, Rulebook::default_template())?;
+        tracing::info!(
+            multorum_root = %multorum_root.display(),
+            rulebook_path = %rulebook_path.display(),
+            gitignore_path = %gitignore_path.display(),
+            "initialized rulebook workspace"
+        );
+
+        Ok(RulebookInit { multorum_root, rulebook_path, gitignore_path })
+    }
+
     /// Load the active rulebook projection.
     pub(crate) fn load_active_rulebook(&self) -> Result<ActiveRulebookRecord, RuntimeError> {
         let path = self.paths.orchestrator().active_rulebook();
@@ -170,5 +198,23 @@ impl RuntimeFileSystem {
             .filter(|line| !line.trim().is_empty())
             .map(PathBuf::from)
             .collect())
+    }
+
+    fn ensure_multorum_gitignore(&self) -> Result<(), RuntimeError> {
+        let gitignore_path = self.paths.multorum_gitignore();
+        let mut lines = if gitignore_path.exists() {
+            fs::read_to_string(&gitignore_path)?.lines().map(str::to_owned).collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+
+        for entry in MULTORUM_GITIGNORE_ENTRIES {
+            if !lines.iter().any(|line| line == entry) {
+                lines.push(entry.to_owned());
+            }
+        }
+
+        fs::write(gitignore_path, lines.join("\n") + "\n")?;
+        Ok(())
     }
 }

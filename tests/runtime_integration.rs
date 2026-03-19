@@ -5,6 +5,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 use multorum::perspective::PerspectiveName;
+use multorum::rulebook::Rulebook;
 use multorum::runtime::{
     BundlePayload, MessageKind, ReplyReference, RuntimeError, WorkerState,
     service::{
@@ -58,6 +59,43 @@ fn setup_repo() -> (TempDir, FilesystemOrchestratorService, String) {
     let orchestrator = FilesystemOrchestratorService::new(dir.path()).unwrap();
     orchestrator.rulebook_switch(head.clone()).unwrap();
     (dir, orchestrator, head)
+}
+
+#[test]
+fn rulebook_init_creates_default_committed_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let orchestrator = FilesystemOrchestratorService::new(dir.path()).unwrap();
+    let canonical_root = dir.path().canonicalize().unwrap();
+
+    let init = orchestrator.rulebook_init().unwrap();
+
+    assert_eq!(init.multorum_root, canonical_root.join(".multorum"));
+    assert_eq!(init.rulebook_path, canonical_root.join(".multorum/rulebook.toml"));
+    assert_eq!(init.gitignore_path, canonical_root.join(".multorum/.gitignore"));
+    assert_eq!(fs::read_to_string(&init.rulebook_path).unwrap(), Rulebook::default_template());
+    assert_eq!(fs::read_to_string(&init.gitignore_path).unwrap(), "orchestrator/\nworktrees/\n");
+    assert!(init.multorum_root.join("orchestrator").is_dir());
+    assert!(init.multorum_root.join("worktrees").is_dir());
+
+    let rulebook = Rulebook::from_workspace_root(dir.path()).unwrap();
+    assert!(rulebook.filesets().definitions().is_empty());
+    assert!(rulebook.perspectives().declarations().is_empty());
+    assert!(rulebook.checks().pipeline().is_empty());
+}
+
+#[test]
+fn rulebook_init_refuses_to_overwrite_existing_rulebook() {
+    let dir = tempfile::tempdir().unwrap();
+    let rulebook_path = dir.path().join(".multorum/rulebook.toml");
+    fs::create_dir_all(rulebook_path.parent().unwrap()).unwrap();
+    fs::write(&rulebook_path, "[checks]\npipeline = []\n").unwrap();
+    let orchestrator = FilesystemOrchestratorService::new(dir.path()).unwrap();
+    let canonical_rulebook_path = rulebook_path.canonicalize().unwrap();
+
+    let error = orchestrator.rulebook_init().unwrap_err();
+
+    assert!(matches!(error, RuntimeError::RulebookExists(path) if path == canonical_rulebook_path));
+    assert_eq!(fs::read_to_string(rulebook_path).unwrap(), "[checks]\npipeline = []\n");
 }
 
 #[test]

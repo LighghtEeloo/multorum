@@ -12,6 +12,10 @@ pub enum RuntimeError {
     #[error("no active rulebook; run `multorum rulebook switch <commit>` first")]
     MissingActiveRulebook,
 
+    /// The workspace already has a committed rulebook.
+    #[error("rulebook already exists at {0}")]
+    RulebookExists(std::path::PathBuf),
+
     /// The requested perspective does not exist in the active rulebook
     /// or runtime state.
     #[error("unknown perspective: {0}")]

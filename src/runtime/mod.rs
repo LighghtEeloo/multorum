@@ -23,6 +23,6 @@ pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};
 pub use projection::TranscriptView;
 pub use state::{
     DiscardResult, IntegrateResult, MailboxMessageView, OrchestratorStatus, PerspectiveSummary,
-    ProvisionResult, RulebookSwitch, RulebookValidation, WorkerContractView, WorkerState,
-    WorkerStatus, WorkerSummary,
+    ProvisionResult, RulebookInit, RulebookSwitch, RulebookValidation, WorkerContractView,
+    WorkerState, WorkerStatus, WorkerSummary,
 };

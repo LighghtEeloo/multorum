@@ -6,7 +6,7 @@
 //!
 //! The instruction set is grouped into four categories:
 //!
-//! - **Rulebook** — `rulebook switch`, `rulebook validate`
+//! - **Rulebook** — `rulebook init`, `rulebook switch`, `rulebook validate`
 //! - **Worker lifecycle** — `provision`, `resolve`, `revise`, `discard`
 //! - **Integration** — `integrate`
 //! - **Query** — `status`
@@ -275,6 +275,15 @@ pub enum Command {
 /// Accessed via `multorum rulebook <subcommand>`.
 #[derive(Debug, Subcommand)]
 pub enum RulebookCommand {
+    /// Initialize `.multorum/` with the default committed artifacts.
+    ///
+    /// Creates `.multorum/rulebook.toml` from the checked-in default
+    /// template, ensures `.multorum/.gitignore` ignores the runtime
+    /// directories, and prepares the local orchestrator runtime
+    /// directories. The command refuses to overwrite an existing
+    /// committed rulebook.
+    Init,
+
     /// Validate and activate a new rulebook version.
     ///
     /// Compiles the target rulebook and checks that no file held by an
@@ -299,6 +308,10 @@ impl RulebookCommand {
     /// Execute the rulebook instruction.
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
+            | Self::Init => {
+                let result = services.orchestrator.rulebook_init()?;
+                println!("{result:#?}");
+            }
             | Self::Switch { commit } => {
                 let result = services.orchestrator.rulebook_switch(commit)?;
                 println!("{result:#?}");

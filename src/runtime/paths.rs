@@ -74,6 +74,11 @@ impl MultorumPaths {
         self.workspace_root.join(".multorum")
     }
 
+    /// Path to the committed `.multorum/.gitignore`.
+    pub fn multorum_gitignore(&self) -> PathBuf {
+        self.multorum_root().join(".gitignore")
+    }
+
     /// Path helper for orchestrator-local runtime state.
     pub fn orchestrator(&self) -> OrchestratorPaths {
         OrchestratorPaths::new(self.multorum_root().join("orchestrator"))

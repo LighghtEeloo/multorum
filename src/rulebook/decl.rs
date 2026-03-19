@@ -14,6 +14,12 @@ use super::error::RulebookError;
 /// Canonical relative path to the committed project rulebook.
 pub const RULEBOOK_RELATIVE_PATH: &str = ".multorum/rulebook.toml";
 
+/// Checked-in default rulebook template used by `rulebook init`.
+///
+/// Note: This template stays in `src/rulebook.default.toml` so design
+/// edits do not require touching Rust string literals.
+pub const DEFAULT_RULEBOOK_TEMPLATE: &str = include_str!("../rulebook.default.toml");
+
 /// The raw `.multorum/rulebook.toml` artifact.
 ///
 /// A rulebook is the single committed configuration file that defines
@@ -30,6 +36,11 @@ pub struct Rulebook {
 }
 
 impl Rulebook {
+    /// Return the default rulebook template used during initialization.
+    pub fn default_template() -> &'static str {
+        DEFAULT_RULEBOOK_TEMPLATE
+    }
+
     /// Parse a rulebook from a TOML string.
     pub fn from_toml_str(input: &str) -> Result<Self, RulebookError> {
         tracing::debug!(bytes = input.len(), "decoding rulebook from string");
@@ -141,6 +152,15 @@ mod tests {
         .unwrap();
 
         let rulebook = Rulebook::from_workspace_root(dir.path()).unwrap();
+        assert!(rulebook.filesets().definitions().is_empty());
+        assert!(rulebook.perspectives().declarations().is_empty());
+        assert!(rulebook.checks().pipeline().is_empty());
+    }
+
+    #[test]
+    fn default_template_is_a_valid_empty_rulebook() {
+        let rulebook = Rulebook::from_toml_str(Rulebook::default_template()).unwrap();
+
         assert!(rulebook.filesets().definitions().is_empty());
         assert!(rulebook.perspectives().declarations().is_empty());
         assert!(rulebook.checks().pipeline().is_empty());

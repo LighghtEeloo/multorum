@@ -6,6 +6,10 @@ use crate::mcp::dto::ToolDescriptor;
 pub fn descriptors() -> Vec<ToolDescriptor> {
     vec![
         ToolDescriptor {
+            name: "rulebook_init",
+            description: "Initialize .multorum with the default committed rulebook artifacts.",
+        },
+        ToolDescriptor {
             name: "rulebook_validate",
             description: "Dry-run validation of a rulebook commit switch.",
         },

@@ -42,6 +42,7 @@ impl From<RuntimeError> for McpToolError {
     fn from(value: RuntimeError) -> Self {
         let code = match value {
             | RuntimeError::MissingActiveRulebook => McpErrorCode::InvalidState,
+            | RuntimeError::RulebookExists(_) => McpErrorCode::InvalidState,
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,
             | RuntimeError::InvalidState => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,

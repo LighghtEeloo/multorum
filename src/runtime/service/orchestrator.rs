@@ -11,7 +11,7 @@ use super::super::{
     error::{Result, RuntimeError},
     state::{
         DiscardResult, IntegrateResult, OrchestratorStatus, PerspectiveSummary, ProvisionResult,
-        RulebookSwitch, RulebookValidation, WorkerState, WorkerSummary,
+        RulebookInit, RulebookSwitch, RulebookValidation, WorkerState, WorkerSummary,
     },
 };
 use super::filesystem::{
@@ -21,6 +21,9 @@ use super::filesystem::{
 
 /// Typed operations available to the orchestrator frontend.
 pub trait OrchestratorService {
+    /// Initialize `.multorum/` with the default committed artifacts.
+    fn rulebook_init(&self) -> Result<RulebookInit>;
+
     /// Dry-run validation of a rulebook switch.
     fn rulebook_validate(&self, commit: String) -> Result<RulebookValidation>;
 
@@ -141,6 +144,10 @@ impl FilesystemOrchestratorService {
 }
 
 impl OrchestratorService for FilesystemOrchestratorService {
+    fn rulebook_init(&self) -> Result<RulebookInit> {
+        self.fs.initialize_rulebook()
+    }
+
     fn rulebook_validate(&self, commit: String) -> Result<RulebookValidation> {
         let compiled = self.fs.load_compiled_rulebook(&commit)?;
         let target_paths = compiled_rulebook_paths(&compiled);
