@@ -7,12 +7,12 @@
 3. [File Set Algebra](#file-set-algebra)
 4. [Perspectives](#perspectives)
 5. [The Rulebook](#the-rulebook)
-6. [Sub-Codebase Provisioning](#sub-codebase-provisioning)
-7. [The Worker State Machine](#the-worker-state-machine)
-8. [The Report-Back Protocol](#the-report-back-protocol)
-9. [The Pre-Merge Pipeline](#the-pre-merge-pipeline)
-10. [The Orchestrator Instruction Set](#the-orchestrator-instruction-set)
-11. [Project Layout](#project-layout)
+6. [Project Layout](#project-layout)
+7. [Sub-Codebase Provisioning](#sub-codebase-provisioning)
+8. [The Worker State Machine](#the-worker-state-machine)
+9. [The Mailbox Protocol](#the-mailbox-protocol)
+10. [The Pre-Merge Pipeline](#the-pre-merge-pipeline)
+11. [The Orchestrator Instruction Set](#the-orchestrator-instruction-set)
 
 ---
 
@@ -240,6 +240,46 @@ If the check fails, Multorum rejects the switch and reports which active workers
 
 ---
 
+## Project Layout
+
+A Multorum project adds a `.multorum/` directory to the project root. Every worker worktree also has its own `.multorum/` directory because it is a full checkout of the repository plus local runtime files. The orchestrator and each worker therefore have separate `.multorum/` directories with different responsibilities.
+
+```
+<project-root>/
+  .multorum/
+    rulebook.toml        # committed — perspectives, file sets, check pipeline
+    orchestrator/        # gitignored — orchestrator control plane and audit data
+    worktrees/           # gitignored — git worktrees for active workers
+  src/
+  tests/
+  ...
+```
+
+### The Committed Region
+
+**`.multorum/rulebook.toml`** is the sole Multorum configuration file that the project team owns and commits. It contains file set definitions, perspective declarations, and project-level check pipeline settings. Its full history is available via standard git tooling.
+
+### The Runtime Region
+
+In the main workspace, **`.multorum/orchestrator/`** contains the orchestrator's local control-plane data: the active rulebook commit, worker state projections, integration records, check results, and audit logs. This data is local to the machine and does not travel with the repository.
+
+**`.multorum/worktrees/`** contains one subdirectory per active worker, each being a git worktree. These are created and destroyed by Multorum as workers are provisioned and integrated or discarded.
+
+Inside each worker worktree, the worker-local **`.multorum/`** directory contains the runtime contract, the compiled read and write sets, the inbox and outbox mailboxes, and any runtime artifacts attached to messages. These files are authoritative for orchestrator-worker communication, but they are local runtime state rather than project configuration.
+
+### Gitignore
+
+The following entries should be present in the project's `.gitignore`:
+
+```
+.multorum/orchestrator/
+.multorum/worktrees/
+```
+
+Multorum verifies that these entries are present during project initialization and warns if they are missing. Worker-local runtime files inside each worktree are ignored through that worktree's local exclude configuration rather than through the committed project `.gitignore`.
+
+---
+
 ## Sub-Codebase Provisioning
 
 When the orchestrator issues a `provision` instruction for a perspective, Multorum creates an isolated working environment for that worker. This environment is called a *sub-codebase*.
@@ -264,6 +304,29 @@ git worktree add .multorum/worktrees/<perspective-name> <HEAD-commit>
 All worktrees are created from the same pinned commit. This means every worker starts from an identical snapshot of the codebase, and that snapshot does not change for the lifetime of the worker's task — even if the orchestrator integrates other workers' commits into HEAD in the meantime.
 
 This stability is intentional. Each worker operates on a predictable, immutable world. The orchestrator is responsible for decomposing work such that workers do not depend on each other's in-progress output. If such a dependency exists, the orchestrator should sequence the tasks across separate provisioning steps rather than running them concurrently.
+
+### Worker-Local Runtime
+
+Every worker worktree has its own `.multorum/` directory, distinct from the orchestrator's `.multorum/` directory in the main workspace. Multorum uses this worker-local directory as the worker's runtime control surface.
+
+At provisioning time, Multorum creates the following runtime files inside the worker worktree:
+
+```text
+.multorum/
+  rulebook.toml      # checked out from the pinned commit
+  contract.toml      # runtime — perspective, pinned rulebook commit, base commit
+  read-set.txt       # runtime — compiled read set for worker guidance
+  write-set.txt      # runtime — compiled write set for enforcement and audit
+  inbox/
+    new/
+    ack/
+  outbox/
+    new/
+    ack/
+  artifacts/
+```
+
+`contract.toml`, the mailbox directories, and `artifacts/` are runtime-only files. They are not part of the canonical codebase and must never be committed by the worker. Multorum installs local ignore rules in the worktree so these paths remain invisible to normal version-control operations.
 
 ### Write Enforcement
 
@@ -328,28 +391,77 @@ PROVISIONED ──► ACTIVE ◄───────────┘
 
 ---
 
-## The Report-Back Protocol
+## The Mailbox Protocol
 
-Report-back is a first-class primitive in Multorum, not an escape hatch. It is the mechanism by which workers express the boundary between what they can accomplish autonomously and what requires orchestrator judgment. A worker that reports back rather than guessing is behaving correctly.
+All orchestrator-to-worker and worker-to-orchestrator communication in Multorum is file-based. Multorum does not require sockets, RPC, or a resident broker process. Each active worker worktree exposes two mailbox trees in its own `.multorum/` directory:
 
-### What Workers Report
+- **`inbox/`** — messages authored by the orchestrator and consumed by the worker
+- **`outbox/`** — messages authored by the worker and consumed by the orchestrator
 
-Workers may report back for any reason that prevents confident, correct completion of their task. Common categories include:
+This preserves the star topology of the system while taking full advantage of the fact that the orchestrator workspace and each worker worktree have separate `.multorum/` directories. The orchestrator owns the control plane in the main workspace; each worker owns the runtime surface inside its own worktree.
 
-- **Permission issues** — the task requires creating a new file, accessing a file outside the read set, or writing to a file outside the write set
-- **Ambiguity** — the task description is underspecified, a function signature is too vague, or a business logic decision cannot be made without external input
-- **Structural issues** — there is no appropriate place to write tests, the required change cuts across perspective boundaries, or a dependency does not exist yet
-- **Evidence submission** — the worker has completed work and wishes to submit test results or other evidence to support skipping pre-merge checks
+### Message Bundles
 
-### The Boundary of Multorum's Concern
+Every message is represented as a directory bundle published atomically into a mailbox.
 
-Multorum manages the **lifecycle state** of a report. It does not parse, interpret, or act on the **content** of a report. The content — natural language descriptions, code snippets, test output, structured requests — is an opaque payload that Multorum records and makes available to the orchestrator.
+```text
+.multorum/outbox/new/0007-report/
+  envelope.toml
+  body.md
+  artifacts/
+    test.log
+```
 
-When a worker issues a `report`, Multorum transitions the worker to BLOCKED and notifies the orchestrator. When the orchestrator issues `resolve`, Multorum transitions the worker back to ACTIVE. Any mechanical consequences of the resolution — such as a rulebook switch or re-provisioning — are handled by Multorum as separate instructions issued by the orchestrator.
+`envelope.toml` carries the routing and state-transition metadata that Multorum interprets:
 
-### Resumption
+- `protocol` — protocol version
+- `perspective` — the active worker identity
+- `kind` — message type, such as `task`, `report`, `resolve`, `revise`, or `commit`
+- `sequence` — a monotonic number unique within the mailbox
+- `created_at` — creation timestamp
+- `in_reply_to` — optional reference to the message being answered
+- `head_commit` — optional git commit hash relevant to the message
 
-When a worker is resumed after a report-back, it picks up from where it left off. The worktree state is preserved exactly as the worker left it. The orchestrator is responsible for communicating the resolution content to the worker so it can continue with the new information.
+`body.md` and `artifacts/` are opaque payloads. They may contain natural-language instructions, structured evidence, test output, or any other worker-orchestrator content. Multorum validates the envelope and records the bundle, but it does not interpret the body.
+
+Messages are published by writing the bundle under a temporary name and atomically renaming it into `new/`. This guarantees that readers either see the complete message or do not see it at all.
+
+### Ownership and Acknowledgement
+
+Each mailbox subtree has exactly one writer:
+
+- the orchestrator writes `inbox/new/`
+- the worker writes `inbox/ack/`
+- the worker writes `outbox/new/`
+- the orchestrator writes `outbox/ack/`
+
+The original message bundle is immutable once published. Receipt is recorded by writing a small acknowledgement file with the same sequence number into the corresponding `ack/` directory. This avoids rename races, preserves an audit trail, and keeps concurrent access simple: no directory has more than one writer.
+
+Because a perspective may have at most one active worker at a time, the perspective name is sufficient as the runtime identity. Multorum avoids temporal ambiguity by requiring provisioning to start with empty mailboxes and by archiving or removing the entire worktree runtime state when the worker is integrated or discarded.
+
+Provisioning may seed the worker inbox with an initial `task` bundle carrying the orchestrator's assignment and any supporting material. This keeps the initial task description in the same transport as later resolutions and revisions.
+
+### Report-Back
+
+Report-back is a first-class primitive and one message kind within the mailbox protocol. It is not a special side channel.
+
+Workers may send `report` bundles for any reason that prevents confident, correct completion of the task. Common categories include:
+
+- **Permission issues** — the task requires creating a new file or writing outside the write set
+- **Ambiguity** — the task description is underspecified or a design choice needs explicit judgment
+- **Structural issues** — the required change cuts across perspective boundaries or the necessary destination does not exist yet
+- **Evidence submission** — the worker wants the orchestrator to review test output or other execution evidence before integration
+
+When Multorum accepts a `report` bundle from the worker outbox, it transitions the worker from ACTIVE to BLOCKED. The orchestrator answers by writing a `resolve` bundle into the worker inbox. When that bundle is acknowledged, the worker returns to ACTIVE and resumes from the preserved worktree state.
+
+### Revision and Submission
+
+The same mailbox protocol is used for post-review feedback and final submission:
+
+- a worker writes a `commit` bundle to the outbox to submit its git commit and any evidence
+- the orchestrator writes a `revise` bundle to the inbox to request changes after review or failed checks
+
+`discard` is an orchestrator-local teardown action, not a content-carrying mailbox message. This unifies initial task delivery, blocker resolution, revision requests, and final submission into one transport. There is no separate mechanism for "real" content outside the protocol.
 
 ---
 
@@ -403,6 +515,8 @@ The file set check is always `always` and this cannot be configured.
 
 Multorum exposes a set of instructions that the orchestrator may issue. Every state change in Multorum is the result of one of these instructions. Multorum is purely reactive.
 
+Orchestrator-local instructions operate on the main workspace control plane under `.multorum/`. Worker-facing instructions are delivered by writing message bundles into the worker's inbox. Worker-originated instructions are observed by reading message bundles from the worker's outbox.
+
 ### Rulebook Instructions
 
 **`rulebook switch <commit-hash>`**
@@ -414,13 +528,13 @@ Performs a dry run of the switch validation without making any changes. Useful f
 ### Worker Lifecycle Instructions
 
 **`provision <perspective-name>`**
-Compiles the file sets for the named perspective, creates a git worktree at the pinned HEAD commit, installs the client-side write hook, and injects the read set as worker guidance metadata. Transitions the worker to PROVISIONED.
+Compiles the file sets for the named perspective, creates a git worktree at the pinned HEAD commit, installs the client-side write hook, materializes the worker-local runtime files in `.multorum/`, and injects the read set as worker guidance metadata. Multorum also prepares empty inbox and outbox mailboxes for the worker and may publish an initial `task` bundle into the worker inbox. Transitions the worker to PROVISIONED.
 
 **`resolve <perspective-name>`**
-Signals that a blocked worker's report has been resolved. Transitions the worker from BLOCKED to ACTIVE. The orchestrator is responsible for separately communicating the resolution content to the worker.
+Publishes a `resolve` bundle into the worker's inbox. The bundle carries both the state transition and the resolution content. Once the worker acknowledges it, Multorum transitions the worker from BLOCKED to ACTIVE.
 
 **`revise <perspective-name>`**
-Returns a committed worker to ACTIVE state so it can address problems identified by the orchestrator. The worktree is unfrozen and the worker resumes execution. The orchestrator is responsible for communicating the required changes to the worker.
+Publishes a `revise` bundle into the worker's inbox. The bundle carries the required changes. Once the worker acknowledges it, Multorum returns the committed worker to ACTIVE state so it can address the feedback.
 
 **`discard <perspective-name>`**
 Tears down a worker's worktree without integrating its work. Valid from ACTIVE or COMMITTED states.
@@ -433,50 +547,12 @@ Runs the pre-merge pipeline against the worker's commit. If all checks pass, int
 ### Worker-Facing Instructions
 
 **`commit <perspective-name>`**
-Issued by the worker to declare its task complete and submit its work for review. Multorum freezes the worktree and transitions the worker from ACTIVE to COMMITTED. The orchestrator then decides whether to `integrate`, `revise`, or `discard` the submission.
+Issued by the worker by publishing a `commit` bundle into its outbox. The bundle includes the submitted git commit hash and may include evidence artifacts. When Multorum accepts the bundle, it freezes the worktree and transitions the worker from ACTIVE to COMMITTED. The orchestrator then decides whether to `integrate`, `revise`, or `discard` the submission.
 
 **`report <perspective-name>`**
-Issued by the worker to signal that it is blocked. Multorum transitions the worker to BLOCKED and notifies the orchestrator. An optional structured payload carries the evidence, request, or description — this content is opaque to Multorum.
+Issued by the worker by publishing a `report` bundle into its outbox. When Multorum accepts the bundle, it transitions the worker to BLOCKED and records the payload for orchestrator review.
 
 ### Query Instructions
 
 **`status`**
-Returns the current state of all active workers, the active rulebook commit hash, and a summary of any blocked workers awaiting resolution.
-
----
-
-## Project Layout
-
-A Multorum project adds a `.multorum/` directory to the project root. This directory has two distinct regions: the *committed region*, which is versioned in git and represents the project's Multorum configuration, and the *runtime region*, which is gitignored and managed entirely by Multorum.
-
-```
-<project-root>/
-  .multorum/
-    rulebook.toml        # committed — perspectives, file sets, check pipeline
-    worktrees/           # gitignored — git worktrees for active workers
-    state/               # gitignored — runtime state, worker metadata, audit logs
-  src/
-  tests/
-  ...
-```
-
-### The Committed Region
-
-**`.multorum/rulebook.toml`** is the sole Multorum configuration file that the project team owns and commits. It contains file set definitions, perspective declarations, and project-level check pipeline settings. Its full history is available via standard git tooling.
-
-### The Runtime Region
-
-**`.multorum/worktrees/`** contains one subdirectory per active worker, each being a git worktree. These are created and destroyed by Multorum as workers are provisioned and integrated or discarded.
-
-**`.multorum/state/`** contains Multorum's runtime state: the active rulebook commit hash, worker states, report payloads, evidence submissions, check results, and audit logs. This data is local to the machine and does not travel with the repository.
-
-### Gitignore
-
-The following entries should be present in the project's `.gitignore`:
-
-```
-.multorum/worktrees/
-.multorum/state/
-```
-
-Multorum verifies that these entries are present during project initialization and warns if they are missing.
+Returns the current state of all active workers, the active rulebook commit hash, and a summary of any blocked workers awaiting resolution. This view is derived from the orchestrator control-plane metadata together with the mailbox history, not from a single mutable global state file.

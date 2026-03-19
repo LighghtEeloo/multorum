@@ -40,6 +40,20 @@ write = "AuthTests"
 
 The rulebook is immutable once active — its versioning is handled entirely by git. The orchestrator evolves it by committing changes and explicitly instructing Multorum to switch to a new version.
 
+### Multorum-Managed Project Layout
+
+The main workspace and every active worker worktree each have a `.multorum/` directory, but they serve different roles. The main workspace holds the orchestrator control plane. Each worker worktree holds the worker-local runtime surface.
+
+```text
+<project-root>/
+  .multorum/
+    rulebook.toml        # committed — versioned project configuration
+    orchestrator/        # gitignored — orchestrator control plane and audit data
+    worktrees/           # gitignored — active worker worktrees
+```
+
+Inside each worker worktree, Multorum materializes runtime files such as the compiled read and write sets, a runtime contract, and the worker's inbox and outbox mailboxes. These files are local runtime state, not project configuration, and are ignored through the worktree's local exclude configuration.
+
 ### The Safety Property
 
 Multorum enforces one core invariant at compile time: **a file may either be written exclusively by one perspective, or read by any number of perspectives — never both.** Write sets across all perspectives must be strictly disjoint. This means write conflicts between workers are impossible by construction, and integrating their work is always conflict-free.
@@ -52,29 +66,24 @@ The write set is enforced server-side when Multorum integrates the worker's comm
 
 Workers may not create new files. If a task requires a file not in the compiled write set, the worker reports back to the orchestrator rather than acting unilaterally.
 
-### The Report-Back Protocol
+### The Mailbox Protocol
 
-Report-back is a first-class primitive, not an escape hatch. Workers report back whenever they cannot complete their task confidently: a missing file permission, an ambiguous specification, a vague function signature, nowhere appropriate to write tests — anything requiring orchestrator judgment. A worker that reports back rather than guessing is behaving correctly.
+All orchestrator-to-worker and worker-to-orchestrator communication is file-based. Each active worker worktree exposes two mailbox trees in its local `.multorum/` directory:
 
-Multorum manages the lifecycle state of a report (blocking and resuming the worker); the content is an opaque payload between worker and orchestrator. Workers never communicate with each other. The communication topology is a strict star with the orchestrator at the center.
+- `inbox/` for messages authored by the orchestrator and consumed by the worker
+- `outbox/` for messages authored by the worker and consumed by the orchestrator
+
+Messages are published as directory bundles with an `envelope.toml` plus opaque payload files such as `body.md` and attached artifacts. Publication is atomic, and acknowledgement is recorded separately so each mailbox directory has exactly one writer.
+
+Report-back is one message kind within this protocol. Workers publish a `report` bundle whenever they cannot complete their task confidently: a missing file permission, an ambiguous specification, a vague function signature, nowhere appropriate to write tests — anything requiring orchestrator judgment. The orchestrator answers with `resolve` or `revise` bundles in the worker inbox. Initial task delivery, blocker resolution, revision requests, and final commit submission all use the same transport.
+
+Workers never communicate with each other. The communication topology is a strict star with the orchestrator at the center.
 
 ### Pre-Merge Pipeline
 
 Before integration, every commit passes through a pipeline of gates. The first — a server-side file set check — is mandatory and non-negotiable. The remainder are project-defined checks configured in the rulebook: build, test, lint, format, or any arbitrary command.
 
 Workers may submit evidence (e.g. test output from their worktree) to request that specific checks be skipped. The orchestrator reviews the evidence and decides whether to trust it. The file set check cannot be skipped under any circumstances.
-
----
-
-## Multorum-Managed Project Layout
-
-```
-<project-root>/
-  .multorum/
-    rulebook.toml        # committed — versioned project configuration
-    worktrees/           # gitignored — active worker worktrees
-    state/               # gitignored — runtime state and audit logs
-```
 
 ---
 
