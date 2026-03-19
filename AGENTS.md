@@ -8,6 +8,11 @@ Above all: consolidate key understandings and new findings as inline Rust docume
 Inline Rust documentation is the canonical documentation source for this repository.
 Write `/// Note: ` to explain why unusual design choices / compromises are made.
 
+Prioritize a clean codebase and elegant design over compatibility or migration work.
+Do not keep transitional layers, compatibility shims, or legacy interfaces unless they are
+explicitly required by the task. If compatibility or migration concerns conflict with a
+clearer design, prefer the clearer design.
+
 ## Documentation and Language
 
 Actively write documentation for the program. Make sure *all* public APIs are documented.
@@ -74,18 +79,6 @@ Add concise yet critical documentation for structs, fields, and methods.
 Ensure that documentation is clear, concise, and accurate. No emojis unless strictly necessary.
 
 When adding new features, record and observe details with the `tracing` crate.
-
-## UI Design
-
-Use or create constants in `theme.rs` for all UI numeric values
-(sizes, padding, gaps, colors). Avoid hardcoding magic numbers.
-
-All user-facing text must be internationalized via `rust_i18n::t!`.
-Never hardcode UI strings; add keys to the locale files instead.
-
-When adding, removing, or changing keyboard shortcuts, update the in-app
-shortcut guide in `src/app/document.rs` (shortcut help banner) and keep all
-locale entries in sync (`locales/en-US.yml`, `locales/ja.yml`, `locales/zh-CN.yml`).
 
 ## Version Control
 
