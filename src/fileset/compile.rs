@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use wax::Program as _;
+use wax::walk::{Entry as _, PathExt as _};
 
 use super::error::CompileError;
 use super::expr::{Definition, Expr, GlobPattern};
@@ -41,19 +42,15 @@ impl<'a> Compiler<'a> {
     /// `order` must be a valid topological ordering as produced by
     /// [`Validator::validate`](super::Validator::validate).
     pub fn compile(
-        &self,
-        definitions: &BTreeMap<Name, Definition>,
-        order: &[Name],
+        &self, definitions: &BTreeMap<Name, Definition>, order: &[Name],
     ) -> Result<BTreeMap<Name, BTreeSet<PathBuf>>, CompileError> {
         let mut resolved: BTreeMap<Name, BTreeSet<PathBuf>> = BTreeMap::new();
 
         for name in order {
-            let def = definitions
-                .get(name)
-                .expect("topological order contains only defined names");
+            let def = definitions.get(name).expect("topological order contains only defined names");
             let set = match def {
-                Definition::Primitive(pattern) => self.expand_glob(pattern)?,
-                Definition::Compound(expr) => Self::evaluate(expr, &resolved),
+                | Definition::Primitive(pattern) => self.expand_glob(pattern)?,
+                | Definition::Compound(expr) => Self::evaluate(expr, &resolved),
             };
             if set.is_empty() {
                 tracing::warn!(name = %name, "file set compiled to empty list");
@@ -65,22 +62,13 @@ impl<'a> Compiler<'a> {
     }
 
     /// Expand a glob pattern against the file list.
-    fn expand_glob(
-        &self,
-        pattern: &GlobPattern,
-    ) -> Result<BTreeSet<PathBuf>, CompileError> {
-        let glob = wax::Glob::new(pattern.as_str()).map_err(|err| {
-            CompileError::Glob {
-                pattern: pattern.as_str().to_owned(),
-                reason: err.to_string(),
-            }
+    fn expand_glob(&self, pattern: &GlobPattern) -> Result<BTreeSet<PathBuf>, CompileError> {
+        let glob = wax::Glob::new(pattern.as_str()).map_err(|err| CompileError::Glob {
+            pattern: pattern.as_str().to_owned(),
+            reason: err.to_string(),
         })?;
-        let matched = self
-            .files
-            .iter()
-            .filter(|path| glob.is_match(path.as_path()))
-            .cloned()
-            .collect();
+        let matched =
+            self.files.iter().filter(|path| glob.is_match(path.as_path())).cloned().collect();
         Ok(matched)
     }
 
@@ -89,25 +77,23 @@ impl<'a> Compiler<'a> {
     /// This is also used by the perspective module to resolve read/write
     /// expressions against compiled file sets.
     pub fn evaluate(
-        expr: &Expr,
-        resolved: &BTreeMap<Name, BTreeSet<PathBuf>>,
+        expr: &Expr, resolved: &BTreeMap<Name, BTreeSet<PathBuf>>,
     ) -> BTreeSet<PathBuf> {
         match expr {
-            Expr::Ref(name) => resolved
-                .get(name)
-                .expect("topological order guarantees resolved")
-                .clone(),
-            Expr::Union(a, b) => {
+            | Expr::Ref(name) => {
+                resolved.get(name).expect("topological order guarantees resolved").clone()
+            }
+            | Expr::Union(a, b) => {
                 let mut result = Self::evaluate(a, resolved);
                 result.extend(Self::evaluate(b, resolved));
                 result
             }
-            Expr::Intersection(a, b) => {
+            | Expr::Intersection(a, b) => {
                 let set_a = Self::evaluate(a, resolved);
                 let set_b = Self::evaluate(b, resolved);
                 set_a.intersection(&set_b).cloned().collect()
             }
-            Expr::Difference(a, b) => {
+            | Expr::Difference(a, b) => {
                 let set_a = Self::evaluate(a, resolved);
                 let set_b = Self::evaluate(b, resolved);
                 set_a.difference(&set_b).cloned().collect()
@@ -116,25 +102,25 @@ impl<'a> Compiler<'a> {
     }
 }
 
-/// Walk a directory and collect all file paths relative to `root`.
+/// Walk a directory tree and collect all file paths relative to `root`.
 ///
 /// This is a convenience function for callers that want to enumerate
-/// the filesystem before compiling. Uses [`walkdir::WalkDir`]
-/// internally.
+/// the filesystem before compiling.
+///
+/// Uses [`wax::walk::PathExt`] so traversal and glob matching rely on
+/// the same path semantics.
+///
+/// Note: if `root` names a regular file instead of a directory, the
+/// returned relative path is empty because it is relative to the walked
+/// file itself.
 pub fn enumerate_files(root: &Path) -> Result<Vec<PathBuf>, CompileError> {
     let mut files = Vec::new();
-    for entry in walkdir::WalkDir::new(root).into_iter() {
-        let entry = entry.map_err(|err| CompileError::Walk {
-            root: root.to_owned(),
-            reason: err.to_string(),
-        })?;
+    for entry in root.walk() {
+        let entry = entry
+            .map_err(|err| CompileError::Walk { root: root.to_owned(), reason: err.to_string() })?;
         if entry.file_type().is_file() {
-            let relative = entry
-                .path()
-                .strip_prefix(root)
-                .expect("walkdir entries are under root")
-                .to_owned();
-            files.push(relative);
+            let (_, relative) = entry.root_relative_paths();
+            files.push(relative.to_owned());
         }
     }
     Ok(files)
@@ -142,6 +128,8 @@ pub fn enumerate_files(root: &Path) -> Result<Vec<PathBuf>, CompileError> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use crate::fileset::{ExprParser, Validator};
 
@@ -167,19 +155,12 @@ mod tests {
 
     #[test]
     fn primitive_glob_matching() {
-        let files = paths(&[
-            "auth/login.rs",
-            "auth/logout.rs",
-            "api/handler.rs",
-        ]);
+        let files = paths(&["auth/login.rs", "auth/logout.rs", "api/handler.rs"]);
         let defs = BTreeMap::from([(n("AuthFiles"), prim("auth/**"))]);
         let order = Validator::new(&defs).validate().unwrap();
         let result = Compiler::new(&files).compile(&defs, &order).unwrap();
 
-        assert_eq!(
-            result[&n("AuthFiles")],
-            path_set(&["auth/login.rs", "auth/logout.rs"])
-        );
+        assert_eq!(result[&n("AuthFiles")], path_set(&["auth/login.rs", "auth/logout.rs"]));
     }
 
     #[test]
@@ -193,19 +174,12 @@ mod tests {
         let order = Validator::new(&defs).validate().unwrap();
         let result = Compiler::new(&files).compile(&defs, &order).unwrap();
 
-        assert_eq!(
-            result[&n("AB")],
-            path_set(&["a/x.rs", "b/y.rs"])
-        );
+        assert_eq!(result[&n("AB")], path_set(&["a/x.rs", "b/y.rs"]));
     }
 
     #[test]
     fn intersection_operation() {
-        let files = paths(&[
-            "auth/login.rs",
-            "auth/test/login_test.rs",
-            "api/test/api_test.rs",
-        ]);
+        let files = paths(&["auth/login.rs", "auth/test/login_test.rs", "api/test/api_test.rs"]);
         let defs = BTreeMap::from([
             (n("AuthFiles"), prim("auth/**")),
             (n("TestFiles"), prim("**/test/**")),
@@ -214,18 +188,12 @@ mod tests {
         let order = Validator::new(&defs).validate().unwrap();
         let result = Compiler::new(&files).compile(&defs, &order).unwrap();
 
-        assert_eq!(
-            result[&n("AuthTests")],
-            path_set(&["auth/test/login_test.rs"])
-        );
+        assert_eq!(result[&n("AuthTests")], path_set(&["auth/test/login_test.rs"]));
     }
 
     #[test]
     fn difference_operation() {
-        let files = paths(&[
-            "auth/login.rs",
-            "auth/test/login_test.rs",
-        ]);
+        let files = paths(&["auth/login.rs", "auth/test/login_test.rs"]);
         let defs = BTreeMap::from([
             (n("AuthFiles"), prim("auth/**")),
             (n("TestFiles"), prim("**/test/**")),
@@ -234,10 +202,7 @@ mod tests {
         let order = Validator::new(&defs).validate().unwrap();
         let result = Compiler::new(&files).compile(&defs, &order).unwrap();
 
-        assert_eq!(
-            result[&n("AuthImpl")],
-            path_set(&["auth/login.rs"])
-        );
+        assert_eq!(result[&n("AuthImpl")], path_set(&["auth/login.rs"]));
     }
 
     #[test]
@@ -261,14 +226,8 @@ mod tests {
         let order = Validator::new(&defs).validate().unwrap();
         let result = Compiler::new(&files).compile(&defs, &order).unwrap();
 
-        assert_eq!(
-            result[&n("AuthSpecs")],
-            path_set(&["auth/auth.spec.md"])
-        );
-        assert_eq!(
-            result[&n("AuthTests")],
-            path_set(&["auth/test/login_test.rs"])
-        );
+        assert_eq!(result[&n("AuthSpecs")], path_set(&["auth/auth.spec.md"]));
+        assert_eq!(result[&n("AuthTests")], path_set(&["auth/test/login_test.rs"]));
 
         // Simulate the AuthImplementor write set:
         // AuthFiles - AuthSpecs - AuthTests
@@ -279,9 +238,21 @@ mod tests {
             .difference(&result[&n("AuthTests")])
             .cloned()
             .collect();
+        assert_eq!(auth_impl, path_set(&["auth/login.rs", "auth/logout.rs"]));
+    }
+
+    #[test]
+    fn enumerate_files_returns_root_relative_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("auth/test")).unwrap();
+        fs::write(dir.path().join("auth/login.rs"), "").unwrap();
+        fs::write(dir.path().join("auth/test/login_test.rs"), "").unwrap();
+
+        let files = enumerate_files(dir.path()).unwrap();
+
         assert_eq!(
-            auth_impl,
-            path_set(&["auth/login.rs", "auth/logout.rs"])
+            files.into_iter().collect::<BTreeSet<_>>(),
+            path_set(&["auth/login.rs", "auth/test/login_test.rs"])
         );
     }
 }

@@ -9,7 +9,6 @@ serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 toml = "1.0"
 tracing = "0.1"
-walkdir = "2"
 wax = "0.7"
 
 [dev-dependencies]

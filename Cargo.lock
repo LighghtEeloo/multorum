@@ -298,7 +298,6 @@ dependencies = [
  "thiserror",
  "toml",
  "tracing",
- "walkdir",
  "wax",
 ]
 
