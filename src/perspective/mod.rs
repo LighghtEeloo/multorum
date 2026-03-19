@@ -16,8 +16,10 @@
 //!
 //! This is enforced statically at compile time by [`SafetyValidator`].
 
+pub mod decl;
 pub mod error;
 pub mod name;
 
+pub use decl::{PerspectiveDecl, PerspectiveTable};
 pub use error::*;
 pub use name::PerspectiveName;
