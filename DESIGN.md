@@ -110,7 +110,7 @@ AuthTests = "AuthFiles & TestFiles"
 
 # Used in a perspective
 [perspectives.AuthImplementor]
-read  = "AuthSpecs | AuthTests"
+read  = "AuthSpecs"
 write = "AuthFiles - AuthSpecs - AuthTests"
 
 [perspectives.AuthTester]
@@ -160,7 +160,7 @@ A *perspective* is a named declaration in the rulebook that defines a role's rel
 
 ```toml
 [perspectives.AuthImplementor]
-read  = "AuthSpecs | AuthTests"
+read  = "AuthSpecs"
 write = "AuthFiles - AuthSpecs - AuthTests"
 ```
 

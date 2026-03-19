@@ -112,12 +112,14 @@ impl<'de> de::Deserialize<'de> for PerspectiveTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fileset::ParseError;
+    use crate::perspective::PerspectiveNameError;
 
     #[test]
     fn deserialize_design_doc_example() {
         let toml_str = r#"
             [AuthImplementor]
-            read  = "AuthSpecs | AuthTests"
+            read  = "AuthSpecs"
             write = "AuthFiles - AuthSpecs - AuthTests"
 
             [AuthTester]
@@ -133,36 +135,27 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_rejects_invalid_name() {
-        let toml_str = r#"
-            [lowercase]
-            read  = "A"
-            write = "B"
-        "#;
-        let result: Result<PerspectiveTable, _> = toml::from_str(toml_str);
-        assert!(result.is_err());
+    fn rejects_invalid_name() {
+        assert!(matches!(
+            PerspectiveName::new("lowercase"),
+            Err(PerspectiveNameError::InvalidStart { .. })
+        ));
     }
 
     #[test]
-    fn deserialize_rejects_invalid_read_expr() {
-        let toml_str = r#"
-            [Bad]
-            read  = "A |"
-            write = "B"
-        "#;
-        let result: Result<PerspectiveTable, _> = toml::from_str(toml_str);
-        assert!(result.is_err());
+    fn rejects_invalid_read_expr() {
+        assert!(matches!(
+            ExprParser::new("A |").parse(),
+            Err(ParseError::UnexpectedEof)
+        ));
     }
 
     #[test]
-    fn deserialize_rejects_invalid_write_expr() {
-        let toml_str = r#"
-            [Bad]
-            read  = "A"
-            write = "| B"
-        "#;
-        let result: Result<PerspectiveTable, _> = toml::from_str(toml_str);
-        assert!(result.is_err());
+    fn rejects_invalid_write_expr() {
+        assert!(matches!(
+            ExprParser::new("| B").parse(),
+            Err(ParseError::UnexpectedChar { ch: '|', .. })
+        ));
     }
 
     #[test]
@@ -171,8 +164,10 @@ mod tests {
             [Bad]
             read = "A"
         "#;
-        let result: Result<PerspectiveTable, _> = toml::from_str(toml_str);
-        assert!(result.is_err());
+        assert!(matches!(
+            toml::from_str::<PerspectiveTable>(toml_str),
+            Err(_)
+        ));
     }
 
     #[test]
@@ -181,8 +176,10 @@ mod tests {
             [Bad]
             write = "A"
         "#;
-        let result: Result<PerspectiveTable, _> = toml::from_str(toml_str);
-        assert!(result.is_err());
+        assert!(matches!(
+            toml::from_str::<PerspectiveTable>(toml_str),
+            Err(_)
+        ));
     }
 
     #[test]

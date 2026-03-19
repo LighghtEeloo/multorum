@@ -30,7 +30,7 @@ AuthTests = "AuthFiles & TestFiles"
 
 # Used in a perspective
 [perspectives.AuthImplementor]
-read  = "AuthSpecs | AuthTests"
+read  = "AuthSpecs"
 write = "AuthFiles - AuthSpecs - AuthTests"
 
 [perspectives.AuthTester]

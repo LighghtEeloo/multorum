@@ -16,10 +16,14 @@
 //!
 //! This is enforced statically at compile time by [`SafetyValidator`].
 
+pub mod compile;
 pub mod decl;
 pub mod error;
 pub mod name;
+pub mod safety;
 
+pub use compile::{CompiledPerspective, CompiledPerspectives};
 pub use decl::{PerspectiveDecl, PerspectiveTable};
 pub use error::*;
 pub use name::PerspectiveName;
+pub use safety::SafetyValidator;
