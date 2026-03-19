@@ -11,9 +11,15 @@
 //! - **Integration** — `integrate`
 //! - **Query** — `status`
 //!
-//! Workers issue two instructions back: `commit` and `report`.
+//! Worker-originated instructions (`commit` and `report`) are represented
+//! here as CLI commands because the current implementation is a stub.
+//! In the mailbox-based design, these commands publish message bundles
+//! into the worker outbox, while `resolve` and `revise` publish bundles
+//! into the worker inbox.
 
-use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+
+use clap::{Args, Parser, Subcommand};
 
 /// Multorum — multi-perspective codebase orchestration.
 ///
@@ -35,6 +41,29 @@ impl Cli {
     }
 }
 
+/// Shared payload options for commands that publish mailbox bundles.
+///
+/// The stub CLI models bundle contents as filesystem paths so the command
+/// surface matches the file-based protocol in `DESIGN.md`.
+#[derive(Debug, Clone, Args)]
+pub struct BundlePayload {
+    /// Optional Markdown body file to copy into `body.md`.
+    #[arg(long, value_name = "FILE")]
+    pub body: Option<PathBuf>,
+
+    /// Files to attach under the bundle's `artifacts/` directory.
+    #[arg(long = "artifact", value_name = "FILE")]
+    pub artifacts: Vec<PathBuf>,
+}
+
+/// Shared reply metadata for mailbox bundles that answer earlier messages.
+#[derive(Debug, Clone, Args)]
+pub struct ReplyReference {
+    /// Sequence number of the message this bundle answers.
+    #[arg(long = "reply-to", value_name = "SEQUENCE")]
+    pub in_reply_to: Option<u64>,
+}
+
 /// The orchestrator instruction set.
 ///
 /// Each variant corresponds to one instruction described in
@@ -54,31 +83,53 @@ pub enum Command {
     /// Create a sub-codebase with a perspective.
     ///
     /// Compiles the perspective's file sets, creates a git worktree at
-    /// the pinned commit, installs the client-side write hook, and
-    /// injects read-set guidance metadata. Transitions the worker to
-    /// PROVISIONED, then immediately to ACTIVE.
+    /// the pinned commit, installs the client-side write hook,
+    /// materializes the worker-local runtime files, and injects
+    /// read-set guidance metadata. The orchestrator may also seed the
+    /// worker inbox with an initial `task` bundle.
     Provision {
         /// The perspective name to provision.
         perspective: String,
+
+        /// Optional payload for the initial `task` bundle.
+        #[command(flatten)]
+        payload: BundlePayload,
     },
 
     /// Unblock a worker after orchestrator resolution.
     ///
-    /// Transitions the worker from BLOCKED to ACTIVE. The orchestrator
-    /// must separately communicate resolution content to the worker.
+    /// Publishes a `resolve` bundle into the worker inbox. Once the
+    /// bundle is acknowledged, the worker transitions from BLOCKED to
+    /// ACTIVE.
     Resolve {
         /// The perspective name of the blocked worker.
         perspective: String,
+
+        /// Optional payload for the `resolve` bundle.
+        #[command(flatten)]
+        payload: BundlePayload,
+
+        /// Optional reply metadata for the `resolve` bundle.
+        #[command(flatten)]
+        reply: ReplyReference,
     },
 
     /// Return a committed worker to active state for rework.
     ///
-    /// Unfreezes the worktree so the worker can address problems
-    /// identified by the orchestrator. Transitions from COMMITTED to
-    /// ACTIVE.
+    /// Publishes a `revise` bundle into the worker inbox. Once the
+    /// bundle is acknowledged, the worker transitions from COMMITTED
+    /// to ACTIVE and resumes with the preserved worktree.
     Revise {
         /// The perspective name of the committed worker.
         perspective: String,
+
+        /// Optional payload for the `revise` bundle.
+        #[command(flatten)]
+        payload: BundlePayload,
+
+        /// Optional reply metadata for the `revise` bundle.
+        #[command(flatten)]
+        reply: ReplyReference,
     },
 
     /// Tear down a worker's worktree without integrating.
@@ -114,26 +165,40 @@ pub enum Command {
     //
     /// Submit the worker's task as complete.
     ///
-    /// Freezes the worktree and transitions the worker from ACTIVE to
-    /// COMMITTED. The orchestrator then decides whether to `integrate`,
-    /// `revise`, or `discard` the submission.
+    /// Publishes a `commit` bundle into the worker outbox. Once
+    /// accepted, Multorum freezes the worktree and transitions the
+    /// worker from ACTIVE to COMMITTED. The orchestrator then decides
+    /// whether to `integrate`, `revise`, or `discard` the submission.
     Commit {
         /// The perspective name of the committing worker.
         perspective: String,
+
+        /// The git commit hash submitted by the worker.
+        #[arg(long = "head-commit", value_name = "COMMIT")]
+        head_commit: String,
+
+        /// Optional payload for the `commit` bundle.
+        #[command(flatten)]
+        payload: BundlePayload,
     },
 
     /// Signal that a worker is blocked.
     ///
-    /// Transitions the worker to BLOCKED and notifies the orchestrator.
-    /// The payload is opaque to Multorum — it is recorded and forwarded
-    /// without interpretation.
+    /// Publishes a `report` bundle into the worker outbox. Once
+    /// accepted, Multorum transitions the worker to BLOCKED. The
+    /// payload is opaque to Multorum — it is recorded without
+    /// interpretation.
     Report {
         /// The perspective name of the reporting worker.
         perspective: String,
 
-        /// An optional message payload describing the blocker.
-        #[arg(long)]
-        message: Option<String>,
+        /// Optional git commit hash relevant to the report.
+        #[arg(long = "head-commit", value_name = "COMMIT")]
+        head_commit: Option<String>,
+
+        /// Optional payload for the `report` bundle.
+        #[command(flatten)]
+        payload: BundlePayload,
     },
 
     // ── Query instructions ──────────────────────────────────────
@@ -189,14 +254,17 @@ impl Command {
     pub fn execute(self) {
         match self {
             | Self::Rulebook { command } => command.execute(),
-            | Self::Provision { perspective } => {
-                todo!("provision: create sub-codebase for {perspective}")
+            | Self::Provision { perspective, payload } => {
+                let _ = payload;
+                todo!("provision: create sub-codebase and optional task bundle for {perspective}")
             }
-            | Self::Resolve { perspective } => {
-                todo!("resolve: unblock worker {perspective}")
+            | Self::Resolve { perspective, payload, reply } => {
+                let _ = (payload, reply);
+                todo!("resolve: publish inbox bundle for {perspective}")
             }
-            | Self::Revise { perspective } => {
-                todo!("revise: return {perspective} to active")
+            | Self::Revise { perspective, payload, reply } => {
+                let _ = (payload, reply);
+                todo!("revise: publish inbox bundle for {perspective}")
             }
             | Self::Discard { perspective } => {
                 todo!("discard: tear down {perspective}")
@@ -205,12 +273,13 @@ impl Command {
                 let _ = skip_checks;
                 todo!("integrate: run pre-merge pipeline for {perspective}")
             }
-            | Self::Commit { perspective } => {
-                todo!("commit: freeze worktree and submit {perspective}")
+            | Self::Commit { perspective, head_commit, payload } => {
+                let _ = (head_commit, payload);
+                todo!("commit: publish outbox submission bundle for {perspective}")
             }
-            | Self::Report { perspective, message } => {
-                let _ = message;
-                todo!("report: worker {perspective} is blocked")
+            | Self::Report { perspective, head_commit, payload } => {
+                let _ = (head_commit, payload);
+                todo!("report: publish outbox blocker bundle for {perspective}")
             }
             | Self::Status => {
                 todo!("status: query all worker states")
