@@ -45,8 +45,7 @@ fn setup_repo() -> (TempDir, FilesystemOrchestratorService, String) {
     fs::create_dir_all(dir.path().join(".multorum")).unwrap();
     fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
     fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
-    fs::write(dir.path().join(".gitignore"), ".multorum/orchestrator/\n.multorum/worktrees/\n")
-        .unwrap();
+    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\nworktrees/\n").unwrap();
     fs::write(dir.path().join(".multorum/rulebook.toml"), rulebook_toml()).unwrap();
 
     git(dir.path(), &["init"]);

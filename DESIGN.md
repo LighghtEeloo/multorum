@@ -243,6 +243,28 @@ command = "cargo test --workspace"
 
 This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `checks` table to make the example complete. `AuthImplementor` and `AuthTester` may work in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across perspectives. The `checks` table defines the ordered pre-merge pipeline that every submitted change must pass before integration.
 
+### Default Rulebook Template
+
+`rulebook init` creates `.multorum/rulebook.toml` with a valid but intentionally empty template. The file should be immediately editable by the orchestrator and should explain only the decisions the orchestrator must make next:
+
+```toml
+# Define shared file ownership vocabulary first.
+# `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
+[filesets]
+
+# Add one table per perspective under `[perspectives.<Name>]`.
+# `write` names the files that perspective may modify.
+# `read` names stable context files that no other perspective may write.
+[perspectives]
+
+# Add pre-merge gates in execution order.
+# Each name in `pipeline` should later get a `[checks.<name>]` table with a command.
+[checks]
+pipeline = []
+```
+
+This template is deliberately sparse. It gives the orchestrator the minimum structure needed to begin declaring ownership boundaries and checks without smuggling in project-specific assumptions.
+
 ### Immutability via Version Control
 
 Because the rulebook is a version-controlled file, every historical state of it is addressable by a git commit hash. When Multorum activates a rulebook, it pins to a specific commit. This means the rulebook governing an active set of workers is immutable by construction — changing the file on disk does not affect active workers until the orchestrator explicitly instructs Multorum to switch rulebooks.
@@ -283,6 +305,7 @@ A Multorum project adds a `.multorum/` directory to the project root. Every work
 ```
 <project-root>/
   .multorum/
+    .gitignore          # committed — ignores Multorum runtime directories
     rulebook.toml        # committed — perspectives, file sets, check pipeline
     orchestrator/        # gitignored — orchestrator control plane and audit data
     worktrees/           # gitignored — git worktrees for active workers
@@ -293,7 +316,7 @@ A Multorum project adds a `.multorum/` directory to the project root. Every work
 
 ### The Committed Region
 
-**`.multorum/rulebook.toml`** is the sole Multorum configuration file that the project team owns and commits. It contains file set definitions, perspective declarations, and project-level check pipeline settings. Its full history is available via standard git tooling.
+**`.multorum/rulebook.toml`** and **`.multorum/.gitignore`** are the Multorum files that the project team owns and commits. `rulebook.toml` contains file set definitions, perspective declarations, and project-level check pipeline settings. `.multorum/.gitignore` keeps the runtime-only `orchestrator/` and `worktrees/` directories out of version control while keeping that policy scoped to the `.multorum/` subtree. Their history is available via standard git tooling.
 
 ### The Runtime Region
 
@@ -305,14 +328,14 @@ Inside each worker worktree, the worker-local **`.multorum/`** directory contain
 
 ### Gitignore
 
-The following entries should be present in the project's `.gitignore`:
+The following entries should be present in `.multorum/.gitignore`:
 
 ```
-.multorum/orchestrator/
-.multorum/worktrees/
+orchestrator/
+worktrees/
 ```
 
-Multorum verifies that these entries are present during project initialization and warns if they are missing. Worker-local runtime files inside each worktree are ignored through that worktree's local exclude configuration rather than through the committed project `.gitignore`.
+Multorum verifies that these entries are present during `rulebook init` and warns if they are missing. Worker-local runtime files inside each worktree are ignored through that worktree's local exclude configuration rather than through the committed `.multorum/.gitignore`.
 
 ---
 
@@ -564,6 +587,9 @@ Multorum exposes a set of instructions that the orchestrator may issue. Every st
 Orchestrator-local instructions operate on the main workspace control plane under `.multorum/`. Worker-facing instructions are delivered by writing message bundles into the worker's inbox. Worker-originated instructions are observed by reading message bundles from the worker's outbox.
 
 ### Rulebook Instructions
+
+**`rulebook init`**
+Initializes the project's `.multorum/` directory. Multorum creates `.multorum/` if it does not already exist, writes the default commented `rulebook.toml` template shown above, prepares `.multorum/.gitignore` so runtime directories stay ignored within that subtree, prepares the local orchestrator runtime directories, and verifies that the recommended ignore entries are present. The instruction must not overwrite an existing `.multorum/rulebook.toml`; if a rulebook already exists, initialization is rejected so project policy is never replaced implicitly.
 
 **`rulebook switch <commit-hash>`**
 Validates and activates a new version of the rulebook. Multorum runs the file-level safety check against all active workers. If the check passes, the new rulebook is compiled and activated. If it fails, the instruction is rejected and Multorum reports which active workers are blocking the switch.

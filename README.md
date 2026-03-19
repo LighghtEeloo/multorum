@@ -14,7 +14,7 @@ Parallel development faces a fundamental tension: workers need *isolation* to ma
 
 ### Rulebook, File Sets, and Perspectives
 
-The project maintains a single `.multorum/rulebook.toml`, versioned in git. The rulebook declares *perspectives* — named roles, each with explicit read and write sets. File permissions are expressed using a small algebra of *file sets*: explicit paths and globs as primitives, composed via union, intersection, and difference, and optionally given names for reuse across the rulebook.
+The project starts with subcommand `rulebook init`, which creates `.multorum/` and a commented `.multorum/rulebook.toml` template. The rulebook is versioned in git and declares *perspectives* — named roles, each with explicit read and write sets. File permissions are expressed using a small algebra of *file sets*: explicit paths and globs as primitives, composed via union, intersection, and difference, and optionally given names for reuse across the rulebook.
 
 ```toml
 # Named file set definitions
@@ -45,10 +45,13 @@ The main workspace and every active worker worktree each have a `.multorum/` dir
 ```text
 <project-root>/
   .multorum/
+    .gitignore          # committed — ignores Multorum runtime directories
     rulebook.toml        # committed — versioned project configuration
     orchestrator/        # gitignored — orchestrator control plane and audit data
     worktrees/           # gitignored — active worker worktrees
 ```
+
+During `rulebook init`, Multorum also ensures that `.multorum/.gitignore` ignores `orchestrator/` and `worktrees/`.
 
 Inside each worker worktree, Multorum materializes runtime files such as the compiled read and write sets, a runtime contract, and the worker's inbox and outbox mailboxes. These files are local runtime state, not project configuration, and are ignored through the worktree's local exclude configuration. Path-backed message payloads are moved into this `.multorum/` runtime area on successful publication, so Multorum becomes responsible for storing them.
 
