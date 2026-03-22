@@ -49,8 +49,8 @@ pub struct PerspectiveSummary {
 pub struct RulebookValidation {
     /// `true` if the target rulebook may be activated.
     pub ok: bool,
-    /// Bidding groups currently blocking the switch.
-    pub blocking_bidding_groups: Vec<PerspectiveName>,
+    /// Perspectives with live runtime boundaries that still block the switch.
+    pub blocking_perspectives: Vec<PerspectiveName>,
 }
 
 /// Result of activating a rulebook switch.
@@ -63,9 +63,11 @@ pub struct RulebookSwitch {
 /// Summary of one active bidding group.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BiddingGroupSummary {
-    /// Stable bidding-group identifier.
-    pub bidding_group: PerspectiveName,
-    /// Perspective instantiated by workers in the group.
+    /// Perspective instantiated by workers in the active runtime boundary.
+    ///
+    /// Note: Runtime state does not persist a separate bidding-group
+    /// identifier because the current implementation derives the active
+    /// group directly from live workers for this perspective.
     pub perspective: PerspectiveName,
     /// Live workers currently competing in the group.
     pub worker_ids: Vec<WorkerId>,
@@ -91,8 +93,6 @@ pub struct RulebookInit {
 pub struct ProvisionResult {
     /// New worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group joined by the new worker.
-    pub bidding_group: PerspectiveName,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
     /// Absolute path to the worker worktree.
@@ -108,8 +108,6 @@ pub struct ProvisionResult {
 pub struct DiscardResult {
     /// Discarded worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group from which the worker was discarded.
-    pub bidding_group: PerspectiveName,
     /// Perspective held by the worker.
     pub perspective: PerspectiveName,
     /// Final worker state.
@@ -121,8 +119,6 @@ pub struct DiscardResult {
 pub struct IntegrateResult {
     /// Merged worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group selected for integration.
-    pub bidding_group: PerspectiveName,
     /// Perspective held by the merged worker.
     pub perspective: PerspectiveName,
     /// Final worker state.
@@ -138,8 +134,8 @@ pub struct IntegrateResult {
 pub struct OrchestratorStatus {
     /// Active canonical rulebook commit hash.
     pub active_rulebook_commit: CanonicalCommitHash,
-    /// Current bidding-group summaries.
-    pub bidding_groups: Vec<BiddingGroupSummary>,
+    /// Current active perspective summaries.
+    pub active_perspectives: Vec<BiddingGroupSummary>,
     /// Current worker summaries.
     pub workers: Vec<WorkerSummary>,
 }
@@ -149,8 +145,6 @@ pub struct OrchestratorStatus {
 pub struct WorkerSummary {
     /// Worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group to which the worker belongs.
-    pub bidding_group: PerspectiveName,
     /// Perspective held by the worker.
     pub perspective: PerspectiveName,
     /// Current projected lifecycle state.
@@ -162,8 +156,6 @@ pub struct WorkerSummary {
 pub struct WorkerDetail {
     /// Worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group to which the worker belongs.
-    pub bidding_group: PerspectiveName,
     /// Perspective held by the worker.
     pub perspective: PerspectiveName,
     /// Current projected lifecycle state.
@@ -183,8 +175,6 @@ pub struct WorkerDetail {
 pub struct WorkerStatus {
     /// Worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group to which the worker belongs.
-    pub bidding_group: PerspectiveName,
     /// Perspective held by the worker.
     pub perspective: PerspectiveName,
     /// Current projected lifecycle state.
@@ -196,8 +186,6 @@ pub struct WorkerStatus {
 pub struct WorkerContractView {
     /// Worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group to which the worker belongs.
-    pub bidding_group: PerspectiveName,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
     /// Canonical rulebook commit governing the worker.
@@ -215,8 +203,6 @@ pub struct WorkerContractView {
 pub struct MailboxMessageView {
     /// Worker identity that owns the mailbox.
     pub worker_id: WorkerId,
-    /// Bidding group to which the worker belongs.
-    pub bidding_group: PerspectiveName,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
     /// Direction of the mailbox containing the message.

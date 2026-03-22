@@ -153,7 +153,6 @@ impl RuntimeFs {
 
         let contract = WorkerContractView {
             worker_id: record.worker_id.clone(),
-            bidding_group: record.bidding_group.clone(),
             perspective: record.perspective.clone(),
             rulebook_commit: record.rulebook_commit.clone(),
             base_commit: record.base_commit.clone(),

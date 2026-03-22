@@ -133,7 +133,6 @@ pub struct FsOrchestratorService {
 /// One active bidding-group boundary materialized from runtime state.
 #[derive(Debug, Clone)]
 struct ActiveBiddingGroup {
-    bidding_group: PerspectiveName,
     perspective: PerspectiveName,
     worker_ids: Vec<WorkerId>,
     boundary: CompiledPerspective,
@@ -167,26 +166,26 @@ impl FsOrchestratorService {
         let compiled = self.fs.load_compiled_rulebook(commit)?;
         let active_groups = self.active_bidding_groups()?;
 
-        let mut blocking_bidding_groups = BTreeSet::new();
+        let mut blocking_perspectives = BTreeSet::new();
         for active_group in &active_groups {
             for (candidate_name, candidate) in compiled.perspectives().perspectives() {
                 if boundary_conflict(
-                    &active_group.bidding_group,
+                    &active_group.perspective,
                     &active_group.boundary,
                     candidate_name,
                     candidate,
                 )
                 .is_some()
                 {
-                    blocking_bidding_groups.insert(active_group.bidding_group.clone());
+                    blocking_perspectives.insert(active_group.perspective.clone());
                     break;
                 }
             }
         }
 
         Ok(RulebookValidation {
-            ok: blocking_bidding_groups.is_empty(),
-            blocking_bidding_groups: blocking_bidding_groups.into_iter().collect(),
+            ok: blocking_perspectives.is_empty(),
+            blocking_perspectives: blocking_perspectives.into_iter().collect(),
         })
     }
 
@@ -204,7 +203,7 @@ impl FsOrchestratorService {
         let mut groups = Vec::new();
         let mut seen = BTreeSet::<PerspectiveName>::new();
         for record in active_workers.iter() {
-            if !seen.insert(record.bidding_group.clone()) {
+            if !seen.insert(record.perspective.clone()) {
                 continue;
             }
 
@@ -212,11 +211,10 @@ impl FsOrchestratorService {
             let read = RuntimeFs::read_path_list(&worker_paths.read_set())?;
             let write = RuntimeFs::read_path_list(&worker_paths.write_set())?;
             groups.push(ActiveBiddingGroup {
-                bidding_group: record.bidding_group.clone(),
                 perspective: record.perspective.clone(),
                 worker_ids: active_workers
                     .iter()
-                    .filter(|worker| worker.bidding_group == record.bidding_group)
+                    .filter(|worker| worker.perspective == record.perspective)
                     .map(|worker| worker.worker_id.clone())
                     .collect(),
                 boundary: CompiledPerspective::from_materialized_sets(read, write),
@@ -283,7 +281,7 @@ impl FsOrchestratorService {
             if let Some(conflict) = boundary_conflict(
                 perspective,
                 candidate,
-                &active_group.bidding_group,
+                &active_group.perspective,
                 &active_group.boundary,
             ) {
                 return Err(conflict);
@@ -322,7 +320,6 @@ impl FsOrchestratorService {
                 MailboxDirection::Inbox,
                 kind,
                 &record.worker_id,
-                &record.bidding_group,
                 &record.perspective,
                 reply,
                 None,
@@ -371,7 +368,7 @@ impl OrchestratorService for FsOrchestratorService {
         if !validation.ok {
             return Err(RuntimeError::RulebookConflict {
                 commit,
-                blocking_bidding_groups: validation.blocking_bidding_groups,
+                blocking_perspectives: validation.blocking_perspectives,
             });
         }
 
@@ -395,14 +392,13 @@ impl OrchestratorService for FsOrchestratorService {
             .active_bidding_groups()?
             .into_iter()
             .map(|group| BiddingGroupSummary {
-                bidding_group: group.bidding_group,
                 perspective: group.perspective,
                 worker_ids: group.worker_ids,
                 read_count: group.boundary.read().len(),
                 write_count: group.boundary.write().len(),
             })
             .collect::<Vec<_>>();
-        groups.sort_by(|left, right| left.bidding_group.cmp(&right.bidding_group));
+        groups.sort_by(|left, right| left.perspective.cmp(&right.perspective));
         Ok(groups)
     }
 
@@ -412,7 +408,6 @@ impl OrchestratorService for FsOrchestratorService {
             .into_iter()
             .map(|record| WorkerSummary {
                 worker_id: record.worker_id,
-                bidding_group: record.bidding_group,
                 perspective: record.perspective,
                 state: record.state,
             })
@@ -425,7 +420,6 @@ impl OrchestratorService for FsOrchestratorService {
         let record = self.fs.load_worker_record(&worker_id)?;
         Ok(WorkerDetail {
             worker_id: record.worker_id,
-            bidding_group: record.bidding_group,
             perspective: record.perspective,
             state: record.state,
             worktree_path: record.worktree_path,
@@ -445,7 +439,6 @@ impl OrchestratorService for FsOrchestratorService {
         self.validate_provision_boundary(&perspective, compiled_perspective)?;
 
         let worker_id = self.resolve_worker_id(&perspective, worker_id)?;
-        let bidding_group = perspective.clone();
         let worktree_path = self.fs.worker_paths(&worker_id).worktree_root().to_path_buf();
         self.fs.vcs().create_worktree(
             self.fs.workspace_root(),
@@ -455,7 +448,6 @@ impl OrchestratorService for FsOrchestratorService {
 
         let record = WorkerRecord {
             worker_id: worker_id.clone(),
-            bidding_group: bidding_group.clone(),
             perspective: perspective.clone(),
             state: WorkerState::Active,
             worktree_path: worktree_path.clone(),
@@ -474,7 +466,6 @@ impl OrchestratorService for FsOrchestratorService {
                         MailboxDirection::Inbox,
                         MessageKind::Task,
                         &worker_id,
-                        &bidding_group,
                         &perspective,
                         ReplyReference::default(),
                         None,
@@ -495,7 +486,6 @@ impl OrchestratorService for FsOrchestratorService {
 
         Ok(ProvisionResult {
             worker_id,
-            bidding_group,
             perspective,
             worktree_path,
             state: WorkerState::Active,
@@ -530,7 +520,6 @@ impl OrchestratorService for FsOrchestratorService {
         tracing::info!(worker_id = %record.worker_id, perspective = %record.perspective, "discarded worker");
         Ok(DiscardResult {
             worker_id: record.worker_id,
-            bidding_group: record.bidding_group,
             perspective: record.perspective,
             state: record.state,
         })
@@ -614,7 +603,7 @@ impl OrchestratorService for FsOrchestratorService {
         self.fs.store_worker_record(&record)?;
 
         for mut sibling in self.active_workers()?.into_iter().filter(|sibling| {
-            sibling.worker_id != record.worker_id && sibling.bidding_group == record.bidding_group
+            sibling.worker_id != record.worker_id && sibling.perspective == record.perspective
         }) {
             self.discard_worker_record(&mut sibling)?;
         }
@@ -627,7 +616,6 @@ impl OrchestratorService for FsOrchestratorService {
         );
         Ok(IntegrateResult {
             worker_id: record.worker_id,
-            bidding_group: record.bidding_group,
             perspective: record.perspective,
             state: record.state,
             ran_checks,
@@ -637,10 +625,10 @@ impl OrchestratorService for FsOrchestratorService {
 
     fn status(&self) -> Result<OrchestratorStatus> {
         let active_rulebook_commit = self.fs.load_active_rulebook()?.rulebook_commit;
-        let bidding_groups = self.list_bidding_groups()?;
+        let active_perspectives = self.list_bidding_groups()?;
         let workers = self.list_workers()?;
 
-        Ok(OrchestratorStatus { active_rulebook_commit, bidding_groups, workers })
+        Ok(OrchestratorStatus { active_rulebook_commit, active_perspectives, workers })
     }
 }
 
@@ -653,7 +641,7 @@ fn boundary_conflict(
     if !write_write.is_empty() {
         return Some(RuntimeError::ConflictWithActiveBiddingGroup {
             perspective: candidate_name.clone(),
-            blocking_group: active_name.clone(),
+            blocking_perspective: active_name.clone(),
             relation: "write/write overlap",
             files: write_write.into_iter().collect(),
         });
@@ -664,7 +652,7 @@ fn boundary_conflict(
     if !candidate_write_active_read.is_empty() {
         return Some(RuntimeError::ConflictWithActiveBiddingGroup {
             perspective: candidate_name.clone(),
-            blocking_group: active_name.clone(),
+            blocking_perspective: active_name.clone(),
             relation: "candidate write overlaps active read",
             files: candidate_write_active_read.into_iter().collect(),
         });
@@ -675,7 +663,7 @@ fn boundary_conflict(
     if !candidate_read_active_write.is_empty() {
         return Some(RuntimeError::ConflictWithActiveBiddingGroup {
             perspective: candidate_name.clone(),
-            blocking_group: active_name.clone(),
+            blocking_perspective: active_name.clone(),
             relation: "candidate read overlaps active write",
             files: candidate_read_active_write.into_iter().collect(),
         });

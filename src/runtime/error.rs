@@ -61,26 +61,26 @@ pub enum RuntimeError {
 
     /// The requested rulebook switch conflicts with active workers.
     #[error(
-        "cannot activate rulebook commit `{commit}` while bidding groups are still live: {blocking_bidding_groups}",
-        blocking_bidding_groups = format_perspectives(blocking_bidding_groups)
+        "cannot activate rulebook commit `{commit}` while active perspectives are still live: {blocking_perspectives}",
+        blocking_perspectives = format_perspectives(blocking_perspectives)
     )]
     RulebookConflict {
         /// Canonical rulebook commit the caller attempted to activate.
         commit: CanonicalCommitHash,
-        /// Live bidding groups that still depend on the current rulebook.
-        blocking_bidding_groups: Vec<PerspectiveName>,
+        /// Live perspectives that still depend on the current rulebook.
+        blocking_perspectives: Vec<PerspectiveName>,
     },
 
     /// A candidate bidding group conflicts with active runtime state.
     #[error(
-        "cannot provision perspective `{perspective}` because active bidding group `{blocking_group}` has a {relation}: {files}",
+        "cannot provision perspective `{perspective}` because active perspective `{blocking_perspective}` has a {relation}: {files}",
         files = format_paths(files)
     )]
     ConflictWithActiveBiddingGroup {
         /// Perspective being provisioned.
         perspective: PerspectiveName,
-        /// Active bidding group that blocks the candidate boundary.
-        blocking_group: PerspectiveName,
+        /// Active perspective that blocks the candidate boundary.
+        blocking_perspective: PerspectiveName,
         /// Human-readable description of the overlap relation.
         relation: &'static str,
         /// Overlapping files.

@@ -28,8 +28,6 @@ pub(crate) struct ActiveRulebookRecord {
 pub(crate) struct WorkerRecord {
     /// Unique worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group to which the worker belongs.
-    pub bidding_group: PerspectiveName,
     /// Perspective currently held by the worker.
     pub perspective: PerspectiveName,
     /// Current lifecycle state.

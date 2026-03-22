@@ -91,8 +91,6 @@ pub struct BundleEnvelope {
     pub protocol: u32,
     /// Active worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group to which the worker belongs.
-    pub bidding_group: PerspectiveName,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
     /// Kind of bundle.

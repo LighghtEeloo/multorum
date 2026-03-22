@@ -168,7 +168,6 @@ impl WorkerService for FsWorkerService {
             MailboxDirection::Outbox,
             MessageKind::Report,
             &contract.worker_id,
-            &contract.bidding_group,
             &contract.perspective,
             reply,
             head_commit,
@@ -190,7 +189,6 @@ impl WorkerService for FsWorkerService {
             MailboxDirection::Outbox,
             MessageKind::Commit,
             &contract.worker_id,
-            &contract.bidding_group,
             &contract.perspective,
             ReplyReference::default(),
             Some(head_commit.clone()),
@@ -205,7 +203,6 @@ impl WorkerService for FsWorkerService {
         let record = self.fs.load_worker_record(&contract.worker_id)?;
         Ok(WorkerStatus {
             worker_id: contract.worker_id,
-            bidding_group: contract.bidding_group,
             perspective: contract.perspective,
             state: record.state,
         })
