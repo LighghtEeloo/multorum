@@ -15,8 +15,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::perspective::PerspectiveName;
-
-use super::CanonicalCommitHash;
+use crate::vcs::CanonicalCommitHash;
 
 /// Monotonic per-mailbox sequence number.
 ///

@@ -9,8 +9,9 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::perspective::PerspectiveName;
+use crate::vcs::CanonicalCommitHash;
 
-use super::{CanonicalCommitHash, Sequence, bundle::MessageKind, mailbox::MailboxDirection};
+use super::{Sequence, bundle::MessageKind, mailbox::MailboxDirection};
 
 /// Worker lifecycle state as projected by Multorum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

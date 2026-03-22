@@ -9,12 +9,13 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::perspective::PerspectiveName;
-use crate::runtime::{CanonicalCommitHash, Sequence, WorkerState};
+use crate::runtime::{Sequence, WorkerState};
+use crate::vcs::CanonicalCommitHash;
 
 /// Active rulebook projection stored under `.multorum/orchestrator/`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ActiveRulebookRecord {
-    /// Canonical git commit that owns the active committed rulebook.
+    /// Canonical commit that owns the active committed rulebook.
     pub rulebook_commit: CanonicalCommitHash,
     /// Canonical pinned base commit for newly provisioned workers.
     pub base_commit: CanonicalCommitHash,

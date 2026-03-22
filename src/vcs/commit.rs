@@ -1,26 +1,26 @@
-//! Canonical git commit identifiers stored by Multorum.
+//! Canonical commit identifiers stored by Multorum.
 //!
 //! Frontends may accept symbolic revisions such as `HEAD~1` or
-//! abbreviated hashes as user input, but the runtime must resolve them
-//! to a stable commit id before persisting any state. This module owns
-//! that persisted representation.
+//! abbreviated hashes as user input, but the active version-control
+//! backend must resolve them to a stable commit id before persisting
+//! any runtime state. This module owns that persisted representation.
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// A canonical git commit identifier resolved by the runtime.
+/// A canonical commit identifier resolved by the active backend.
 ///
 /// ## Invariants
 ///
 /// - Identifies exactly one commit at the time it was resolved.
-/// - Stores `git rev-parse --verify <rev>^{commit}` output.
+/// - Stores the backend's fully-resolved committed revision identity.
 /// - Never stores symbolic revisions such as `HEAD` or abbreviated
 ///   hashes.
 ///
 /// Note: User-facing APIs may accept symbolic or abbreviated revisions,
-/// but Multorum must convert them into `CanonicalCommitHash` before they
-/// become persisted runtime state.
+/// but Multorum must convert them into `CanonicalCommitHash` before
+/// they become persisted runtime state.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct CanonicalCommitHash(String);
@@ -29,7 +29,7 @@ impl CanonicalCommitHash {
     /// Construct a canonical commit hash from an already-resolved value.
     ///
     /// Note: This constructor is crate-private so callers cannot bypass
-    /// runtime git resolution with raw user input.
+    /// backend resolution with raw user input.
     pub(crate) fn new(resolved: impl Into<String>) -> Self {
         Self(resolved.into())
     }

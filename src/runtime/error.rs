@@ -5,8 +5,9 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::perspective::PerspectiveName;
+use crate::vcs::CanonicalCommitHash;
 
-use super::{CanonicalCommitHash, state::WorkerState};
+use super::state::WorkerState;
 
 /// Result alias for runtime operations.
 pub type Result<T> = std::result::Result<T, RuntimeError>;

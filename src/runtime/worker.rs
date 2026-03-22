@@ -7,10 +7,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::vcs::{GitVcs, VersionControl};
+use crate::vcs::{CanonicalCommitHash, GitVcs, VersionControl};
 
 use super::{
-    CanonicalCommitHash, MailboxDirection, WorkerPaths,
+    MailboxDirection, WorkerPaths,
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
     mailbox::AckRef,

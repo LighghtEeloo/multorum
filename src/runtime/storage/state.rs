@@ -9,9 +9,8 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::perspective::{CompiledPerspective, PerspectiveName};
 use crate::rulebook::{CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook};
-use crate::runtime::{
-    CanonicalCommitHash, RulebookInit, RuntimeError, WorkerContractView, WorkerPaths,
-};
+use crate::runtime::{RulebookInit, RuntimeError, WorkerContractView, WorkerPaths};
+use crate::vcs::CanonicalCommitHash;
 
 use super::{ActiveRulebookRecord, RuntimeFs, STATE_FILE_NAME, WorkerRecord};
 
@@ -64,7 +63,7 @@ impl RuntimeFs {
         Self::write_toml(&orchestrator.active_rulebook(), record)
     }
 
-    /// Load and compile a rulebook at one git commit.
+    /// Load and compile a rulebook at one pinned commit.
     pub(crate) fn load_compiled_rulebook(
         &self, commit: &CanonicalCommitHash,
     ) -> Result<CompiledRulebook, RuntimeError> {

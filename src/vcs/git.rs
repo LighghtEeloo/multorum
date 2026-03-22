@@ -5,9 +5,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::runtime::{CanonicalCommitHash, RuntimeError};
+use crate::runtime::RuntimeError;
 
-use super::VersionControl;
+use super::{CanonicalCommitHash, VersionControl};
 
 const WORKER_EXCLUDE_ENTRIES: [&str; 6] = [
     ".multorum/contract.toml",

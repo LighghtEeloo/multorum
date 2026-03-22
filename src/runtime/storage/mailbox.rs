@@ -13,9 +13,9 @@ use crate::runtime::{
     BundleEnvelope, BundlePayload, MailboxDirection, MailboxMessageView, MessageKind,
     PublishedBundle, ReplyReference, RuntimeError, WorkerPaths,
     bundle::{MessageRef, Sequence},
-    commit::CanonicalCommitHash,
     mailbox::AckRef,
 };
+use crate::vcs::CanonicalCommitHash;
 
 use super::{
     ACK_EXTENSION, ARTIFACTS_DIR_NAME, AckRecord, BODY_FILE_NAME, ENVELOPE_FILE_NAME,

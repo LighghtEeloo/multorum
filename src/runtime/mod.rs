@@ -6,7 +6,6 @@
 //! through which frontends interact with that state.
 
 pub mod bundle;
-pub mod commit;
 pub mod error;
 pub(crate) mod storage;
 pub mod mailbox;
@@ -20,7 +19,6 @@ pub use bundle::{
     BundleEnvelope, BundlePayload, MessageKind, MessageRef, PublishedBundle, ReplyReference,
     Sequence,
 };
-pub use commit::CanonicalCommitHash;
 pub use error::{Result, RuntimeError};
 pub use mailbox::{AckRef, MailboxDirection};
 pub use orchestrator::{FsOrchestratorService, OrchestratorService};

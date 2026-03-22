@@ -7,13 +7,15 @@
 //! for another backend such as Jujutsu without reopening the storage
 //! implementation.
 
+mod commit;
 mod git;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::runtime::{CanonicalCommitHash, RuntimeError};
+use crate::runtime::RuntimeError;
 
+pub use commit::CanonicalCommitHash;
 pub use git::GitVcs;
 
 /// Repository operations required by the Multorum runtime.

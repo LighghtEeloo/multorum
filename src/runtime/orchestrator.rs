@@ -9,10 +9,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::perspective::PerspectiveName;
-use crate::vcs::VersionControl;
+use crate::vcs::{CanonicalCommitHash, VersionControl};
 
 use super::{
-    CanonicalCommitHash, MailboxDirection, MultorumPaths,
+    MailboxDirection, MultorumPaths,
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference},
     error::{Result, RuntimeError},
     state::{
