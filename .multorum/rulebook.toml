@@ -1,17 +1,17 @@
 # Define shared file ownership vocabulary first.
 # `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
-[filesets]
+[fileset]
 RustFiles.path = "**/*.rs"
 
-# Add one table per perspective under `[perspectives.<Name>]`.
+# Add one table per perspective under `[perspective.<Name>]`.
 # `write` names the files that perspective may modify.
 # `read` names stable context files that no other perspective may write.
-[perspectives]
-[perspectives.RustDeveloper]
+[perspective]
+[perspective.RustDeveloper]
 read = "RustFiles"
 write = "RustFiles"
 
 # Add pre-merge gates in execution order.
-# Each name in `pipeline` should later get a `[checks.<name>]` table with a command.
-[checks]
+# Each name in `pipeline` should later get a `[check.command.<name>]` table with a command.
+[check]
 pipeline = []
