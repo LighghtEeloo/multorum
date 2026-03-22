@@ -3,6 +3,9 @@
 //! Checks are project-defined commands that run after the mandatory
 //! compiled-write-set scope check. The rulebook declares the ordered
 //! validation pipeline plus named command and policy maps.
+//!
+//! The `[check.policy]` map is optional. Any declared check without an
+//! explicit policy entry defaults to [`CheckPolicy::Always`].
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::{fmt, str::FromStr};
@@ -77,6 +80,8 @@ impl<'de> de::Deserialize<'de> for CheckName {
 #[derive(Default)]
 pub enum CheckPolicy {
     /// The check always runs during integration.
+    ///
+    /// This is the default when `[check.policy]` omits the check name.
     #[default]
     Always,
     /// The check may be skipped when the orchestrator accepts worker
@@ -117,6 +122,12 @@ impl CheckDecl {
 /// The table contains an ordered `pipeline`, a `[check.command]` map
 /// for shell commands, and an optional `[check.policy]` map keyed by
 /// the same check names.
+///
+/// ## Invariants
+///
+/// - Every command key is a validated [`CheckName`].
+/// - Policy entries are optional; omitted checks default to
+///   [`CheckPolicy::Always`].
 #[derive(Debug, Clone, Default)]
 pub struct CheckTable {
     pipeline: Vec<CheckName>,
@@ -139,6 +150,8 @@ impl CheckTable {
     /// Validation ensures that every declared check appears exactly
     /// once in the pipeline and that every command string is non-empty
     /// after trimming.
+    ///
+    /// Policy defaults have already been applied during deserialization.
     pub fn compile(&self) -> Result<CompiledChecks, CheckValidationError> {
         let mut seen = BTreeSet::new();
         for name in &self.pipeline {

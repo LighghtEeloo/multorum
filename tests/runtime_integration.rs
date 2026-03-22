@@ -40,13 +40,17 @@ fn git(root: &Path, args: &[&str]) -> String {
 }
 
 fn setup_repo() -> (TempDir, FsOrchestratorService, String) {
+    setup_repo_with_rulebook(rulebook_toml())
+}
+
+fn setup_repo_with_rulebook(rulebook_toml: &str) -> (TempDir, FsOrchestratorService, String) {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join("src")).unwrap();
     fs::create_dir_all(dir.path().join(".multorum")).unwrap();
     fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
     fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
     fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\nworktrees/\n").unwrap();
-    fs::write(dir.path().join(".multorum/rulebook.toml"), rulebook_toml()).unwrap();
+    fs::write(dir.path().join(".multorum/rulebook.toml"), rulebook_toml).unwrap();
 
     git(dir.path(), &["init"]);
     git(dir.path(), &["config", "user.name", "Multorum Test"]);
@@ -563,6 +567,80 @@ fn merge_rejects_when_worker_head_moves_after_submission() {
         } if actual_submitted_head_commit.as_str() == submitted_head_commit
             && actual_current_head_commit.as_str() == current_head_commit
     ));
+}
+
+#[test]
+fn merge_rejects_skip_request_for_check_without_policy_override() {
+    let (_repo, orchestrator, _) = setup_repo_with_rulebook(
+        r#"
+            [filesets]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+
+            [perspectives.AuthImplementor]
+            read = "Other"
+            write = "Owned"
+
+            [check]
+            pipeline = ["test"]
+
+            [check.command]
+            test = "true"
+        "#,
+    );
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
+
+    fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 7 }\n")
+        .unwrap();
+    git(&provision.worktree_path, &["add", "src/owned.rs"]);
+    git(&provision.worktree_path, &["commit", "-m", "incr: prepare skip policy test"]);
+    let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
+
+    worker.send_commit(head_commit, BundlePayload::default()).unwrap();
+    let error =
+        orchestrator.merge_worker(provision.worker_id.clone(), vec!["test".to_owned()]).unwrap_err();
+
+    assert!(matches!(error, RuntimeError::CheckFailed(message) if message == "check `test` is not skippable"));
+}
+
+#[test]
+fn merge_accepts_skip_request_for_explicit_skippable_check() {
+    let (_repo, orchestrator, _) = setup_repo_with_rulebook(
+        r#"
+            [filesets]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+
+            [perspectives.AuthImplementor]
+            read = "Other"
+            write = "Owned"
+
+            [check]
+            pipeline = ["test"]
+
+            [check.command]
+            test = "false"
+
+            [check.policy]
+            test = "skippable"
+        "#,
+    );
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
+
+    fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 8 }\n")
+        .unwrap();
+    git(&provision.worktree_path, &["add", "src/owned.rs"]);
+    git(&provision.worktree_path, &["commit", "-m", "incr: skip explicit skippable check"]);
+    let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
+
+    worker.send_commit(head_commit, BundlePayload::default()).unwrap();
+    let merge = orchestrator.merge_worker(provision.worker_id.clone(), vec!["test".to_owned()]).unwrap();
+
+    assert_eq!(merge.state, WorkerState::Merged);
+    assert!(merge.ran_checks.is_empty());
+    assert_eq!(merge.skipped_checks, vec!["test"]);
 }
 
 #[test]

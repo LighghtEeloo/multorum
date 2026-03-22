@@ -105,6 +105,14 @@ write = "AuthTests"
 
 [check]
 pipeline = ["fmt", "clippy", "test"]
+
+[check.command]
+fmt = "cargo fmt --all"
+clippy = "cargo clippy --all"
+test = "cargo test --all"
+
+[check.policy]
+test = "skippable"
 ```
 
 This gives one role ownership of production auth code, another ownership of auth tests, and a shared stable context in the auth specs. Because the write sets are disjoint, both roles may run concurrently.

@@ -9,7 +9,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use multorum::perspective::PerspectiveError;
-use multorum::rulebook::{CheckName, Rulebook, RulebookError};
+use multorum::rulebook::{CheckName, CheckPolicy, Rulebook, RulebookError};
 
 /// Create a temporary workspace containing a canonical
 /// `.multorum/rulebook.toml` and a small project tree.
@@ -123,6 +123,30 @@ fn compile_rejects_unused_declared_check() {
     let err = rulebook.compile_for_root(workspace.path()).unwrap_err();
 
     assert!(matches!(err, RulebookError::CheckValidation(_)));
+}
+
+#[test]
+fn compile_defaults_omitted_policy_entries_to_always() {
+    let workspace = setup_workspace(
+        r#"
+            [check]
+            pipeline = ["test"]
+
+            [check.command]
+            test = "cargo test --workspace"
+        "#,
+        &["src/main.rs"],
+    );
+
+    let rulebook = Rulebook::from_workspace_root(workspace.path()).unwrap();
+    let compiled = rulebook.compile_for_root(workspace.path()).unwrap();
+    let policy = compiled
+        .check()
+        .get(&CheckName::new("test").unwrap())
+        .expect("compiled checks should contain the pipeline entry")
+        .policy();
+
+    assert_eq!(policy, CheckPolicy::Always);
 }
 
 #[test]

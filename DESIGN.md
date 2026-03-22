@@ -587,16 +587,19 @@ Multorum always verifies that every file touched by the worker's commit is withi
 
 ### Project Validation Checks: Rulebook Pipeline
 
-The project may define a pipeline of additional checks in the rulebook: building, testing, linting, formatting, or any other command. These run in the declared order after the file set check passes.
+The project may define a pipeline of additional checks in the rulebook: building, testing, linting, formatting, or any other command. These run in the declared order after the file set check passes. The `[check.command]` table defines the command for each named check in the pipeline. The `[check.policy]` table is optional and only needs to mention checks whose default behavior should be overridden.
 
 ```toml
 [check]
-pipeline = ["lint", "build", "test"]
+pipeline = ["fmt", "clippy", "test"]
 
 [check.command]
-lint = "npm run lint"
-build = "npm run build"
-test = "npm run test"
+fmt = "cargo fmt --all"
+clippy = "cargo clippy --all"
+test = "cargo test --all"
+
+[check.policy]
+test = "skippable"
 ```
 
 ### Evidence and Trust Negotiation
@@ -620,6 +623,8 @@ Individual checks can be assigned a policy in the rulebook under `[check.policy]
 
 - `always` — the check always runs, regardless of any evidence submitted
 - `skippable` — the check may be skipped if the orchestrator accepts the worker's evidence
+
+The `[check.policy]` table is optional. Any pipeline check without an explicit policy entry defaults to `always`.
 
 The file set check is always `always` and this cannot be configured.
 

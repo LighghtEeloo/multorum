@@ -131,6 +131,9 @@ pub(super) fn can_submit_from_state(state: WorkerState) -> bool {
 }
 
 /// Validate that a skip request only targets skippable declared checks.
+///
+/// Checks omitted from the optional `[check.policy]` table default to
+/// `always`, so skip requests for them are rejected here.
 pub(super) fn validate_skip_request(
     rulebook: &CompiledRulebook, skip_checks: &[String],
 ) -> Result<BTreeSet<CheckName>, RuntimeError> {
