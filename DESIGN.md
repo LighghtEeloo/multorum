@@ -95,13 +95,13 @@ definition ::= name ".path" "=" path  primitive — binds a name to a glob
 
 File set expressions are given names, making them referenceable by other file sets and by perspective declarations. Naming a file set creates a shared vocabulary for the project — a single place to update when boundaries change, and a readable shorthand in perspective declarations.
 
-Names are defined in the `[filesets]` table. A name may bind either a primitive (a glob or explicit path) or a compound expression that references other names. Perspectives then reference these names in their `read` and `write` fields.
+Names are defined in the `[fileset]` table. A name may bind either a primitive (a glob or explicit path) or a compound expression that references other names. Perspectives then reference these names in their `read` and `write` fields.
 
 Consider a project with specification files, test files, and an authentication module:
 
 ```toml
 # Named file set definitions
-[filesets]
+[fileset]
 SpecFiles.path = "**/*.spec.md"
 TestFiles.path = "**/test/**"
 
@@ -110,11 +110,11 @@ AuthSpecs = "AuthFiles & SpecFiles"
 AuthTests = "AuthFiles & TestFiles"
 
 # Used in a perspective
-[perspectives.AuthImplementor]
+[perspective.AuthImplementor]
 read  = "AuthSpecs"
 write = "AuthFiles - AuthSpecs - AuthTests"
 
-[perspectives.AuthTester]
+[perspective.AuthTester]
 read  = "AuthSpecs | AuthTests"
 write = "AuthTests"
 ```
@@ -173,7 +173,7 @@ A *perspective* is a named declaration in the rulebook that defines a role's rel
 ### Anatomy of a Perspective
 
 ```toml
-[perspectives.AuthImplementor]
+[perspective.AuthImplementor]
 read  = "AuthSpecs"
 write = "AuthFiles - AuthSpecs - AuthTests"
 ```
@@ -254,7 +254,7 @@ A rulebook contains:
 The following example shows a small but complete rulebook:
 
 ```toml
-[filesets]
+[fileset]
 SpecFiles.path = "**/*.spec.md"
 TestFiles.path = "**/test/**"
 
@@ -262,11 +262,11 @@ AuthFiles.path = "auth/**"
 AuthSpecs = "AuthFiles & SpecFiles"
 AuthTests = "AuthFiles & TestFiles"
 
-[perspectives.AuthImplementor]
+[perspective.AuthImplementor]
 read  = "AuthSpecs"
 write = "AuthFiles - AuthSpecs - AuthTests"
 
-[perspectives.AuthTester]
+[perspective.AuthTester]
 read  = "AuthSpecs | AuthTests"
 write = "AuthTests"
 
@@ -288,12 +288,12 @@ This rulebook reuses the same file set vocabulary introduced earlier, then adds 
 ```toml
 # Define shared file ownership vocabulary first.
 # `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
-[filesets]
+[fileset]
 
-# Add one table per perspective under `[perspectives.<Name>]`.
+# Add one table per perspective under `[perspective.<Name>]`.
 # `write` names the files that perspective may modify.
 # `read` names stable context files that concurrent work must not write.
-[perspectives]
+[perspective]
 
 # Add pre-merge gates in execution order.
 # Add commands under `[check.command]` and optional skip policies under `[check.policy]`.

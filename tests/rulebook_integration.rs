@@ -153,10 +153,10 @@ fn compile_defaults_omitted_policy_entries_to_always() {
 fn compile_surfaces_perspective_undefined_fileset_errors() {
     let workspace = setup_workspace(
         r#"
-            [filesets]
+            [fileset]
             AuthFiles.path = "auth/**"
 
-            [perspectives.AuthImplementor]
+            [perspective.AuthImplementor]
             read  = "MissingFiles"
             write = "AuthFiles"
 

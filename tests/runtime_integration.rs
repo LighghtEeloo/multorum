@@ -18,11 +18,11 @@ fn perspective() -> PerspectiveName {
 
 fn rulebook_toml() -> &'static str {
     r#"
-        [filesets]
+        [fileset]
         Owned.path = "src/owned.rs"
         Other.path = "src/other.rs"
 
-        [perspectives.AuthImplementor]
+        [perspective.AuthImplementor]
         read = "Other"
         write = "Owned"
 
@@ -85,8 +85,8 @@ fn rulebook_init_creates_default_committed_files() {
     assert!(init.multorum_root.join("worktrees").is_dir());
 
     let rulebook = Rulebook::from_workspace_root(dir.path()).unwrap();
-    assert!(rulebook.filesets().definitions().is_empty());
-    assert!(rulebook.perspectives().declarations().is_empty());
+    assert!(rulebook.fileset().definitions().is_empty());
+    assert!(rulebook.perspective().declarations().is_empty());
     assert!(rulebook.check().pipeline().is_empty());
 }
 
@@ -573,11 +573,11 @@ fn merge_rejects_when_worker_head_moves_after_submission() {
 fn merge_rejects_skip_request_for_check_without_policy_override() {
     let (_repo, orchestrator, _) = setup_repo_with_rulebook(
         r#"
-            [filesets]
+            [fileset]
             Owned.path = "src/owned.rs"
             Other.path = "src/other.rs"
 
-            [perspectives.AuthImplementor]
+            [perspective.AuthImplementor]
             read = "Other"
             write = "Owned"
 
@@ -608,11 +608,11 @@ fn merge_rejects_skip_request_for_check_without_policy_override() {
 fn merge_accepts_skip_request_for_explicit_skippable_check() {
     let (_repo, orchestrator, _) = setup_repo_with_rulebook(
         r#"
-            [filesets]
+            [fileset]
             Owned.path = "src/owned.rs"
             Other.path = "src/other.rs"
 
-            [perspectives.AuthImplementor]
+            [perspective.AuthImplementor]
             read = "Other"
             write = "Owned"
 

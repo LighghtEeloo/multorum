@@ -1,4 +1,4 @@
-//! File set expressions, definitions, and the `[filesets]` table.
+//! File set expressions, definitions, and the `[fileset]` table.
 
 use std::collections::BTreeMap;
 
@@ -81,7 +81,7 @@ pub enum Definition {
 }
 
 /// The complete set of file set definitions from a rulebook's
-/// `[filesets]` table.
+/// `[fileset]` table.
 ///
 /// Wraps `BTreeMap<Name, Definition>` for deterministic ordering.
 #[derive(Debug, Clone, Default)]
@@ -120,7 +120,7 @@ impl FileSetTable {
 
 /// Raw TOML value for a single file set entry.
 ///
-/// In the `[filesets]` table, each entry is either:
+/// In the `[fileset]` table, each entry is either:
 /// - A sub-table with a `path` key: `SpecFiles.path = "**/*.spec.md"`
 /// - A plain string expression: `AuthSpecs = "AuthFiles & SpecFiles"`
 #[derive(serde::Deserialize)]

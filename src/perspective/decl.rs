@@ -2,7 +2,7 @@
 //!
 //! A [`PerspectiveDecl`] holds the parsed read and write expressions
 //! for a single perspective. A [`PerspectiveTable`] collects all
-//! declarations from the `[perspectives]` TOML table.
+//! declarations from the `[perspective]` TOML table.
 
 use std::collections::BTreeMap;
 
@@ -16,7 +16,7 @@ use super::name::PerspectiveName;
 /// A single perspective declaration with parsed read and write
 /// expressions.
 ///
-/// Created during deserialization of the `[perspectives]` table.
+/// Created during deserialization of the `[perspective]` table.
 /// Not yet compiled against concrete file sets.
 #[derive(Debug, Clone)]
 pub struct PerspectiveDecl {
@@ -37,7 +37,7 @@ impl PerspectiveDecl {
 }
 
 /// The complete set of perspective declarations from a rulebook's
-/// `[perspectives]` table.
+/// `[perspective]` table.
 ///
 /// Wraps `BTreeMap<PerspectiveName, PerspectiveDecl>` for
 /// deterministic ordering.
@@ -61,7 +61,7 @@ impl PerspectiveTable {
 /// Raw TOML shape for a single perspective entry.
 ///
 /// ```toml
-/// [perspectives.AuthImplementor]
+/// [perspective.AuthImplementor]
 /// read  = "AuthSpecs | AuthTests"
 /// write = "AuthFiles - AuthSpecs - AuthTests"
 /// ```

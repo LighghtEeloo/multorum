@@ -25,12 +25,18 @@ pub const DEFAULT_RULEBOOK_TEMPLATE: &str = include_str!("../rulebook.default.to
 /// A rulebook is the single committed configuration file that defines
 /// file sets, perspectives, and the pre-merge check pipeline for a
 /// Multorum project.
+///
+/// ## TOML Shape
+///
+/// Top-level rulebook tables use singular names: `[fileset]`,
+/// `[perspective.<Name>]`, and `[check]`.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Rulebook {
     #[serde(default)]
-    filesets: FileSetTable,
+    fileset: FileSetTable,
     #[serde(default)]
-    perspectives: PerspectiveTable,
+    perspective: PerspectiveTable,
     #[serde(default)]
     check: CheckTable,
 }
@@ -71,13 +77,13 @@ impl Rulebook {
     }
 
     /// The raw file set declarations.
-    pub fn filesets(&self) -> &FileSetTable {
-        &self.filesets
+    pub fn fileset(&self) -> &FileSetTable {
+        &self.fileset
     }
 
     /// The raw perspective declarations.
-    pub fn perspectives(&self) -> &PerspectiveTable {
-        &self.perspectives
+    pub fn perspective(&self) -> &PerspectiveTable {
+        &self.perspective
     }
 
     /// The raw check declarations.
@@ -99,18 +105,18 @@ mod tests {
     fn full_rulebook_deserializes() {
         let rulebook = Rulebook::from_toml_str(
             r#"
-            [filesets]
+            [fileset]
             SpecFiles.path = "**/*.spec.md"
             TestFiles.path = "**/test/**"
             AuthFiles.path = "auth/**"
             AuthSpecs = "AuthFiles & SpecFiles"
             AuthTests = "AuthFiles & TestFiles"
 
-            [perspectives.AuthImplementor]
+            [perspective.AuthImplementor]
             read  = "AuthSpecs"
             write = "AuthFiles - AuthSpecs - AuthTests"
 
-            [perspectives.AuthTester]
+            [perspective.AuthTester]
             read  = "AuthSpecs"
             write = "AuthTests"
 
@@ -127,8 +133,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(rulebook.filesets().definitions().len(), 5);
-        assert_eq!(rulebook.perspectives().declarations().len(), 2);
+        assert_eq!(rulebook.fileset().definitions().len(), 5);
+        assert_eq!(rulebook.perspective().declarations().len(), 2);
         assert_eq!(rulebook.check().pipeline().len(), 2);
         assert_eq!(
             rulebook.check().declarations()[&crate::rulebook::CheckName::new("test").unwrap()]
@@ -152,8 +158,8 @@ mod tests {
         .unwrap();
 
         let rulebook = Rulebook::from_workspace_root(dir.path()).unwrap();
-        assert!(rulebook.filesets().definitions().is_empty());
-        assert!(rulebook.perspectives().declarations().is_empty());
+        assert!(rulebook.fileset().definitions().is_empty());
+        assert!(rulebook.perspective().declarations().is_empty());
         assert!(rulebook.check().pipeline().is_empty());
     }
 
@@ -161,8 +167,25 @@ mod tests {
     fn default_template_is_a_valid_empty_rulebook() {
         let rulebook = Rulebook::from_toml_str(Rulebook::default_template()).unwrap();
 
-        assert!(rulebook.filesets().definitions().is_empty());
-        assert!(rulebook.perspectives().declarations().is_empty());
+        assert!(rulebook.fileset().definitions().is_empty());
+        assert!(rulebook.perspective().declarations().is_empty());
         assert!(rulebook.check().pipeline().is_empty());
+    }
+
+    #[test]
+    fn plural_top_level_tables_are_rejected() {
+        let error = Rulebook::from_toml_str(
+            r#"
+            [filesets]
+            Owned.path = "src/owned.rs"
+
+            [perspectives.AuthImplementor]
+            read = "Owned"
+            write = "Owned"
+        "#,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("unknown field `filesets`"));
     }
 }

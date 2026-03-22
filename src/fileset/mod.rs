@@ -7,7 +7,7 @@
 //!
 //! ## Compilation pipeline
 //!
-//! 1. Deserialize the `[filesets]` table from TOML.
+//! 1. Deserialize the `[fileset]` table from TOML.
 //! 2. Parse expression strings into an AST.
 //! 3. Validate: no cycles, no undefined references.
 //! 4. Compile: expand globs, evaluate set operations.

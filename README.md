@@ -87,7 +87,7 @@ The orchestrator-side worker lifecycle commands are:
 ## Rulebook Example
 
 ```toml
-[filesets]
+[fileset]
 SpecFiles.path = "**/*.spec.md"
 TestFiles.path = "**/test/**"
 
@@ -95,11 +95,11 @@ AuthFiles.path = "auth/**"
 AuthSpecs = "AuthFiles & SpecFiles"
 AuthTests = "AuthFiles & TestFiles"
 
-[perspectives.AuthImplementor]
+[perspective.AuthImplementor]
 read = "AuthSpecs"
 write = "AuthFiles - AuthSpecs - AuthTests"
 
-[perspectives.AuthTester]
+[perspective.AuthTester]
 read = "AuthSpecs | AuthTests"
 write = "AuthTests"
 

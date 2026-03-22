@@ -1,11 +1,11 @@
 # Define shared file ownership vocabulary first.
 # `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
-[filesets]
+[fileset]
 
-# Add one table per perspective under `[perspectives.<Name>]`.
+# Add one table per perspective under `[perspective.<Name>]`.
 # `write` names the files that perspective may modify.
 # `read` names stable context files that concurrent work must not write.
-[perspectives]
+[perspective]
 
 # Add pre-merge gates in execution order.
 # Add commands under `[check.command]` and optional skip policies under `[check.policy]`.

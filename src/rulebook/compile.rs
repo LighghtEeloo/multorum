@@ -61,8 +61,8 @@ impl Rulebook {
         tracing::debug!(file_count = files.len(), "compiling rulebook");
 
         let check = self.check().compile()?;
-        let filesets = self.filesets().compile(files)?;
-        let perspectives = self.perspectives().compile(&filesets)?;
+        let filesets = self.fileset().compile(files)?;
+        let perspectives = self.perspective().compile(&filesets)?;
 
         tracing::debug!(
             fileset_count = filesets.len(),
@@ -94,18 +94,18 @@ mod tests {
     fn design_rulebook() -> Rulebook {
         Rulebook::from_toml_str(
             r#"
-            [filesets]
+            [fileset]
             SpecFiles.path = "**/*.spec.md"
             TestFiles.path = "**/test/**"
             AuthFiles.path = "auth/**"
             AuthSpecs = "AuthFiles & SpecFiles"
             AuthTests = "AuthFiles & TestFiles"
 
-            [perspectives.AuthImplementor]
+            [perspective.AuthImplementor]
             read  = "AuthSpecs"
             write = "AuthFiles - AuthSpecs - AuthTests"
 
-            [perspectives.AuthTester]
+            [perspective.AuthTester]
             read  = "AuthSpecs"
             write = "AuthTests"
 
@@ -174,7 +174,7 @@ mod tests {
     fn compile_surfaces_fileset_validation_failures() {
         let rulebook = Rulebook::from_toml_str(
             r#"
-            [filesets]
+            [fileset]
             Broken = "MissingFiles"
 
             [check]
@@ -191,15 +191,15 @@ mod tests {
     fn compile_allows_overlapping_perspectives() {
         let rulebook = Rulebook::from_toml_str(
             r#"
-            [filesets]
+            [fileset]
             SpecFiles.path = "**/*.spec.md"
             AuthFiles.path = "auth/**"
 
-            [perspectives.P]
+            [perspective.P]
             read  = "SpecFiles"
             write = "AuthFiles"
 
-            [perspectives.Q]
+            [perspective.Q]
             read  = "SpecFiles"
             write = "AuthFiles"
 
