@@ -18,9 +18,10 @@ use super::{Sequence, bundle::MessageKind, mailbox::MailboxDirection};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum WorkerState {
-    /// The worktree and runtime surface have been created.
-    Provisioned,
-    /// The worker is actively executing its task.
+    /// The worktree and runtime surface have been created and the worker may run.
+    ///
+    /// Note: Provisioning transitions directly into `ACTIVE`; Multorum does
+    /// not model a separate idle post-provisioning state.
     Active,
     /// The worker is blocked on orchestrator input.
     Blocked,
@@ -88,9 +89,9 @@ pub struct RulebookInit {
 /// Result of provisioning a worker.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProvisionResult {
-    /// Provisioned worker identity.
+    /// New worker identity.
     pub worker_id: WorkerId,
-    /// Bidding group joined by the provisioned worker.
+    /// Bidding group joined by the new worker.
     pub bidding_group: PerspectiveName,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,

@@ -211,7 +211,6 @@ pub enum RuntimeError {
 
 fn worker_state_name(state: WorkerState) -> &'static str {
     match state {
-        | WorkerState::Provisioned => "PROVISIONED",
         | WorkerState::Active => "ACTIVE",
         | WorkerState::Blocked => "BLOCKED",
         | WorkerState::Committed => "COMMITTED",

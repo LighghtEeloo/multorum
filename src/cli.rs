@@ -10,7 +10,7 @@
 //! - `perspective` inspects declared roles from the active rulebook.
 //! - `bidding-group` inspects active competing groups.
 //! - `worker` addresses orchestrator-side operations on concrete workers.
-//! - `local` addresses worker-local operations from inside a provisioned
+//! - `local` addresses worker-local operations from inside a worker
 //!   worktree.
 
 use std::path::PathBuf;
@@ -143,7 +143,7 @@ pub enum Command {
         command: WorkerCommand,
     },
 
-    /// Operate on the current provisioned worker worktree.
+    /// Operate on the current worker worktree.
     Local {
         #[command(subcommand)]
         command: LocalCommand,

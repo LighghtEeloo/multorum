@@ -128,7 +128,7 @@ impl RuntimeFs {
         Ok(workers)
     }
 
-    /// Load the immutable worker contract from a provisioned worktree.
+    /// Load the immutable worker contract from a worker worktree.
     pub(crate) fn load_worker_contract(
         &self, worktree_root: &Path,
     ) -> Result<WorkerContractView, RuntimeError> {

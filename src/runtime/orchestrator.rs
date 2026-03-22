@@ -407,7 +407,7 @@ impl OrchestratorService for FsOrchestratorService {
             worker_id: worker_id.clone(),
             bidding_group: bidding_group.clone(),
             perspective: perspective.clone(),
-            state: WorkerState::Provisioned,
+            state: WorkerState::Active,
             worktree_path: worktree_path.clone(),
             rulebook_commit: active.rulebook_commit,
             base_commit: active.base_commit,
@@ -440,7 +440,7 @@ impl OrchestratorService for FsOrchestratorService {
             worker_id = %worker_id,
             perspective = %perspective,
             root = %worktree_path.display(),
-            "provisioned worker"
+            "provisioned active worker"
         );
 
         Ok(ProvisionResult {
@@ -448,7 +448,7 @@ impl OrchestratorService for FsOrchestratorService {
             bidding_group,
             perspective,
             worktree_path,
-            state: WorkerState::Provisioned,
+            state: WorkerState::Active,
             seeded_task_path,
         })
     }
@@ -467,13 +467,10 @@ impl OrchestratorService for FsOrchestratorService {
 
     fn discard_worker(&self, worker_id: WorkerId) -> Result<DiscardResult> {
         let mut record = self.fs.load_worker_record(&worker_id)?;
-        if !matches!(
-            record.state,
-            WorkerState::Provisioned | WorkerState::Active | WorkerState::Committed
-        ) {
+        if !matches!(record.state, WorkerState::Active | WorkerState::Committed) {
             return Err(RuntimeError::InvalidState {
                 operation: "discard worker",
-                expected: "PROVISIONED, ACTIVE, or COMMITTED",
+                expected: "ACTIVE or COMMITTED",
                 actual: record.state,
             });
         }

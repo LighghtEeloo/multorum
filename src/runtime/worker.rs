@@ -49,7 +49,7 @@ pub trait WorkerService {
 
 /// Storage-backed worker runtime service.
 ///
-/// The service is bound to one provisioned worktree and derives the
+/// The service is bound to one active worker worktree and derives the
 /// canonical orchestrator control plane from the managed
 /// `.multorum/worktrees/<perspective>` location created during
 /// provisioning. Repository-specific discovery is delegated to the
@@ -117,7 +117,7 @@ impl FsWorkerService {
         if !can_submit_from_state(record.state) {
             return Err(RuntimeError::InvalidState {
                 operation: "publish worker submission",
-                expected: "PROVISIONED or ACTIVE",
+                expected: "ACTIVE",
                 actual: record.state,
             });
         }

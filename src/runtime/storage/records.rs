@@ -23,7 +23,7 @@ pub(crate) struct ActiveRulebookRecord {
     pub activated_at: String,
 }
 
-/// Orchestrator-local projection for one provisioned worker.
+/// Orchestrator-local projection for one live or historical worker.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct WorkerRecord {
     /// Unique worker identity.

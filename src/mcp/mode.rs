@@ -10,6 +10,6 @@ use crate::runtime::WorkerId;
 pub enum McpMode {
     /// Main-workspace orchestrator server.
     Orchestrator,
-    /// Worker-local server scoped to one provisioned worker.
+    /// Worker-local server scoped to one worker worktree.
     Worker { worker_id: WorkerId },
 }

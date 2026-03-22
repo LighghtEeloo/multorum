@@ -119,7 +119,7 @@ read  = "AuthSpecs | AuthTests"
 write = "AuthTests"
 ```
 
-Primitive names bind globs via the `.path` key (`SpecFiles.path`, `AuthFiles.path`). Compound names (`AuthSpecs`, `AuthTests`) reference other names through set expressions, narrowing a module to a cross-cutting concern via intersection. Perspectives then use union and difference to partition the module: `AuthImplementor` writes only production code by subtracting specs and tests from the full auth set, while `AuthTester` writes only tests. The two write sets are disjoint, so bidding groups provisioned from those perspectives may run concurrently.
+Primitive names bind globs via the `.path` key (`SpecFiles.path`, `AuthFiles.path`). Compound names (`AuthSpecs`, `AuthTests`) reference other names through set expressions, narrowing a module to a cross-cutting concern via intersection. Perspectives then use union and difference to partition the module: `AuthImplementor` writes only production code by subtracting specs and tests from the full auth set, while `AuthTester` writes only tests. The two write sets are disjoint, so workers created from those perspectives may run concurrently in separate bidding groups.
 
 ### Compilation
 
@@ -230,8 +230,8 @@ This is why the safety property belongs at the worker boundary rather than the p
 Multorum checks the safety property when concurrent runtime state would change:
 
 - On `provision`, it takes the selected perspective's compiled read and write sets as the candidate bidding-group boundary.
-- If the provisioned worker joins an existing bidding group, Multorum checks equality with that group's materialized read and write sets.
-- If the provisioned worker creates a new bidding group, Multorum checks the candidate group's read and write sets against every other active bidding group's materialized read and write sets.
+- If the worker being provisioned joins an existing bidding group, Multorum checks equality with that group's materialized read and write sets.
+- If the worker being provisioned creates a new bidding group, Multorum checks the candidate group's read and write sets against every other active bidding group's materialized read and write sets.
 - On `rulebook switch`, Multorum compiles the target rulebook and checks every target perspective's candidate read and write sets against every currently active bidding group's materialized read and write sets.
 
 In other words, safety is checked against the runtime state that already exists, not against perspectives in isolation.
@@ -280,7 +280,7 @@ clippy = "cargo clippy --workspace --all-targets -- -D warnings"
 test = "cargo test --workspace"
 ```
 
-This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `check` table to make the example complete. Bidding groups provisioned from `AuthImplementor` and `AuthTester` may run in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across those groups. The `check` table defines the ordered pre-merge pipeline that every submitted change must pass before integration.
+This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `check` table to make the example complete. Workers created from `AuthImplementor` and `AuthTester` may run in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across those groups. The `check` table defines the ordered pre-merge pipeline that every submitted change must pass before integration.
 
 ### Default Rulebook Template
 
@@ -327,7 +327,7 @@ Development phases and their rationale can be communicated through git commit me
 
 A rulebook switch is valid if and only if it does not conflict with any currently active bidding group. The unit of concern is **files**, not perspectives. Multorum validates a switch by:
 
-1. Collecting the compiled read and write sets of all currently active bidding groups (as materialized when their workers were provisioned)
+1. Collecting the compiled read and write sets of all currently active bidding groups (as materialized when their workers were created)
 2. Compiling the target rulebook's read and write sets per perspective
 3. Treating each target perspective as a candidate future bidding group
 4. Checking every candidate target perspective against every active bidding group:
@@ -365,7 +365,7 @@ A Multorum project adds a `.multorum/` directory to the project root. Every work
 
 In the main workspace, **`.multorum/orchestrator/`** contains the orchestrator's local control-plane data: the active rulebook commit, worker state projections, integration records, check results, and audit logs. This data is local to the machine and does not travel with the repository.
 
-**`.multorum/worktrees/`** contains one subdirectory per active worker, each being a git worktree. These are created and destroyed by Multorum as workers are provisioned and integrated or discarded.
+**`.multorum/worktrees/`** contains one subdirectory per active worker, each being a git worktree. These are created and destroyed by Multorum as workers are started, integrated, or discarded.
 
 Inside each worker worktree, the worker-local **`.multorum/`** directory contains the runtime contract, the compiled read and write sets, the inbox and outbox mailboxes, and any runtime artifacts attached to messages. These files are authoritative for orchestrator-worker communication, but they are local runtime state rather than project configuration. When the orchestrator or worker submits payloads by filesystem path, Multorum moves them into this runtime area and becomes responsible for retaining them.
 
@@ -457,24 +457,24 @@ This constraint keeps the compiled file lists authoritative and ensures that eve
 A worker progresses through a defined set of states during its lifecycle. Multorum enforces valid state transitions and rejects instructions that would produce invalid ones. This state machine is defined per worker; a bidding group is simply a set of workers moving through the same machine independently until one is selected for integration or the group is discarded.
 
 ```
-                    ┌──► BLOCKED ──┐
-             report │              │ resolve
-                    │              │
-PROVISIONED ──► ACTIVE ◄───────────┘
-                 │  ▲
-          commit │  │ revise
-                 ▼  │
-              COMMITTED
-                  │
-          ┌───────┴───────┐
-          ▼               ▼
-      INTEGRATED       DISCARDED
+                 BLOCKED
+                    ▲ │
+             report │ │ resolve
+                    │ ▼
+provision ───────► ACTIVE
+                    │ ▲
+             commit │ │ revise
+                    ▼ │
+                 COMMITTED
+                     │
+             ┌───────┴───────┐
+             ▼               ▼
+         INTEGRATED       DISCARDED
 ```
 
 ### States
 
-- **PROVISIONED** — the worktree has been created and the worker's environment is ready. The worker has not yet begun execution.
-- **ACTIVE** — the worker is executing its task.
+- **ACTIVE** — the worktree has been created, the worker's environment is ready, and execution may proceed immediately.
 - **BLOCKED** — the worker has reported a blocker and is awaiting orchestrator resolution. The worker is suspended; no execution occurs in this state.
 - **COMMITTED** — the worker has completed its task and submitted a commit to Multorum. The worktree is frozen pending orchestrator action: integration, revision, or discard.
 - **INTEGRATED** — the worker's commit has passed the pre-merge pipeline and been integrated into the canonical codebase. The worktree is released.
@@ -486,7 +486,7 @@ Integrating one worker is also a group-level decision: once a worker in a biddin
 
 | From | To | Trigger |
 |---|---|---|
-| PROVISIONED | ACTIVE | `provision` completes; worker begins execution |
+| provision | ACTIVE | Multorum creates the worktree and runtime surface |
 | ACTIVE | BLOCKED | Worker issues `report` |
 | ACTIVE | COMMITTED | Worker submits commit |
 | BLOCKED | ACTIVE | Orchestrator issues `resolve` |
@@ -643,7 +643,7 @@ Performs a dry run of the switch validation without making any changes. Useful f
 ### Worker Lifecycle Instructions
 
 **`provision <perspective-name>`**
-Compiles the file sets for the named perspective, derives the candidate bidding group's read and write sets, and checks them against the materialized read and write sets of all active bidding groups. If the worker joins an existing bidding group, Multorum instead checks that the compiled sets are identical to that group's existing boundary. Once the check passes, Multorum creates a git worktree at the pinned HEAD commit, assigns a unique worker id, records the worker's bidding-group membership, installs the client-side write hook, materializes the worker-local runtime files in `.multorum/`, and injects the read set as worker guidance metadata. Multorum also prepares empty inbox and outbox mailboxes for the worker and may publish an initial `task` bundle into the worker inbox. Transitions the worker to PROVISIONED.
+Compiles the file sets for the named perspective, derives the candidate bidding group's read and write sets, and checks them against the materialized read and write sets of all active bidding groups. If the worker joins an existing bidding group, Multorum instead checks that the compiled sets are identical to that group's existing boundary. Once the check passes, Multorum creates a git worktree at the pinned HEAD commit, assigns a unique worker id, records the worker's bidding-group membership, installs the client-side write hook, materializes the worker-local runtime files in `.multorum/`, and injects the read set as worker guidance metadata. Multorum also prepares empty inbox and outbox mailboxes for the worker and may publish an initial `task` bundle into the worker inbox. Provisioning transitions the worker directly to ACTIVE.
 
 **`resolve <worker-id>`**
 Publishes a `resolve` bundle into the worker's inbox. The bundle carries both the state transition and the resolution content. Once the worker acknowledges it, Multorum transitions the worker from BLOCKED to ACTIVE.

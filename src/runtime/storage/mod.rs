@@ -126,7 +126,7 @@ pub(super) fn is_live_worker_state(state: WorkerState) -> bool {
 
 /// Return `true` when a worker may still produce mailbox submissions.
 pub(super) fn can_submit_from_state(state: WorkerState) -> bool {
-    matches!(state, WorkerState::Provisioned | WorkerState::Active)
+    matches!(state, WorkerState::Active)
 }
 
 /// Validate that a skip request only targets skippable declared checks.

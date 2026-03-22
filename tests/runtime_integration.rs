@@ -113,7 +113,7 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
             Some(BundlePayload { body_path: Some(task_body.clone()), ..BundlePayload::default() }),
         )
         .unwrap();
-    assert_eq!(provision.state, WorkerState::Provisioned);
+    assert_eq!(provision.state, WorkerState::Active);
     assert!(provision.worktree_path.is_absolute());
     assert!(
         provision
@@ -124,6 +124,7 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     assert!(!task_body.exists(), "task body should be moved into the runtime bundle");
 
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
+    assert_eq!(worker.status().unwrap().state, WorkerState::Active);
     let contract = worker.contract().unwrap();
     assert!(contract.read_set_path.is_absolute());
     assert!(contract.write_set_path.is_absolute());
