@@ -9,6 +9,8 @@ pub enum McpErrorCode {
     UnknownPerspective,
     /// Unknown worker identifier.
     UnknownWorker,
+    /// Requested worker id is already allocated.
+    WorkerIdExists,
     /// Invalid state transition for the requested operation.
     InvalidState,
     /// Message bundle not found.
@@ -47,6 +49,7 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::RulebookExists(_) => McpErrorCode::InvalidState,
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,
             | RuntimeError::UnknownWorker(_) => McpErrorCode::UnknownWorker,
+            | RuntimeError::WorkerIdExists(_) => McpErrorCode::WorkerIdExists,
             | RuntimeError::InvalidState { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,
             | RuntimeError::AlreadyAcknowledged => McpErrorCode::AlreadyAcknowledged,

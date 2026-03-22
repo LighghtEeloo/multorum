@@ -20,7 +20,8 @@ use clap::{Args, Parser, Subcommand};
 use crate::{
     perspective::PerspectiveName,
     runtime::{
-        self, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerId, WorkerService,
+        self, FsOrchestratorService, FsWorkerService, OrchestratorService, ProvisionWorker,
+        WorkerId, WorkerService,
     },
 };
 
@@ -174,6 +175,13 @@ pub enum WorkerCommand {
     Provision {
         /// Perspective to instantiate.
         perspective: PerspectiveName,
+
+        /// Optional runtime worker identity chosen by the orchestrator.
+        ///
+        /// When omitted, Multorum allocates the default perspective-based
+        /// worker id automatically.
+        #[arg(long = "worker-id", value_name = "WORKER")]
+        worker_id: Option<WorkerId>,
 
         /// Optional payload for the initial `task` bundle.
         #[command(flatten)]
@@ -386,10 +394,17 @@ impl WorkerCommand {
     /// Execute one orchestrator-side worker command.
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
-            | Self::Provision { perspective, payload } => {
+            | Self::Provision { perspective, worker_id, payload } => {
                 let task =
                     (!payload.clone().into_runtime().is_empty()).then(|| payload.into_runtime());
-                let result = services.orchestrator.provision_worker(perspective, task)?;
+                let mut request = ProvisionWorker::new(perspective);
+                if let Some(worker_id) = worker_id {
+                    request = request.with_worker_id(worker_id);
+                }
+                if let Some(task) = task {
+                    request = request.with_task(task);
+                }
+                let result = services.orchestrator.provision_worker(request)?;
                 println!("{result:#?}");
             }
             | Self::List => {

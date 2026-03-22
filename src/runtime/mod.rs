@@ -22,7 +22,7 @@ pub use bundle::{
 };
 pub use error::{Result, RuntimeError};
 pub use mailbox::{AckRef, MailboxDirection};
-pub use orchestrator::{FsOrchestratorService, OrchestratorService};
+pub use orchestrator::{FsOrchestratorService, OrchestratorService, ProvisionWorker};
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};
 pub use projection::TranscriptView;
 pub use state::{

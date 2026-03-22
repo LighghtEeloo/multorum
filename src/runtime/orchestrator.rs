@@ -27,6 +27,41 @@ use super::{
     worker_id::WorkerId,
 };
 
+/// Request to provision one worker from a compiled perspective.
+///
+/// The orchestrator may provide `worker_id` to pin the runtime identity
+/// used for mailbox routing and filesystem placement. When `worker_id`
+/// is `None`, Multorum allocates the default perspective-based worker
+/// id automatically.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProvisionWorker {
+    /// Perspective to instantiate.
+    pub perspective: PerspectiveName,
+    /// Optional orchestrator-selected worker identity.
+    pub worker_id: Option<WorkerId>,
+    /// Optional initial `task` bundle to seed in the worker inbox.
+    pub task: Option<BundlePayload>,
+}
+
+impl ProvisionWorker {
+    /// Construct a provisioning request for one perspective.
+    pub fn new(perspective: PerspectiveName) -> Self {
+        Self { perspective, worker_id: None, task: None }
+    }
+
+    /// Pin the worker to one orchestrator-selected runtime identity.
+    pub fn with_worker_id(mut self, worker_id: WorkerId) -> Self {
+        self.worker_id = Some(worker_id);
+        self
+    }
+
+    /// Seed the new worker inbox with one initial `task` bundle.
+    pub fn with_task(mut self, task: BundlePayload) -> Self {
+        self.task = Some(task);
+        self
+    }
+}
+
 /// Typed operations available to the orchestrator frontend.
 pub trait OrchestratorService {
     /// Initialize `.multorum/` with the default committed artifacts.
@@ -52,11 +87,9 @@ pub trait OrchestratorService {
 
     /// Provision a worker worktree and optional initial task bundle.
     ///
-    /// Any path-backed payload files are moved into `.multorum/`
-    /// storage if publication succeeds.
-    fn provision_worker(
-        &self, perspective: PerspectiveName, task: Option<BundlePayload>,
-    ) -> Result<ProvisionResult>;
+    /// Any path-backed payload files are moved into `.multorum/` storage
+    /// if publication succeeds.
+    fn provision_worker(&self, request: ProvisionWorker) -> Result<ProvisionResult>;
 
     /// Publish a `resolve` bundle to the worker inbox.
     ///
@@ -208,6 +241,24 @@ impl FsOrchestratorService {
 
         WorkerId::new(format!("{prefix}{next}"))
             .map_err(|_| RuntimeError::CheckFailed("failed to allocate worker id".to_owned()))
+    }
+
+    fn resolve_worker_id(
+        &self, perspective: &PerspectiveName, worker_id: Option<WorkerId>,
+    ) -> Result<WorkerId> {
+        if let Some(worker_id) = worker_id {
+            if self
+                .fs
+                .list_worker_records()?
+                .into_iter()
+                .any(|record| record.worker_id == worker_id)
+            {
+                return Err(RuntimeError::WorkerIdExists(worker_id));
+            }
+            return Ok(worker_id);
+        }
+
+        self.allocate_worker_id(perspective)
     }
 
     fn validate_provision_boundary(
@@ -384,9 +435,8 @@ impl OrchestratorService for FsOrchestratorService {
         })
     }
 
-    fn provision_worker(
-        &self, perspective: PerspectiveName, task: Option<BundlePayload>,
-    ) -> Result<ProvisionResult> {
+    fn provision_worker(&self, request: ProvisionWorker) -> Result<ProvisionResult> {
+        let ProvisionWorker { perspective, worker_id, task } = request;
         let (active, compiled) = self.fs.load_active_compiled_rulebook()?;
         let compiled_perspective = compiled
             .perspectives()
@@ -394,7 +444,7 @@ impl OrchestratorService for FsOrchestratorService {
             .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?;
         self.validate_provision_boundary(&perspective, compiled_perspective)?;
 
-        let worker_id = self.allocate_worker_id(&perspective)?;
+        let worker_id = self.resolve_worker_id(&perspective, worker_id)?;
         let bidding_group = perspective.clone();
         let worktree_path = self.fs.worker_paths(&worker_id).worktree_root().to_path_buf();
         self.fs.vcs().create_worktree(

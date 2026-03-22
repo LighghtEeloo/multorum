@@ -14,7 +14,7 @@ pub mod error;
 pub mod name;
 
 pub use compile::{CompiledPerspective, CompiledPerspectives};
-pub use validation::ConflictFreeValidator;
 pub use decl::{PerspectiveDecl, PerspectiveTable};
 pub use error::*;
 pub use name::PerspectiveName;
+pub use validation::ConflictFreeValidator;

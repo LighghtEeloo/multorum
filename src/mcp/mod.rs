@@ -16,7 +16,7 @@ pub mod resource;
 pub mod server;
 pub mod tool;
 
-pub use dto::{ResourceDescriptor, ToolDescriptor};
+pub use dto::{ResourceDescriptor, ToolDescriptor, ToolInputDescriptor};
 pub use error::{McpErrorCode, McpToolError};
 pub use mode::McpMode;
 pub use server::McpServer;
