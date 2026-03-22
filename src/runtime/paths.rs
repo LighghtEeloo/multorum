@@ -52,18 +52,6 @@ impl MultorumPaths {
         path.to_path_buf()
     }
 
-    /// Resolve the git worktree root containing `path`.
-    pub(crate) fn find_git_root(path: &Path) -> PathBuf {
-        let mut current = Some(path);
-        while let Some(candidate) = current {
-            if candidate.join(".git").exists() {
-                return candidate.to_path_buf();
-            }
-            current = candidate.parent();
-        }
-        path.to_path_buf()
-    }
-
     /// Workspace root path used for derived runtime locations.
     pub fn workspace_root(&self) -> &Path {
         &self.workspace_root

@@ -360,8 +360,11 @@ impl Command {
             }
             | Self::Report { head_commit, reply, payload } => {
                 let worker = services.worker()?;
-                let result =
-                    worker.send_report(head_commit, reply.into_runtime(), payload.into_runtime())?;
+                let result = worker.send_report(
+                    head_commit,
+                    reply.into_runtime(),
+                    payload.into_runtime(),
+                )?;
                 println!("{result:#?}");
             }
             | Self::Status => {

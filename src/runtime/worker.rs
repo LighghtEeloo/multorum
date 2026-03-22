@@ -5,9 +5,12 @@
 //! the CLI.
 
 use std::path::PathBuf;
+use std::sync::Arc;
+
+use crate::vcs::{GitVcs, VersionControl};
 
 use super::{
-    CanonicalCommitHash, MailboxDirection, MultorumPaths, WorkerPaths,
+    CanonicalCommitHash, MailboxDirection, WorkerPaths,
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
     mailbox::AckRef,
@@ -49,7 +52,8 @@ pub trait WorkerService {
 /// The service is bound to one provisioned worktree and derives the
 /// canonical orchestrator control plane from the managed
 /// `.multorum/worktrees/<perspective>` location created during
-/// provisioning.
+/// provisioning. Repository-specific discovery is delegated to the
+/// configured version-control backend.
 #[derive(Debug, Clone)]
 pub struct FsWorkerService {
     fs: RuntimeFs,
@@ -64,10 +68,22 @@ impl FsWorkerService {
         Ok(Self { fs: RuntimeFs::new(workspace_root)?, worktree_root })
     }
 
+    /// Construct the worker service for an explicit worktree root with
+    /// one repository backend.
+    pub fn with_vcs(
+        worktree_root: impl Into<PathBuf>, vcs: Arc<dyn VersionControl>,
+    ) -> Result<Self> {
+        let worktree_root = worktree_root.into().canonicalize()?;
+        let workspace_root = WorkerPaths::new(worktree_root.clone()).workspace_root()?;
+        Ok(Self { fs: RuntimeFs::with_vcs(workspace_root, vcs)?, worktree_root })
+    }
+
     /// Construct the worker service from the current directory.
     pub fn from_current_dir() -> Result<Self> {
         let cwd = std::env::current_dir()?;
-        Self::new(MultorumPaths::find_git_root(&cwd))
+        let vcs: Arc<dyn VersionControl> = Arc::new(GitVcs::new());
+        let worktree_root = vcs.repository_root(&cwd);
+        Self::with_vcs(worktree_root, vcs)
     }
 
     fn contract_view(&self) -> Result<WorkerContractView> {
@@ -140,7 +156,7 @@ impl WorkerService for FsWorkerService {
         let head_commit = head_commit
             .as_deref()
             .map(|revision| {
-                self.fs.resolve_commit(
+                self.fs.vcs().resolve_commit(
                     &self.worktree_root,
                     revision,
                     "verify reported worker commit",
@@ -161,7 +177,7 @@ impl WorkerService for FsWorkerService {
     }
 
     fn send_commit(&self, head_commit: String, payload: BundlePayload) -> Result<PublishedBundle> {
-        let head_commit = self.fs.resolve_commit(
+        let head_commit = self.fs.vcs().resolve_commit(
             &self.worktree_root,
             &head_commit,
             "verify submitted worker commit",

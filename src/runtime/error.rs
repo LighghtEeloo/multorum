@@ -142,14 +142,19 @@ pub enum RuntimeError {
     #[error("invalid bundle payload: {0}")]
     InvalidPayload(&'static str),
 
-    /// Git command execution failed.
-    #[error("git command failed while attempting to {action} in `{cwd}`: {details}", cwd = cwd.display())]
-    Git {
-        /// Human-readable description of the git action.
+    /// Repository backend command execution failed.
+    #[error(
+        "{backend} command failed while attempting to {action} in `{cwd}`: {details}",
+        cwd = cwd.display()
+    )]
+    Vcs {
+        /// Repository backend that reported the failure.
+        backend: &'static str,
+        /// Human-readable description of the repository action.
         action: &'static str,
-        /// Working directory used for the git command.
+        /// Working directory used for the repository command.
         cwd: PathBuf,
-        /// Git-provided failure details.
+        /// Backend-provided failure details.
         details: String,
     },
 

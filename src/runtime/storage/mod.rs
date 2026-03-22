@@ -3,21 +3,23 @@
 //! The runtime model is intentionally filesystem-first: `.multorum/`
 //! stores the authoritative control plane, worker contract, compiled
 //! file sets, and mailbox bundles. This module centralizes that on-disk
-//! layout and the small amount of git orchestration needed to provision
-//! worktrees and integrate submitted commits.
+//! layout and the small amount of version-control orchestration needed
+//! to provision worktrees and integrate submitted commits.
 
-mod git;
 mod mailbox;
 mod records;
 mod state;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::perspective::PerspectiveName;
 use crate::rulebook::{CheckName, CheckPolicy, CompiledRulebook};
 use crate::runtime::{MessageKind, MultorumPaths, RuntimeError, WorkerPaths, WorkerState};
+use crate::vcs::{GitVcs, VersionControl};
 
 pub(crate) use records::{AckRecord, ActiveRulebookRecord, WorkerRecord};
 
@@ -39,12 +41,21 @@ pub(crate) const ACK_EXTENSION: &str = "ack";
 #[derive(Debug, Clone)]
 pub(crate) struct RuntimeFs {
     paths: MultorumPaths,
+    vcs: Arc<dyn VersionControl>,
 }
 
 impl RuntimeFs {
     /// Build runtime helpers for the canonical workspace root.
     pub(crate) fn new(workspace_root: impl Into<PathBuf>) -> Result<Self, RuntimeError> {
-        Ok(Self { paths: MultorumPaths::new_canonical(workspace_root.into())? })
+        Self::with_vcs(workspace_root, Arc::new(GitVcs::new()))
+    }
+
+    /// Build runtime helpers for the canonical workspace root with one
+    /// explicit repository backend.
+    pub(crate) fn with_vcs(
+        workspace_root: impl Into<PathBuf>, vcs: Arc<dyn VersionControl>,
+    ) -> Result<Self, RuntimeError> {
+        Ok(Self { paths: MultorumPaths::new_canonical(workspace_root.into())?, vcs })
     }
 
     /// The canonical workspace root.
@@ -55,6 +66,39 @@ impl RuntimeFs {
     /// Deterministic worktree-local runtime paths for one perspective.
     pub(crate) fn worker_paths(&self, perspective: &PerspectiveName) -> WorkerPaths {
         self.paths.worker(perspective)
+    }
+
+    /// Repository backend bound to the current workspace.
+    pub(crate) fn vcs(&self) -> &dyn VersionControl {
+        self.vcs.as_ref()
+    }
+
+    /// Run one shell-based rulebook check in a worktree.
+    pub(crate) fn run_check(
+        &self, worktree_root: &Path, name: &CheckName, command_text: &str,
+    ) -> Result<(), RuntimeError> {
+        tracing::debug!(
+            check = %name,
+            command = command_text,
+            root = %worktree_root.display(),
+            "running pre-merge check"
+        );
+
+        let output =
+            Command::new("sh").arg("-lc").arg(command_text).current_dir(worktree_root).output()?;
+
+        if output.status.success() {
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let details = if stderr.trim().is_empty() {
+            stdout.trim().to_owned()
+        } else {
+            stderr.trim().to_owned()
+        };
+        Err(RuntimeError::CheckFailed(format!("{name}: {details}")))
     }
 }
 

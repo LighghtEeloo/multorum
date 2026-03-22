@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::perspective::{CompiledPerspective, PerspectiveName};
-use crate::rulebook::{CompiledRulebook, Rulebook};
+use crate::rulebook::{CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook};
 use crate::runtime::{
     CanonicalCommitHash, RulebookInit, RuntimeError, WorkerContractView, WorkerPaths,
 };
@@ -68,8 +68,12 @@ impl RuntimeFs {
     pub(crate) fn load_compiled_rulebook(
         &self, commit: &CanonicalCommitHash,
     ) -> Result<CompiledRulebook, RuntimeError> {
-        let rulebook_text = self.git_show_rulebook(commit)?;
-        let files = self.git_list_files(commit)?;
+        let rulebook_text = self.vcs().show_file_at_commit(
+            self.workspace_root(),
+            commit,
+            Path::new(RULEBOOK_RELATIVE_PATH),
+        )?;
+        let files = self.vcs().list_files_at_commit(self.workspace_root(), commit)?;
         let rulebook = Rulebook::from_toml_str(&rulebook_text)?;
         rulebook.compile(&files).map_err(RuntimeError::from)
     }
@@ -159,8 +163,7 @@ impl RuntimeFs {
         Self::write_path_list(&worker_paths.read_set(), perspective.read())?;
         Self::write_path_list(&worker_paths.write_set(), perspective.write())?;
 
-        self.install_worker_exclude(worker_paths.worktree_root())?;
-        self.install_pre_commit_hook(worker_paths.worktree_root())?;
+        self.vcs().install_worker_runtime_support(worker_paths.worktree_root())?;
         Ok(())
     }
 

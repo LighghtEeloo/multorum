@@ -6,8 +6,10 @@
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::perspective::PerspectiveName;
+use crate::vcs::VersionControl;
 
 use super::{
     CanonicalCommitHash, MailboxDirection, MultorumPaths,
@@ -77,8 +79,8 @@ pub trait OrchestratorService {
 ///
 /// The canonical `.multorum/` tree under the workspace root remains the
 /// source of truth. This service validates operations, projects their
-/// effects into runtime files, and delegates repository actions to git
-/// where required by the design.
+/// effects into runtime files, and delegates repository actions to the
+/// configured version-control backend where required by the design.
 #[derive(Debug, Clone)]
 pub struct FsOrchestratorService {
     fs: RuntimeFs,
@@ -88,6 +90,14 @@ impl FsOrchestratorService {
     /// Construct the orchestrator service for a workspace root.
     pub fn new(workspace_root: impl Into<PathBuf>) -> Result<Self> {
         Ok(Self { fs: RuntimeFs::new(workspace_root.into())? })
+    }
+
+    /// Construct the orchestrator service for a workspace root with an
+    /// explicit repository backend.
+    pub fn with_vcs(
+        workspace_root: impl Into<PathBuf>, vcs: Arc<dyn VersionControl>,
+    ) -> Result<Self> {
+        Ok(Self { fs: RuntimeFs::with_vcs(workspace_root.into(), vcs)? })
     }
 
     /// Construct the orchestrator service from the current directory.
@@ -186,14 +196,20 @@ impl OrchestratorService for FsOrchestratorService {
     }
 
     fn rulebook_validate(&self, commit: String) -> Result<RulebookValidation> {
-        let commit =
-            self.fs.resolve_commit(self.fs.workspace_root(), &commit, "resolve rulebook commit")?;
+        let commit = self.fs.vcs().resolve_commit(
+            self.fs.workspace_root(),
+            &commit,
+            "resolve rulebook commit",
+        )?;
         self.validate_rulebook_commit(&commit)
     }
 
     fn rulebook_switch(&self, commit: String) -> Result<RulebookSwitch> {
-        let commit =
-            self.fs.resolve_commit(self.fs.workspace_root(), &commit, "resolve rulebook commit")?;
+        let commit = self.fs.vcs().resolve_commit(
+            self.fs.workspace_root(),
+            &commit,
+            "resolve rulebook commit",
+        )?;
         let validation = self.validate_rulebook_commit(&commit)?;
         if !validation.ok {
             return Err(RuntimeError::RulebookConflict {
@@ -229,7 +245,11 @@ impl OrchestratorService for FsOrchestratorService {
             .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?;
 
         let worktree_path = self.fs.worker_paths(&perspective).worktree_root().to_path_buf();
-        self.fs.add_worktree(&worktree_path, &active.base_commit)?;
+        self.fs.vcs().create_worktree(
+            self.fs.workspace_root(),
+            &worktree_path,
+            &active.base_commit,
+        )?;
 
         let record = WorkerRecord {
             perspective: perspective.clone(),
@@ -295,7 +315,7 @@ impl OrchestratorService for FsOrchestratorService {
             });
         }
 
-        self.fs.remove_worktree(&record.worktree_path)?;
+        self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
         record.state = WorkerState::Discarded;
         record.submitted_head_commit = None;
         self.fs.store_worker_record(&record)?;
@@ -322,13 +342,13 @@ impl OrchestratorService for FsOrchestratorService {
                 state: record.state,
             }
         })?;
-        let head_commit = self.fs.resolve_commit(
+        let head_commit = self.fs.vcs().resolve_commit(
             &record.worktree_path,
             head_commit.as_str(),
             "verify submitted worker commit",
         )?;
 
-        let worker_head = self.fs.git_head(&record.worktree_path)?;
+        let worker_head = self.fs.vcs().head_commit(&record.worktree_path)?;
         if worker_head != head_commit {
             return Err(RuntimeError::WorkerHeadMismatch {
                 perspective: perspective.clone(),
@@ -339,8 +359,11 @@ impl OrchestratorService for FsOrchestratorService {
 
         let worker_rulebook = self.fs.load_compiled_rulebook(&record.rulebook_commit)?;
         let allowed_skips = validate_skip_request(&worker_rulebook, &skip_checks)?;
-        let changed_files =
-            self.fs.git_changed_files(&record.worktree_path, &record.base_commit, &head_commit)?;
+        let changed_files = self.fs.vcs().changed_files(
+            &record.worktree_path,
+            &record.base_commit,
+            &head_commit,
+        )?;
         let write_set =
             RuntimeFs::read_path_list(&self.fs.worker_paths(&record.perspective).write_set())?;
         let violations = changed_files.difference(&write_set).cloned().collect::<BTreeSet<_>>();
@@ -370,9 +393,9 @@ impl OrchestratorService for FsOrchestratorService {
             ran_checks.push(check_name.to_string());
         }
 
-        self.fs.ensure_clean_workspace()?;
-        self.fs.cherry_pick(&head_commit)?;
-        self.fs.remove_worktree(&record.worktree_path)?;
+        self.fs.vcs().ensure_clean_workspace(self.fs.workspace_root())?;
+        self.fs.vcs().integrate_commit(self.fs.workspace_root(), &head_commit)?;
+        self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
 
         record.state = WorkerState::Integrated;
         self.fs.store_worker_record(&record)?;
