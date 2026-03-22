@@ -33,6 +33,10 @@ use super::{
 /// used for mailbox routing and filesystem placement. When `worker_id`
 /// is `None`, Multorum allocates the default perspective-based worker
 /// id automatically.
+///
+/// Note: Explicit worker ids may be reused after a previous worker with
+/// the same id reaches a finalized state. Provisioning then replaces the
+/// persisted projection with a fresh active worker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProvisionWorker {
     /// Perspective to instantiate.
@@ -245,13 +249,15 @@ impl FsOrchestratorService {
         &self, perspective: &PerspectiveName, worker_id: Option<WorkerId>,
     ) -> Result<WorkerId> {
         if let Some(worker_id) = worker_id {
-            if self
+            if let Some(record) = self
                 .fs
                 .list_worker_records()?
                 .into_iter()
-                .any(|record| record.worker_id == worker_id)
+                .find(|record| record.worker_id == worker_id)
             {
-                return Err(RuntimeError::WorkerIdExists(worker_id));
+                if is_live_worker_state(record.state) {
+                    return Err(RuntimeError::WorkerIdExists(worker_id));
+                }
             }
             return Ok(worker_id);
         }

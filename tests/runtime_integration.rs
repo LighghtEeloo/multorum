@@ -255,6 +255,56 @@ fn provision_worker_rejects_duplicate_explicit_worker_id() {
 }
 
 #[test]
+fn provision_worker_reuses_explicit_worker_id_after_discard() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+
+    let first = orchestrator
+        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .unwrap();
+    orchestrator.discard_worker(worker_id.clone()).unwrap();
+    assert!(!first.worktree_path.exists());
+
+    let second = orchestrator
+        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .unwrap();
+
+    assert_eq!(second.worker_id, worker_id);
+    assert_eq!(second.state, WorkerState::Active);
+    assert_eq!(second.worktree_path, first.worktree_path);
+    assert!(second.worktree_path.exists());
+    assert_eq!(orchestrator.get_worker(worker_id).unwrap().state, WorkerState::Active);
+}
+
+#[test]
+fn provision_worker_reuses_explicit_worker_id_after_merge() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+
+    let first = orchestrator
+        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .unwrap();
+    let worker = FsWorkerService::new(&first.worktree_path).unwrap();
+    fs::write(first.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 9 }\n").unwrap();
+    git(&first.worktree_path, &["add", "src/owned.rs"]);
+    git(&first.worktree_path, &["commit", "-m", "incr: finalize reused worker id"]);
+    let head_commit = git(&first.worktree_path, &["rev-parse", "HEAD"]);
+    worker.send_commit(head_commit, BundlePayload::default()).unwrap();
+    orchestrator.integrate_worker(worker_id.clone(), Vec::new()).unwrap();
+    assert!(!first.worktree_path.exists());
+
+    let second = orchestrator
+        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .unwrap();
+
+    assert_eq!(second.worker_id, worker_id);
+    assert_eq!(second.state, WorkerState::Active);
+    assert_eq!(second.worktree_path, first.worktree_path);
+    assert!(second.worktree_path.exists());
+    assert_eq!(orchestrator.get_worker(worker_id).unwrap().state, WorkerState::Active);
+}
+
+#[test]
 fn rulebook_switch_canonicalizes_symbolic_revision_before_persistence() {
     let (repo, orchestrator, head) = setup_repo();
 

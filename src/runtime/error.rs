@@ -33,8 +33,8 @@ pub enum RuntimeError {
     #[error("unknown worker: {0}")]
     UnknownWorker(String),
 
-    /// The requested worker id is already present in runtime state.
-    #[error("worker id already exists: {0}")]
+    /// The requested worker id is already held by a live worker.
+    #[error("worker id already belongs to a live worker: {0}")]
     WorkerIdExists(WorkerId),
 
     /// The worker state machine does not permit the requested action.
