@@ -7,6 +7,8 @@ use crate::runtime::RuntimeError;
 pub enum McpErrorCode {
     /// Unknown perspective identifier.
     UnknownPerspective,
+    /// Unknown worker identifier.
+    UnknownWorker,
     /// Invalid state transition for the requested operation.
     InvalidState,
     /// Message bundle not found.
@@ -44,10 +46,13 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::MissingActiveRulebook => McpErrorCode::InvalidState,
             | RuntimeError::RulebookExists(_) => McpErrorCode::InvalidState,
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,
+            | RuntimeError::UnknownWorker(_) => McpErrorCode::UnknownWorker,
             | RuntimeError::InvalidState { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,
             | RuntimeError::AlreadyAcknowledged => McpErrorCode::AlreadyAcknowledged,
             | RuntimeError::RulebookConflict { .. } => McpErrorCode::RulebookConflict,
+            | RuntimeError::SafetyConflict { .. }
+            | RuntimeError::BiddingGroupBoundaryMismatch { .. }
             | RuntimeError::CheckFailed(_) => McpErrorCode::CheckFailed,
             | RuntimeError::WriteSetViolation { .. } => McpErrorCode::WriteSetViolation,
             | RuntimeError::MailboxConflict => McpErrorCode::MailboxConflict,

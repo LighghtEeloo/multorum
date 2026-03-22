@@ -1,6 +1,6 @@
 //! MCP server operating modes.
 
-use crate::perspective::PerspectiveName;
+use crate::runtime::WorkerId;
 
 /// MCP server mode.
 ///
@@ -10,6 +10,6 @@ use crate::perspective::PerspectiveName;
 pub enum McpMode {
     /// Main-workspace orchestrator server.
     Orchestrator,
-    /// Worker-local server scoped to one provisioned perspective.
-    Worker { perspective: PerspectiveName },
+    /// Worker-local server scoped to one provisioned worker.
+    Worker { worker_id: WorkerId },
 }

@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::perspective::{CompiledPerspective, PerspectiveName};
+use crate::perspective::CompiledPerspective;
 use crate::rulebook::{CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook};
-use crate::runtime::{RulebookInit, RuntimeError, WorkerContractView, WorkerPaths};
+use crate::runtime::{RulebookInit, RuntimeError, WorkerContractView, WorkerId, WorkerPaths};
 use crate::vcs::CanonicalCommitHash;
 
 use super::{ActiveRulebookRecord, RuntimeFs, STATE_FILE_NAME, WorkerRecord};
@@ -88,18 +88,18 @@ impl RuntimeFs {
 
     /// Load one worker projection.
     pub(crate) fn load_worker_record(
-        &self, perspective: &PerspectiveName,
+        &self, worker_id: &WorkerId,
     ) -> Result<WorkerRecord, RuntimeError> {
-        let path = self.paths.orchestrator().worker_state(perspective);
+        let path = self.paths.orchestrator().worker_state(worker_id);
         if !path.exists() {
-            return Err(RuntimeError::UnknownPerspective(perspective.to_string()));
+            return Err(RuntimeError::UnknownWorker(worker_id.to_string()));
         }
         Self::read_toml(&path)
     }
 
     /// Persist one worker projection.
     pub(crate) fn store_worker_record(&self, record: &WorkerRecord) -> Result<(), RuntimeError> {
-        let dir = self.paths.orchestrator().worker(&record.perspective);
+        let dir = self.paths.orchestrator().worker(&record.worker_id);
         fs::create_dir_all(&dir)?;
         Self::write_toml(&dir.join(STATE_FILE_NAME), record)
     }
@@ -123,7 +123,7 @@ impl RuntimeFs {
             }
         }
         workers.sort_by(|left: &WorkerRecord, right: &WorkerRecord| {
-            left.perspective.cmp(&right.perspective)
+            left.worker_id.cmp(&right.worker_id)
         });
         Ok(workers)
     }
@@ -152,6 +152,8 @@ impl RuntimeFs {
         fs::create_dir_all(worker_paths.artifacts())?;
 
         let contract = WorkerContractView {
+            worker_id: record.worker_id.clone(),
+            bidding_group: record.bidding_group.clone(),
             perspective: record.perspective.clone(),
             rulebook_commit: record.rulebook_commit.clone(),
             base_commit: record.base_commit.clone(),

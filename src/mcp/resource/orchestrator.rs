@@ -22,16 +22,16 @@ pub fn descriptors() -> Vec<ResourceDescriptor> {
             description: "Worker summary listing for the current runtime.",
         },
         ResourceDescriptor {
-            uri: "multorum://orchestrator/workers/{perspective}/contract",
-            description: "Worker contract projection for one perspective.",
+            uri: "multorum://orchestrator/workers/{worker}/contract",
+            description: "Worker contract projection for one worker.",
         },
         ResourceDescriptor {
-            uri: "multorum://orchestrator/workers/{perspective}/transcript",
-            description: "Normalized transcript view for one perspective.",
+            uri: "multorum://orchestrator/workers/{worker}/transcript",
+            description: "Normalized transcript view for one worker.",
         },
         ResourceDescriptor {
-            uri: "multorum://orchestrator/workers/{perspective}/checks",
-            description: "Integration and pre-merge check results for one perspective.",
+            uri: "multorum://orchestrator/workers/{worker}/checks",
+            description: "Integration and pre-merge check results for one worker.",
         },
     ]
 }

@@ -14,6 +14,7 @@ pub mod paths;
 pub mod projection;
 pub mod state;
 pub mod worker;
+pub mod worker_id;
 
 pub use bundle::{
     BundleEnvelope, BundlePayload, MessageKind, MessageRef, PublishedBundle, ReplyReference,
@@ -30,3 +31,4 @@ pub use state::{
     WorkerState, WorkerStatus, WorkerSummary,
 };
 pub use worker::{FsWorkerService, WorkerService};
+pub use worker_id::{WorkerId, WorkerIdError};

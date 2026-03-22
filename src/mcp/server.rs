@@ -3,7 +3,7 @@
 //! This module assembles the tool and resource surfaces for a given mode.
 //! The real protocol transport can wrap this facade later.
 
-use crate::perspective::PerspectiveName;
+use crate::runtime::WorkerId;
 
 use super::{
     dto::{ResourceDescriptor, ToolDescriptor},
@@ -32,10 +32,10 @@ impl McpServer {
         }
     }
 
-    /// Construct the worker MCP surface for one perspective.
-    pub fn worker(perspective: PerspectiveName) -> Self {
+    /// Construct the worker MCP surface for one worker.
+    pub fn worker(worker_id: WorkerId) -> Self {
         Self {
-            mode: McpMode::Worker { perspective },
+            mode: McpMode::Worker { worker_id },
             tools: tool::worker::descriptors(),
             resources: resource::worker::descriptors(),
         }

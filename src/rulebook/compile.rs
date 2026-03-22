@@ -16,7 +16,7 @@ use super::error::RulebookError;
 /// ## Invariant
 ///
 /// - `filesets` is the compiled output of the raw file set algebra.
-/// - `perspectives` has already passed the safety validator.
+/// - `perspectives` contains concrete read/write sets for each declared perspective.
 /// - `checks` has already passed pipeline validation.
 #[derive(Debug, Clone)]
 pub struct CompiledRulebook {
@@ -89,7 +89,6 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::perspective::PerspectiveError;
     use crate::rulebook::{CheckName, CheckPolicy, Rulebook};
 
     fn design_rulebook() -> Rulebook {
@@ -189,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn compile_surfaces_perspective_safety_violations() {
+    fn compile_allows_overlapping_perspectives() {
         let rulebook = Rulebook::from_toml_str(
             r#"
             [filesets]
@@ -210,8 +209,8 @@ mod tests {
         )
         .unwrap();
 
-        let err = rulebook.compile(&design_files()).unwrap_err();
-        assert!(matches!(err, RulebookError::Perspective(PerspectiveError::Safety(_))));
+        let compiled = rulebook.compile(&design_files()).unwrap();
+        assert_eq!(compiled.perspectives().len(), 2);
     }
 
     #[test]

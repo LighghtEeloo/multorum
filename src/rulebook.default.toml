@@ -4,7 +4,7 @@
 
 # Add one table per perspective under `[perspectives.<Name>]`.
 # `write` names the files that perspective may modify.
-# `read` names stable context files that no other perspective may write.
+# `read` names stable context files that concurrent work must not write.
 [perspectives]
 
 # Add pre-merge gates in execution order.

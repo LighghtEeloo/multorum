@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
+use super::worker_id::WorkerId;
 use super::{Sequence, bundle::MessageKind, mailbox::MailboxDirection};
 
 /// Worker lifecycle state as projected by Multorum.
@@ -47,8 +48,8 @@ pub struct PerspectiveSummary {
 pub struct RulebookValidation {
     /// `true` if the target rulebook may be activated.
     pub ok: bool,
-    /// Perspectives currently blocking the switch.
-    pub blocking_workers: Vec<PerspectiveName>,
+    /// Bidding groups currently blocking the switch.
+    pub blocking_bidding_groups: Vec<PerspectiveName>,
 }
 
 /// Result of activating a rulebook switch.
@@ -73,6 +74,10 @@ pub struct RulebookInit {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProvisionResult {
     /// Provisioned worker identity.
+    pub worker_id: WorkerId,
+    /// Bidding group joined by the provisioned worker.
+    pub bidding_group: PerspectiveName,
+    /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
     /// Absolute path to the worker worktree.
     pub worktree_path: PathBuf,
@@ -86,6 +91,10 @@ pub struct ProvisionResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DiscardResult {
     /// Discarded worker identity.
+    pub worker_id: WorkerId,
+    /// Bidding group from which the worker was discarded.
+    pub bidding_group: PerspectiveName,
+    /// Perspective held by the worker.
     pub perspective: PerspectiveName,
     /// Final worker state.
     pub state: WorkerState,
@@ -95,6 +104,10 @@ pub struct DiscardResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct IntegrateResult {
     /// Integrated worker identity.
+    pub worker_id: WorkerId,
+    /// Bidding group selected for integration.
+    pub bidding_group: PerspectiveName,
+    /// Perspective held by the integrated worker.
     pub perspective: PerspectiveName,
     /// Final worker state.
     pub state: WorkerState,
@@ -117,6 +130,10 @@ pub struct OrchestratorStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkerSummary {
     /// Worker identity.
+    pub worker_id: WorkerId,
+    /// Bidding group to which the worker belongs.
+    pub bidding_group: PerspectiveName,
+    /// Perspective held by the worker.
     pub perspective: PerspectiveName,
     /// Current projected lifecycle state.
     pub state: WorkerState,
@@ -126,6 +143,10 @@ pub struct WorkerSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkerStatus {
     /// Worker identity.
+    pub worker_id: WorkerId,
+    /// Bidding group to which the worker belongs.
+    pub bidding_group: PerspectiveName,
+    /// Perspective held by the worker.
     pub perspective: PerspectiveName,
     /// Current projected lifecycle state.
     pub state: WorkerState,
@@ -135,6 +156,10 @@ pub struct WorkerStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkerContractView {
     /// Worker identity.
+    pub worker_id: WorkerId,
+    /// Bidding group to which the worker belongs.
+    pub bidding_group: PerspectiveName,
+    /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
     /// Canonical rulebook commit governing the worker.
     pub rulebook_commit: CanonicalCommitHash,
@@ -150,6 +175,10 @@ pub struct WorkerContractView {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MailboxMessageView {
     /// Worker identity that owns the mailbox.
+    pub worker_id: WorkerId,
+    /// Bidding group to which the worker belongs.
+    pub bidding_group: PerspectiveName,
+    /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
     /// Direction of the mailbox containing the message.
     pub direction: MailboxDirection,

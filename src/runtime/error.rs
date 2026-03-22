@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::perspective::PerspectiveName;
+use crate::runtime::WorkerId;
 use crate::vcs::CanonicalCommitHash;
 
 use super::state::WorkerState;
@@ -27,6 +28,10 @@ pub enum RuntimeError {
     /// or runtime state.
     #[error("unknown perspective: {0}")]
     UnknownPerspective(String),
+
+    /// The requested worker does not exist in runtime state.
+    #[error("unknown worker: {0}")]
+    UnknownWorker(String),
 
     /// The worker state machine does not permit the requested action.
     #[error(
@@ -52,14 +57,40 @@ pub enum RuntimeError {
 
     /// The requested rulebook switch conflicts with active workers.
     #[error(
-        "cannot activate rulebook commit `{commit}` while workers are still live: {blocking_workers}",
-        blocking_workers = format_perspectives(blocking_workers)
+        "cannot activate rulebook commit `{commit}` while bidding groups are still live: {blocking_bidding_groups}",
+        blocking_bidding_groups = format_perspectives(blocking_bidding_groups)
     )]
     RulebookConflict {
         /// Canonical rulebook commit the caller attempted to activate.
         commit: CanonicalCommitHash,
-        /// Live workers that still depend on the current rulebook.
-        blocking_workers: Vec<PerspectiveName>,
+        /// Live bidding groups that still depend on the current rulebook.
+        blocking_bidding_groups: Vec<PerspectiveName>,
+    },
+
+    /// A candidate bidding group conflicts with active runtime state.
+    #[error(
+        "cannot provision perspective `{perspective}` because active bidding group `{blocking_group}` has a {relation}: {files}",
+        files = format_paths(files)
+    )]
+    SafetyConflict {
+        /// Perspective being provisioned.
+        perspective: PerspectiveName,
+        /// Active bidding group that blocks the candidate boundary.
+        blocking_group: PerspectiveName,
+        /// Human-readable description of the overlap relation.
+        relation: &'static str,
+        /// Overlapping files.
+        files: Vec<PathBuf>,
+    },
+
+    /// A worker attempted to join an existing bidding group with a
+    /// different compiled boundary.
+    #[error(
+        "compiled boundary for perspective `{perspective}` no longer matches its active bidding group"
+    )]
+    BiddingGroupBoundaryMismatch {
+        /// Perspective whose compiled boundary drifted from runtime.
+        perspective: PerspectiveName,
     },
 
     /// A pre-merge or lifecycle check failed.
@@ -68,11 +99,13 @@ pub enum RuntimeError {
 
     /// The worker touched files outside its compiled write set.
     #[error(
-        "write-set violation for perspective `{perspective}` between `{base_commit}` and `{head_commit}`: {violations}",
+        "write-set violation for worker `{worker_id}` (`{perspective}`) between `{base_commit}` and `{head_commit}`: {violations}",
         violations = format_paths(violations)
     )]
     WriteSetViolation {
         /// Worker whose submission touched unauthorized paths.
+        worker_id: WorkerId,
+        /// Perspective instantiated by the worker.
         perspective: PerspectiveName,
         /// Canonical base commit from which the worker was provisioned.
         base_commit: CanonicalCommitHash,
@@ -93,12 +126,12 @@ pub enum RuntimeError {
     /// A worker submission expected a recorded head commit, but the
     /// worker record did not contain one.
     #[error(
-        "worker `{perspective}` is in state {state} but has no submitted head commit recorded",
+        "worker `{worker_id}` is in state {state} but has no submitted head commit recorded",
         state = worker_state_name(*state)
     )]
     MissingSubmittedHeadCommit {
         /// Worker whose committed submission lost its recorded head.
-        perspective: PerspectiveName,
+        worker_id: WorkerId,
         /// Worker state observed when the missing head was detected.
         state: WorkerState,
     },
@@ -106,11 +139,11 @@ pub enum RuntimeError {
     /// A worker worktree moved away from the submitted commit before
     /// integration started.
     #[error(
-        "worker `{perspective}` head changed after submission: submitted `{submitted_head_commit}`, current `{current_head_commit}`"
+        "worker `{worker_id}` head changed after submission: submitted `{submitted_head_commit}`, current `{current_head_commit}`"
     )]
     WorkerHeadMismatch {
         /// Worker whose worktree head changed unexpectedly.
-        perspective: PerspectiveName,
+        worker_id: WorkerId,
         /// Canonical commit hash recorded in the worker submission.
         submitted_head_commit: CanonicalCommitHash,
         /// Canonical commit hash currently checked out in the worker worktree.

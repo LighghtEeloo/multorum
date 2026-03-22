@@ -26,6 +26,7 @@ impl RuntimeFs {
     /// Publish a mailbox bundle and transfer any path-backed payloads.
     pub(crate) fn publish_bundle(
         &self, worktree_root: &Path, direction: MailboxDirection, kind: MessageKind,
+        worker_id: &crate::runtime::WorkerId, bidding_group: &crate::perspective::PerspectiveName,
         perspective: &crate::perspective::PerspectiveName, reply: ReplyReference,
         head_commit: Option<CanonicalCommitHash>, payload: BundlePayload,
     ) -> Result<PublishedBundle, RuntimeError> {
@@ -51,6 +52,8 @@ impl RuntimeFs {
 
         let envelope = BundleEnvelope {
             protocol: PROTOCOL_VERSION,
+            worker_id: worker_id.clone(),
+            bidding_group: bidding_group.clone(),
             perspective: perspective.clone(),
             kind,
             sequence,
@@ -69,14 +72,14 @@ impl RuntimeFs {
         fs::rename(&temp_dir, &final_dir)?;
 
         Ok(PublishedBundle {
-            message: MessageRef { perspective: perspective.clone(), kind, sequence },
+            message: MessageRef { worker_id: worker_id.clone(), kind, sequence },
             bundle_path: final_dir,
         })
     }
 
     /// Read mailbox bundles after an optional sequence threshold.
     pub(crate) fn list_mailbox_messages(
-        &self, worktree_root: &Path, perspective: &crate::perspective::PerspectiveName,
+        &self, worktree_root: &Path, worker_id: &crate::runtime::WorkerId,
         direction: MailboxDirection, after: Option<Sequence>,
     ) -> Result<Vec<MailboxMessageView>, RuntimeError> {
         let worker_paths = WorkerPaths::new(worktree_root.to_path_buf());
@@ -109,7 +112,9 @@ impl RuntimeFs {
 
             let acknowledged = ack_root.join(Self::ack_file_name(envelope.sequence)).exists();
             messages.push(MailboxMessageView {
-                perspective: perspective.clone(),
+                worker_id: worker_id.clone(),
+                bidding_group: envelope.bidding_group.clone(),
+                perspective: envelope.perspective.clone(),
                 direction,
                 kind: envelope.kind,
                 sequence: envelope.sequence,
@@ -145,11 +150,7 @@ impl RuntimeFs {
         file.write_all(toml::to_string(&ack)?.as_bytes())?;
 
         Ok(AckRef {
-            message: MessageRef {
-                perspective: envelope.perspective,
-                kind: envelope.kind,
-                sequence,
-            },
+            message: MessageRef { worker_id: envelope.worker_id, kind: envelope.kind, sequence },
             sequence,
         })
     }

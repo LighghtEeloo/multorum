@@ -1,15 +1,14 @@
 //! Safety property validation for compiled perspectives.
 //!
-//! The safety property requires that for any two distinct perspectives
+//! The safety property requires that for any two distinct boundaries
 //! P and Q:
 //!
 //! - `write(P) ∩ write(Q) = ∅` — write sets are pairwise disjoint.
 //! - `write(P) ∩ read(Q) = ∅` — no file is written by one and read
 //!   by another.
 //!
-//! Validation runs after compilation and before the result is exposed
-//! to callers, so [`CompiledPerspectives`](super::CompiledPerspectives)
-//! always satisfies the safety property by construction.
+//! Runtime code uses this helper when it needs to compare concrete
+//! perspective or bidding-group boundaries.
 
 use std::collections::BTreeMap;
 
@@ -17,7 +16,7 @@ use super::compile::CompiledPerspective;
 use super::error::SafetyViolation;
 use super::name::PerspectiveName;
 
-/// Validates the safety property across a set of compiled perspectives.
+/// Validates the safety property across a set of compiled boundaries.
 pub struct SafetyValidator<'a> {
     perspectives: &'a BTreeMap<PerspectiveName, CompiledPerspective>,
 }

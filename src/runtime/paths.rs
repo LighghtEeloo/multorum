@@ -6,9 +6,7 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-use crate::perspective::PerspectiveName;
-
-use super::{MailboxDirection, RuntimeError};
+use super::{MailboxDirection, RuntimeError, WorkerId};
 
 /// Root path helper for a Multorum workspace.
 #[derive(Debug, Clone)]
@@ -73,8 +71,8 @@ impl MultorumPaths {
     }
 
     /// Path helper for the managed worker worktree.
-    pub fn worker(&self, perspective: &PerspectiveName) -> WorkerPaths {
-        WorkerPaths::new(self.multorum_root().join("worktrees").join(perspective.as_str()))
+    pub fn worker(&self, worker_id: &WorkerId) -> WorkerPaths {
+        WorkerPaths::new(self.multorum_root().join("worktrees").join(worker_id.as_str()))
     }
 }
 
@@ -109,13 +107,13 @@ impl OrchestratorPaths {
     }
 
     /// Worker-specific projection directory.
-    pub fn worker(&self, perspective: &PerspectiveName) -> PathBuf {
-        self.workers().join(perspective.as_str())
+    pub fn worker(&self, worker_id: &WorkerId) -> PathBuf {
+        self.workers().join(worker_id.as_str())
     }
 
     /// Worker state projection file.
-    pub fn worker_state(&self, perspective: &PerspectiveName) -> PathBuf {
-        self.worker(perspective).join("state.toml")
+    pub fn worker_state(&self, worker_id: &WorkerId) -> PathBuf {
+        self.worker(worker_id).join("state.toml")
     }
 
     /// Audit log directory.

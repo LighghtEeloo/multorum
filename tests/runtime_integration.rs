@@ -151,7 +151,7 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     fs::write(&resolve_body, "Use the existing API shape.\n").unwrap();
     orchestrator
         .resolve_worker(
-            perspective(),
+            provision.worker_id.clone(),
             ReplyReference { in_reply_to: Some(report.message.sequence) },
             BundlePayload { body_path: Some(resolve_body.clone()), ..BundlePayload::default() },
         )
@@ -181,7 +181,8 @@ fn integrate_worker_cherry_picks_allowed_changes() {
     worker.send_commit(head_commit.clone(), BundlePayload::default()).unwrap();
     assert_eq!(worker.status().unwrap().state, WorkerState::Committed);
 
-    let integration = orchestrator.integrate_worker(perspective(), Vec::new()).unwrap();
+    let integration =
+        orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap();
     assert_eq!(integration.state, WorkerState::Integrated);
     assert!(integration.ran_checks.is_empty());
     assert!(!provision.worktree_path.exists(), "integrated worktree should be removed");
@@ -189,6 +190,31 @@ fn integrate_worker_cherry_picks_allowed_changes() {
         fs::read_to_string(repo.path().join("src/owned.rs")).unwrap(),
         "pub fn owned() -> i32 { 3 }\n"
     );
+}
+
+#[test]
+fn same_perspective_can_spawn_multiple_workers_and_close_the_group_on_integration() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let first = orchestrator.provision_worker(perspective(), None).unwrap();
+    let second = orchestrator.provision_worker(perspective(), None).unwrap();
+
+    assert_ne!(first.worker_id, second.worker_id);
+    assert_eq!(first.bidding_group, second.bidding_group);
+    assert_eq!(first.perspective, second.perspective);
+    assert_eq!(orchestrator.status().unwrap().workers.len(), 2);
+
+    let worker = FsWorkerService::new(&first.worktree_path).unwrap();
+    fs::write(first.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 5 }\n").unwrap();
+    git(&first.worktree_path, &["add", "src/owned.rs"]);
+    git(&first.worktree_path, &["commit", "-m", "incr: choose one bidder"]);
+    let head_commit = git(&first.worktree_path, &["rev-parse", "HEAD"]);
+
+    worker.send_commit(head_commit, BundlePayload::default()).unwrap();
+    orchestrator.integrate_worker(first.worker_id.clone(), Vec::new()).unwrap();
+
+    assert!(!first.worktree_path.exists(), "integrated worktree should be removed");
+    assert!(!second.worktree_path.exists(), "sibling worktree should be discarded");
+    assert!(orchestrator.status().unwrap().workers.is_empty());
 }
 
 #[test]
@@ -230,13 +256,16 @@ fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() 
             .unwrap()
             .parent()
             .unwrap()
-            .join("orchestrator/workers/AuthImplementor/state.toml"),
+            .join("orchestrator/workers")
+            .join(provision.worker_id.as_str())
+            .join("state.toml"),
     )
     .unwrap();
     let worker_state: Value = toml::from_str(&worker_state).unwrap();
     assert_eq!(worker_state["submitted_head_commit"].as_str(), Some(head_commit.as_str()));
 
-    let integration = orchestrator.integrate_worker(perspective(), Vec::new()).unwrap();
+    let integration =
+        orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap();
     assert_eq!(integration.state, WorkerState::Integrated);
 }
 
@@ -261,7 +290,8 @@ fn send_commit_canonicalizes_short_hash_before_storage_and_integration() {
     let outbox_envelope: Value = toml::from_str(&outbox_envelope).unwrap();
     assert_eq!(outbox_envelope["head_commit"].as_str(), Some(head_commit.as_str()));
 
-    let integration = orchestrator.integrate_worker(perspective(), Vec::new()).unwrap();
+    let integration =
+        orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap();
     assert_eq!(integration.state, WorkerState::Integrated);
 }
 
@@ -307,10 +337,11 @@ fn integrate_rejects_paths_outside_the_compiled_write_set() {
     let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
     worker.send_commit(head_commit.clone(), BundlePayload::default()).unwrap();
-    let error = orchestrator.integrate_worker(perspective(), Vec::new()).unwrap_err();
+    let error = orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap_err();
     assert!(matches!(
         error,
         RuntimeError::WriteSetViolation {
+            worker_id: _,
             perspective: actual_perspective,
             base_commit: actual_base_commit,
             head_commit: actual_head_commit,
@@ -341,15 +372,14 @@ fn integrate_rejects_when_worker_head_moves_after_submission() {
     git(&provision.worktree_path, &["commit", "-m", "incr: move worker head after submission"]);
     let current_head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
-    let error = orchestrator.integrate_worker(perspective(), Vec::new()).unwrap_err();
+    let error = orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap_err();
     assert!(matches!(
         error,
         RuntimeError::WorkerHeadMismatch {
-            perspective: actual_perspective,
+            worker_id: _,
             submitted_head_commit: actual_submitted_head_commit,
             current_head_commit: actual_current_head_commit,
-        } if actual_perspective == perspective()
-            && actual_submitted_head_commit.as_str() == submitted_head_commit
+        } if actual_submitted_head_commit.as_str() == submitted_head_commit
             && actual_current_head_commit.as_str() == current_head_commit
     ));
 }

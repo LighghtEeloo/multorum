@@ -91,7 +91,7 @@ impl FsWorkerService {
     }
 
     fn update_state_after_ack(&self, message: &AckRef) -> Result<()> {
-        let mut record = self.fs.load_worker_record(&message.message.perspective)?;
+        let mut record = self.fs.load_worker_record(&message.message.worker_id)?;
         if record.worktree_path != self.worktree_root {
             return Err(RuntimeError::MissingWorkerRuntime(
                 self.worktree_root.display().to_string(),
@@ -113,7 +113,7 @@ impl FsWorkerService {
         &self, state: WorkerState, head_commit: Option<CanonicalCommitHash>,
     ) -> Result<()> {
         let contract = self.contract_view()?;
-        let mut record = self.fs.load_worker_record(&contract.perspective)?;
+        let mut record = self.fs.load_worker_record(&contract.worker_id)?;
         if !can_submit_from_state(record.state) {
             return Err(RuntimeError::InvalidState {
                 operation: "publish worker submission",
@@ -136,7 +136,7 @@ impl WorkerService for FsWorkerService {
         let contract = self.contract_view()?;
         self.fs.list_mailbox_messages(
             &self.worktree_root,
-            &contract.perspective,
+            &contract.worker_id,
             MailboxDirection::Inbox,
             after,
         )
@@ -167,6 +167,8 @@ impl WorkerService for FsWorkerService {
             &self.worktree_root,
             MailboxDirection::Outbox,
             MessageKind::Report,
+            &contract.worker_id,
+            &contract.bidding_group,
             &contract.perspective,
             reply,
             head_commit,
@@ -187,6 +189,8 @@ impl WorkerService for FsWorkerService {
             &self.worktree_root,
             MailboxDirection::Outbox,
             MessageKind::Commit,
+            &contract.worker_id,
+            &contract.bidding_group,
             &contract.perspective,
             ReplyReference::default(),
             Some(head_commit.clone()),
@@ -198,7 +202,12 @@ impl WorkerService for FsWorkerService {
 
     fn status(&self) -> Result<WorkerStatus> {
         let contract = self.contract_view()?;
-        let record = self.fs.load_worker_record(&contract.perspective)?;
-        Ok(WorkerStatus { perspective: contract.perspective, state: record.state })
+        let record = self.fs.load_worker_record(&contract.worker_id)?;
+        Ok(WorkerStatus {
+            worker_id: contract.worker_id,
+            bidding_group: contract.bidding_group,
+            perspective: contract.perspective,
+            state: record.state,
+        })
     }
 }

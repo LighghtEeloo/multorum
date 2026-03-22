@@ -23,7 +23,9 @@ use clap::{Args, Parser, Subcommand};
 
 use crate::{
     perspective::PerspectiveName,
-    runtime::{self, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerService},
+    runtime::{
+        self, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerId, WorkerService,
+    },
 };
 
 /// Multorum — multi-perspective conflict-free codebase orchestration.
@@ -156,8 +158,8 @@ pub enum Command {
     /// bundle is acknowledged, the worker transitions from BLOCKED to
     /// ACTIVE.
     Resolve {
-        /// The perspective name of the blocked worker.
-        perspective: PerspectiveName,
+        /// The worker id of the blocked worker.
+        worker_id: WorkerId,
 
         /// Optional payload for the `resolve` bundle.
         #[command(flatten)]
@@ -174,8 +176,8 @@ pub enum Command {
     /// bundle is acknowledged, the worker transitions from COMMITTED
     /// to ACTIVE and resumes with the preserved worktree.
     Revise {
-        /// The perspective name of the committed worker.
-        perspective: PerspectiveName,
+        /// The worker id of the committed worker.
+        worker_id: WorkerId,
 
         /// Optional payload for the `revise` bundle.
         #[command(flatten)]
@@ -191,8 +193,8 @@ pub enum Command {
     /// Valid from ACTIVE or COMMITTED states. The work is abandoned
     /// and the worktree is released. Transitions to DISCARDED.
     Discard {
-        /// The perspective name to discard.
-        perspective: PerspectiveName,
+        /// The worker id to discard.
+        worker_id: WorkerId,
     },
 
     // ── Integration instructions ────────────────────────────────
@@ -203,8 +205,8 @@ pub enum Command {
     /// runs according to check policies and any evidence-based skip
     /// instructions from the orchestrator.
     Integrate {
-        /// The perspective name to integrate.
-        perspective: PerspectiveName,
+        /// The worker id to integrate.
+        worker_id: WorkerId,
 
         /// Checks to skip based on trusted worker evidence.
         ///
@@ -279,9 +281,9 @@ pub enum RulebookCommand {
 
     /// Validate and activate a new rulebook version.
     ///
-    /// Compiles the target rulebook and checks that no file held by an
-    /// active worker's write set conflicts with the new rulebook. If
-    /// valid, the new rulebook becomes active.
+    /// Compiles the target rulebook and checks that no active
+    /// bidding-group boundary conflicts with any candidate boundary in
+    /// the new rulebook. If valid, the new rulebook becomes active.
     Switch {
         /// The git commit hash pinning the rulebook to activate.
         commit: String,
@@ -329,28 +331,28 @@ impl Command {
                 let result = services.orchestrator.provision_worker(perspective, task)?;
                 println!("{result:#?}");
             }
-            | Self::Resolve { perspective, payload, reply } => {
+            | Self::Resolve { worker_id, payload, reply } => {
                 let result = services.orchestrator.resolve_worker(
-                    perspective,
+                    worker_id,
                     reply.into_runtime(),
                     payload.into_runtime(),
                 )?;
                 println!("{result:#?}");
             }
-            | Self::Revise { perspective, payload, reply } => {
+            | Self::Revise { worker_id, payload, reply } => {
                 let result = services.orchestrator.revise_worker(
-                    perspective,
+                    worker_id,
                     reply.into_runtime(),
                     payload.into_runtime(),
                 )?;
                 println!("{result:#?}");
             }
-            | Self::Discard { perspective } => {
-                let result = services.orchestrator.discard_worker(perspective)?;
+            | Self::Discard { worker_id } => {
+                let result = services.orchestrator.discard_worker(worker_id)?;
                 println!("{result:#?}");
             }
-            | Self::Integrate { perspective, skip_checks } => {
-                let result = services.orchestrator.integrate_worker(perspective, skip_checks)?;
+            | Self::Integrate { worker_id, skip_checks } => {
+                let result = services.orchestrator.integrate_worker(worker_id, skip_checks)?;
                 println!("{result:#?}");
             }
             | Self::Commit { head_commit, payload } => {

@@ -16,9 +16,10 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::perspective::PerspectiveName;
 use crate::rulebook::{CheckName, CheckPolicy, CompiledRulebook};
-use crate::runtime::{MessageKind, MultorumPaths, RuntimeError, WorkerPaths, WorkerState};
+use crate::runtime::{
+    MessageKind, MultorumPaths, RuntimeError, WorkerId, WorkerPaths, WorkerState,
+};
 use crate::vcs::{GitVcs, VersionControl};
 
 pub(crate) use records::{AckRecord, ActiveRulebookRecord, WorkerRecord};
@@ -63,9 +64,9 @@ impl RuntimeFs {
         self.paths.workspace_root()
     }
 
-    /// Deterministic worktree-local runtime paths for one perspective.
-    pub(crate) fn worker_paths(&self, perspective: &PerspectiveName) -> WorkerPaths {
-        self.paths.worker(perspective)
+    /// Deterministic worktree-local runtime paths for one worker.
+    pub(crate) fn worker_paths(&self, worker_id: &WorkerId) -> WorkerPaths {
+        self.paths.worker(worker_id)
     }
 
     /// Repository backend bound to the current workspace.
@@ -116,16 +117,6 @@ impl MessageKind {
             | Self::Commit => "commit",
         }
     }
-}
-
-/// Return the union of every read and write path in a compiled rulebook.
-pub(super) fn compiled_rulebook_paths(rulebook: &CompiledRulebook) -> BTreeSet<PathBuf> {
-    let mut paths = BTreeSet::new();
-    for perspective in rulebook.perspectives().perspectives().values() {
-        paths.extend(perspective.read().iter().cloned());
-        paths.extend(perspective.write().iter().cloned());
-    }
-    paths
 }
 
 /// Return `true` when a worker still participates in runtime conflict checks.

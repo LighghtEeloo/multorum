@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::perspective::PerspectiveName;
-use crate::runtime::{Sequence, WorkerState};
+use crate::runtime::{Sequence, WorkerId, WorkerState};
 use crate::vcs::CanonicalCommitHash;
 
 /// Active rulebook projection stored under `.multorum/orchestrator/`.
@@ -26,6 +26,10 @@ pub(crate) struct ActiveRulebookRecord {
 /// Orchestrator-local projection for one provisioned worker.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct WorkerRecord {
+    /// Unique worker identity.
+    pub worker_id: WorkerId,
+    /// Bidding group to which the worker belongs.
+    pub bidding_group: PerspectiveName,
     /// Perspective currently held by the worker.
     pub perspective: PerspectiveName,
     /// Current lifecycle state.

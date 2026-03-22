@@ -2,7 +2,8 @@
 //!
 //! Exercises the full path: TOML deserialization of file sets and
 //! perspectives → file set compilation against a real temporary
-//! directory → perspective compilation → safety property validation.
+//! directory → perspective compilation. Runtime-facing safety checks use
+//! the same compiled perspective boundaries later.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -10,7 +11,7 @@ use std::path::PathBuf;
 
 use multorum::fileset::{FileSetTable, enumerate_files};
 use multorum::perspective::{
-    CompiledPerspectives, PerspectiveError, PerspectiveName, PerspectiveTable, SafetyViolation,
+    CompiledPerspectives, PerspectiveName, PerspectiveTable, SafetyValidator, SafetyViolation,
 };
 
 fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
@@ -92,8 +93,9 @@ fn safety_rejects_write_write_overlap() {
         write = "AuthFiles"
     "#;
     let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
-    let err = table.compile(&filesets).unwrap_err();
-    assert!(matches!(err, PerspectiveError::Safety(SafetyViolation::WriteWriteOverlap { .. })));
+    let compiled = table.compile(&filesets).unwrap();
+    let err = SafetyValidator::new(compiled.perspectives()).validate().unwrap_err();
+    assert!(matches!(err, SafetyViolation::WriteWriteOverlap { .. }));
 }
 
 #[test]
@@ -112,8 +114,9 @@ fn safety_rejects_write_read_overlap() {
         write = "SpecFiles"
     "#;
     let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
-    let err = table.compile(&filesets).unwrap_err();
-    assert!(matches!(err, PerspectiveError::Safety(SafetyViolation::WriteReadOverlap { .. })));
+    let compiled = table.compile(&filesets).unwrap();
+    let err = SafetyValidator::new(compiled.perspectives()).validate().unwrap_err();
+    assert!(matches!(err, SafetyViolation::WriteReadOverlap { .. }));
 }
 
 #[test]

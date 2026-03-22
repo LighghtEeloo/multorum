@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::perspective::PerspectiveName;
+use crate::perspective::{CompiledPerspective, PerspectiveName};
 use crate::vcs::{CanonicalCommitHash, VersionControl};
 
 use super::{
@@ -20,9 +20,10 @@ use super::{
         RulebookInit, RulebookSwitch, RulebookValidation, WorkerState, WorkerSummary,
     },
     storage::{
-        ActiveRulebookRecord, RuntimeFs, WorkerRecord, compiled_rulebook_paths,
-        is_live_worker_state, timestamp_now, validate_skip_request,
+        ActiveRulebookRecord, RuntimeFs, WorkerRecord, is_live_worker_state, timestamp_now,
+        validate_skip_request,
     },
+    worker_id::WorkerId,
 };
 
 /// Typed operations available to the orchestrator frontend.
@@ -52,7 +53,7 @@ pub trait OrchestratorService {
     /// Any path-backed payload files are moved into `.multorum/`
     /// storage if publication succeeds.
     fn resolve_worker(
-        &self, perspective: PerspectiveName, reply: ReplyReference, payload: BundlePayload,
+        &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;
 
     /// Publish a `revise` bundle to the worker inbox.
@@ -60,15 +61,15 @@ pub trait OrchestratorService {
     /// Any path-backed payload files are moved into `.multorum/`
     /// storage if publication succeeds.
     fn revise_worker(
-        &self, perspective: PerspectiveName, reply: ReplyReference, payload: BundlePayload,
+        &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;
 
     /// Tear down a worker without integration.
-    fn discard_worker(&self, perspective: PerspectiveName) -> Result<DiscardResult>;
+    fn discard_worker(&self, worker_id: WorkerId) -> Result<DiscardResult>;
 
     /// Run the pre-merge pipeline and integrate the worker submission.
     fn integrate_worker(
-        &self, perspective: PerspectiveName, skip_checks: Vec<String>,
+        &self, worker_id: WorkerId, skip_checks: Vec<String>,
     ) -> Result<IntegrateResult>;
 
     /// Return the current orchestrator status projection.
@@ -84,6 +85,13 @@ pub trait OrchestratorService {
 #[derive(Debug, Clone)]
 pub struct FsOrchestratorService {
     fs: RuntimeFs,
+}
+
+/// One active bidding-group boundary materialized from runtime state.
+#[derive(Debug, Clone)]
+struct ActiveBiddingGroup {
+    perspective: PerspectiveName,
+    boundary: CompiledPerspective,
 }
 
 impl FsOrchestratorService {
@@ -112,30 +120,29 @@ impl FsOrchestratorService {
 
     fn validate_rulebook_commit(&self, commit: &CanonicalCommitHash) -> Result<RulebookValidation> {
         let compiled = self.fs.load_compiled_rulebook(commit)?;
-        let target_paths = compiled_rulebook_paths(&compiled);
+        let active_groups = self.active_bidding_groups()?;
 
-        let mut blocking_workers = Vec::new();
-        for worker in self.active_workers()? {
-            let write_set =
-                RuntimeFs::read_path_list(&self.fs.worker_paths(&worker.perspective).write_set())?;
-            if !write_set.is_disjoint(&target_paths) {
-                blocking_workers.push(worker.perspective);
+        let mut blocking_bidding_groups = BTreeSet::new();
+        for active_group in &active_groups {
+            for (candidate_name, candidate) in compiled.perspectives().perspectives() {
+                if boundary_conflict(
+                    &active_group.perspective,
+                    &active_group.boundary,
+                    candidate_name,
+                    candidate,
+                )
+                .is_some()
+                {
+                    blocking_bidding_groups.insert(active_group.perspective.clone());
+                    break;
+                }
             }
         }
 
-        Ok(RulebookValidation { ok: blocking_workers.is_empty(), blocking_workers })
-    }
-
-    fn ensure_live_worker_slot_is_free(&self, perspective: &PerspectiveName) -> Result<()> {
-        match self.fs.load_worker_record(perspective) {
-            | Ok(record) if is_live_worker_state(record.state) => Err(RuntimeError::InvalidState {
-                operation: "provision worker",
-                expected: "DISCARDED or INTEGRATED",
-                actual: record.state,
-            }),
-            | Ok(_) | Err(RuntimeError::UnknownPerspective(_)) => Ok(()),
-            | Err(error) => Err(error),
-        }
+        Ok(RulebookValidation {
+            ok: blocking_bidding_groups.is_empty(),
+            blocking_bidding_groups: blocking_bidding_groups.into_iter().collect(),
+        })
     }
 
     fn active_workers(&self) -> Result<Vec<WorkerRecord>> {
@@ -147,11 +154,89 @@ impl FsOrchestratorService {
             .collect())
     }
 
+    fn active_bidding_groups(&self) -> Result<Vec<ActiveBiddingGroup>> {
+        let mut groups = Vec::new();
+        let mut seen = BTreeSet::new();
+        for record in self.active_workers()? {
+            if !seen.insert(record.bidding_group.clone()) {
+                continue;
+            }
+
+            let worker_paths = self.fs.worker_paths(&record.worker_id);
+            let read = RuntimeFs::read_path_list(&worker_paths.read_set())?;
+            let write = RuntimeFs::read_path_list(&worker_paths.write_set())?;
+            groups.push(ActiveBiddingGroup {
+                perspective: record.bidding_group,
+                boundary: CompiledPerspective::from_materialized_sets(read, write),
+            });
+        }
+        Ok(groups)
+    }
+
+    fn allocate_worker_id(&self, perspective: &PerspectiveName) -> Result<WorkerId> {
+        let prefix = format!("{}-", perspective.as_str());
+        let next = self
+            .fs
+            .list_worker_records()?
+            .into_iter()
+            .filter(|record| record.perspective == *perspective)
+            .filter_map(|record| {
+                record.worker_id.as_str().strip_prefix(&prefix)?.parse::<u64>().ok()
+            })
+            .max()
+            .unwrap_or(0)
+            + 1;
+
+        WorkerId::new(format!("{prefix}{next}"))
+            .map_err(|_| RuntimeError::CheckFailed("failed to allocate worker id".to_owned()))
+    }
+
+    fn validate_provision_boundary(
+        &self, perspective: &PerspectiveName, candidate: &CompiledPerspective,
+    ) -> Result<()> {
+        let active_groups = self.active_bidding_groups()?;
+        if let Some(existing_group) =
+            active_groups.iter().find(|group| group.perspective == *perspective)
+        {
+            if existing_group.boundary.read() == candidate.read()
+                && existing_group.boundary.write() == candidate.write()
+            {
+                return Ok(());
+            }
+
+            return Err(RuntimeError::BiddingGroupBoundaryMismatch {
+                perspective: perspective.clone(),
+            });
+        }
+
+        for active_group in &active_groups {
+            if let Some(conflict) = boundary_conflict(
+                perspective,
+                candidate,
+                &active_group.perspective,
+                &active_group.boundary,
+            ) {
+                return Err(conflict);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn discard_worker_record(&self, record: &mut WorkerRecord) -> Result<()> {
+        if record.worktree_path.exists() {
+            self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
+        }
+        record.state = WorkerState::Discarded;
+        record.submitted_head_commit = None;
+        self.fs.store_worker_record(record)
+    }
+
     fn publish_worker_inbox(
-        &self, perspective: &PerspectiveName, kind: MessageKind, reply: ReplyReference,
+        &self, worker_id: &WorkerId, kind: MessageKind, reply: ReplyReference,
         payload: BundlePayload,
     ) -> Result<PublishedBundle> {
-        let record = self.fs.load_worker_record(perspective)?;
+        let record = self.fs.load_worker_record(worker_id)?;
         let expected_state = match kind {
             | MessageKind::Resolve if record.state == WorkerState::Blocked => {
                 Some(WorkerState::Blocked)
@@ -166,7 +251,9 @@ impl FsOrchestratorService {
                 &record.worktree_path,
                 MailboxDirection::Inbox,
                 kind,
-                perspective,
+                &record.worker_id,
+                &record.bidding_group,
+                &record.perspective,
                 reply,
                 None,
                 payload,
@@ -214,7 +301,7 @@ impl OrchestratorService for FsOrchestratorService {
         if !validation.ok {
             return Err(RuntimeError::RulebookConflict {
                 commit,
-                blocking_workers: validation.blocking_workers,
+                blocking_bidding_groups: validation.blocking_bidding_groups,
             });
         }
 
@@ -236,15 +323,16 @@ impl OrchestratorService for FsOrchestratorService {
     fn provision_worker(
         &self, perspective: PerspectiveName, task: Option<BundlePayload>,
     ) -> Result<ProvisionResult> {
-        self.ensure_live_worker_slot_is_free(&perspective)?;
-
         let (active, compiled) = self.fs.load_active_compiled_rulebook()?;
         let compiled_perspective = compiled
             .perspectives()
             .get(&perspective)
             .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?;
+        self.validate_provision_boundary(&perspective, compiled_perspective)?;
 
-        let worktree_path = self.fs.worker_paths(&perspective).worktree_root().to_path_buf();
+        let worker_id = self.allocate_worker_id(&perspective)?;
+        let bidding_group = perspective.clone();
+        let worktree_path = self.fs.worker_paths(&worker_id).worktree_root().to_path_buf();
         self.fs.vcs().create_worktree(
             self.fs.workspace_root(),
             &worktree_path,
@@ -252,6 +340,8 @@ impl OrchestratorService for FsOrchestratorService {
         )?;
 
         let record = WorkerRecord {
+            worker_id: worker_id.clone(),
+            bidding_group: bidding_group.clone(),
             perspective: perspective.clone(),
             state: WorkerState::Provisioned,
             worktree_path: worktree_path.clone(),
@@ -269,6 +359,8 @@ impl OrchestratorService for FsOrchestratorService {
                         &worktree_path,
                         MailboxDirection::Inbox,
                         MessageKind::Task,
+                        &worker_id,
+                        &bidding_group,
                         &perspective,
                         ReplyReference::default(),
                         None,
@@ -280,9 +372,16 @@ impl OrchestratorService for FsOrchestratorService {
             None
         };
 
-        tracing::info!(perspective = %perspective, root = %worktree_path.display(), "provisioned worker");
+        tracing::info!(
+            worker_id = %worker_id,
+            perspective = %perspective,
+            root = %worktree_path.display(),
+            "provisioned worker"
+        );
 
         Ok(ProvisionResult {
+            worker_id,
+            bidding_group,
             perspective,
             worktree_path,
             state: WorkerState::Provisioned,
@@ -291,19 +390,19 @@ impl OrchestratorService for FsOrchestratorService {
     }
 
     fn resolve_worker(
-        &self, perspective: PerspectiveName, reply: ReplyReference, payload: BundlePayload,
+        &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle> {
-        self.publish_worker_inbox(&perspective, MessageKind::Resolve, reply, payload)
+        self.publish_worker_inbox(&worker_id, MessageKind::Resolve, reply, payload)
     }
 
     fn revise_worker(
-        &self, perspective: PerspectiveName, reply: ReplyReference, payload: BundlePayload,
+        &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle> {
-        self.publish_worker_inbox(&perspective, MessageKind::Revise, reply, payload)
+        self.publish_worker_inbox(&worker_id, MessageKind::Revise, reply, payload)
     }
 
-    fn discard_worker(&self, perspective: PerspectiveName) -> Result<DiscardResult> {
-        let mut record = self.fs.load_worker_record(&perspective)?;
+    fn discard_worker(&self, worker_id: WorkerId) -> Result<DiscardResult> {
+        let mut record = self.fs.load_worker_record(&worker_id)?;
         if !matches!(
             record.state,
             WorkerState::Provisioned | WorkerState::Active | WorkerState::Committed
@@ -315,19 +414,21 @@ impl OrchestratorService for FsOrchestratorService {
             });
         }
 
-        self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
-        record.state = WorkerState::Discarded;
-        record.submitted_head_commit = None;
-        self.fs.store_worker_record(&record)?;
+        self.discard_worker_record(&mut record)?;
 
-        tracing::info!(perspective = %perspective, "discarded worker");
-        Ok(DiscardResult { perspective, state: record.state })
+        tracing::info!(worker_id = %record.worker_id, perspective = %record.perspective, "discarded worker");
+        Ok(DiscardResult {
+            worker_id: record.worker_id,
+            bidding_group: record.bidding_group,
+            perspective: record.perspective,
+            state: record.state,
+        })
     }
 
     fn integrate_worker(
-        &self, perspective: PerspectiveName, skip_checks: Vec<String>,
+        &self, worker_id: WorkerId, skip_checks: Vec<String>,
     ) -> Result<IntegrateResult> {
-        let mut record = self.fs.load_worker_record(&perspective)?;
+        let mut record = self.fs.load_worker_record(&worker_id)?;
         if record.state != WorkerState::Committed {
             return Err(RuntimeError::InvalidState {
                 operation: "integrate worker",
@@ -338,7 +439,7 @@ impl OrchestratorService for FsOrchestratorService {
 
         let head_commit = record.submitted_head_commit.clone().ok_or_else(|| {
             RuntimeError::MissingSubmittedHeadCommit {
-                perspective: perspective.clone(),
+                worker_id: worker_id.clone(),
                 state: record.state,
             }
         })?;
@@ -351,7 +452,7 @@ impl OrchestratorService for FsOrchestratorService {
         let worker_head = self.fs.vcs().head_commit(&record.worktree_path)?;
         if worker_head != head_commit {
             return Err(RuntimeError::WorkerHeadMismatch {
-                perspective: perspective.clone(),
+                worker_id: worker_id.clone(),
                 submitted_head_commit: head_commit,
                 current_head_commit: worker_head,
             });
@@ -365,12 +466,13 @@ impl OrchestratorService for FsOrchestratorService {
             &head_commit,
         )?;
         let write_set =
-            RuntimeFs::read_path_list(&self.fs.worker_paths(&record.perspective).write_set())?;
+            RuntimeFs::read_path_list(&self.fs.worker_paths(&record.worker_id).write_set())?;
         let violations = changed_files.difference(&write_set).cloned().collect::<BTreeSet<_>>();
         if !violations.is_empty() {
-            tracing::warn!(perspective = %perspective, count = violations.len(), "write-set violation");
+            tracing::warn!(worker_id = %worker_id, count = violations.len(), "write-set violation");
             return Err(RuntimeError::WriteSetViolation {
-                perspective: perspective.clone(),
+                worker_id: worker_id.clone(),
+                perspective: record.perspective.clone(),
                 base_commit: record.base_commit.clone(),
                 head_commit: head_commit.clone(),
                 violations: violations.into_iter().collect(),
@@ -400,8 +502,26 @@ impl OrchestratorService for FsOrchestratorService {
         record.state = WorkerState::Integrated;
         self.fs.store_worker_record(&record)?;
 
-        tracing::info!(perspective = %perspective, head_commit = %head_commit, "integrated worker");
-        Ok(IntegrateResult { perspective, state: record.state, ran_checks, skipped_checks })
+        for mut sibling in self.active_workers()?.into_iter().filter(|sibling| {
+            sibling.worker_id != record.worker_id && sibling.bidding_group == record.bidding_group
+        }) {
+            self.discard_worker_record(&mut sibling)?;
+        }
+
+        tracing::info!(
+            worker_id = %record.worker_id,
+            perspective = %record.perspective,
+            head_commit = %head_commit,
+            "integrated worker"
+        );
+        Ok(IntegrateResult {
+            worker_id: record.worker_id,
+            bidding_group: record.bidding_group,
+            perspective: record.perspective,
+            state: record.state,
+            ran_checks,
+            skipped_checks,
+        })
     }
 
     fn status(&self) -> Result<OrchestratorStatus> {
@@ -409,9 +529,54 @@ impl OrchestratorService for FsOrchestratorService {
         let workers = self
             .active_workers()?
             .into_iter()
-            .map(|record| WorkerSummary { perspective: record.perspective, state: record.state })
+            .map(|record| WorkerSummary {
+                worker_id: record.worker_id,
+                bidding_group: record.bidding_group,
+                perspective: record.perspective,
+                state: record.state,
+            })
             .collect();
 
         Ok(OrchestratorStatus { active_rulebook_commit, workers })
     }
+}
+
+fn boundary_conflict(
+    candidate_name: &PerspectiveName, candidate: &CompiledPerspective,
+    active_name: &PerspectiveName, active: &CompiledPerspective,
+) -> Option<RuntimeError> {
+    let write_write =
+        candidate.write().intersection(active.write()).cloned().collect::<BTreeSet<_>>();
+    if !write_write.is_empty() {
+        return Some(RuntimeError::SafetyConflict {
+            perspective: candidate_name.clone(),
+            blocking_group: active_name.clone(),
+            relation: "write/write overlap",
+            files: write_write.into_iter().collect(),
+        });
+    }
+
+    let candidate_write_active_read =
+        candidate.write().intersection(active.read()).cloned().collect::<BTreeSet<_>>();
+    if !candidate_write_active_read.is_empty() {
+        return Some(RuntimeError::SafetyConflict {
+            perspective: candidate_name.clone(),
+            blocking_group: active_name.clone(),
+            relation: "candidate write overlaps active read",
+            files: candidate_write_active_read.into_iter().collect(),
+        });
+    }
+
+    let candidate_read_active_write =
+        candidate.read().intersection(active.write()).cloned().collect::<BTreeSet<_>>();
+    if !candidate_read_active_write.is_empty() {
+        return Some(RuntimeError::SafetyConflict {
+            perspective: candidate_name.clone(),
+            blocking_group: active_name.clone(),
+            relation: "candidate read overlaps active write",
+            files: candidate_read_active_write.into_iter().collect(),
+        });
+    }
+
+    None
 }

@@ -2,9 +2,8 @@
 //!
 //! Takes a [`PerspectiveTable`] and a pre-compiled file set map
 //! (`BTreeMap<fileset::Name, BTreeSet<PathBuf>>`), evaluates each
-//! perspective's read and write expressions, then validates the
-//! safety property. The result is a [`CompiledPerspectives`] that
-//! is guaranteed to satisfy the safety invariant.
+//! perspective's read and write expressions, and returns the concrete
+//! file lists that runtime safety checks later consume.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -15,8 +14,6 @@ use crate::fileset::Expr;
 use super::decl::PerspectiveTable;
 use super::error::PerspectiveError;
 use super::name::PerspectiveName;
-use super::safety::SafetyValidator;
-
 /// A single perspective compiled into concrete file sets.
 #[derive(Debug, Clone)]
 pub struct CompiledPerspective {
@@ -25,6 +22,14 @@ pub struct CompiledPerspective {
 }
 
 impl CompiledPerspective {
+    /// Construct one compiled perspective from materialized sets.
+    ///
+    /// Note: Runtime code uses this when it reconstructs active
+    /// bidding-group boundaries from worker-local read/write-set files.
+    pub fn from_materialized_sets(read: BTreeSet<PathBuf>, write: BTreeSet<PathBuf>) -> Self {
+        Self { read, write }
+    }
+
     /// The concrete read set.
     pub fn read(&self) -> &BTreeSet<PathBuf> {
         &self.read
@@ -36,16 +41,7 @@ impl CompiledPerspective {
     }
 }
 
-/// A set of compiled perspectives that satisfies the safety property.
-///
-/// ## Invariant
-///
-/// For any two distinct perspectives P and Q:
-/// - `write(P) ∩ write(Q) = ∅`
-/// - `write(P) ∩ read(Q) = ∅`
-///
-/// This invariant is established by [`PerspectiveTable::compile`]
-/// and cannot be violated through the public API.
+/// A set of compiled perspectives keyed by declaration name.
 #[derive(Debug, Clone)]
 pub struct CompiledPerspectives {
     inner: BTreeMap<PerspectiveName, CompiledPerspective>,
@@ -75,13 +71,12 @@ impl CompiledPerspectives {
 
 impl PerspectiveTable {
     /// Compile all perspective declarations against pre-compiled file
-    /// sets and validate the safety property.
+    /// sets.
     ///
     /// `compiled_filesets` is the output of
     /// [`FileSetTable::compile`](crate::fileset::FileSetTable::compile).
     ///
-    /// Returns [`CompiledPerspectives`] on success, which is
-    /// guaranteed to satisfy the safety property.
+    /// Returns [`CompiledPerspectives`] on success.
     pub fn compile(
         &self, compiled_filesets: &BTreeMap<fileset::Name, BTreeSet<PathBuf>>,
     ) -> Result<CompiledPerspectives, PerspectiveError> {
@@ -102,8 +97,6 @@ impl PerspectiveTable {
 
             compiled.insert(name.clone(), CompiledPerspective { read, write });
         }
-
-        SafetyValidator::new(&compiled).validate()?;
 
         Ok(CompiledPerspectives { inner: compiled })
     }
@@ -208,9 +201,10 @@ mod tests {
     }
 
     #[test]
-    fn write_write_overlap_detected() {
+    fn overlapping_perspectives_still_compile() {
         let filesets = design_doc_filesets();
-        // Both perspectives write to AuthFiles (overlapping).
+        // Runtime code, not compilation, decides whether these may be
+        // active at the same time.
         let toml_str = r#"
             [P]
             read  = "SpecFiles"
@@ -221,21 +215,15 @@ mod tests {
             write = "AuthFiles"
         "#;
         let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
-        let err = table.compile(&filesets).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                PerspectiveError::Safety(super::super::SafetyViolation::WriteWriteOverlap { .. })
-            ),
-            "expected WriteWriteOverlap, got: {err:?}"
-        );
+        let compiled = table.compile(&filesets).unwrap();
+        assert_eq!(compiled.len(), 2);
     }
 
     #[test]
-    fn write_read_overlap_detected() {
+    fn write_read_overlap_still_compiles() {
         let filesets = design_doc_filesets();
-        // P writes AuthTests, Q reads AuthTests — disjoint writes
-        // but write-read overlap.
+        // Runtime code, not compilation, decides whether these may be
+        // active at the same time.
         let toml_str = r#"
             [P]
             read  = "SpecFiles"
@@ -246,14 +234,8 @@ mod tests {
             write = "SpecFiles"
         "#;
         let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
-        let err = table.compile(&filesets).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                PerspectiveError::Safety(super::super::SafetyViolation::WriteReadOverlap { .. })
-            ),
-            "expected WriteReadOverlap, got: {err:?}"
-        );
+        let compiled = table.compile(&filesets).unwrap();
+        assert_eq!(compiled.len(), 2);
     }
 
     #[test]

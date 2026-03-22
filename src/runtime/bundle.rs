@@ -17,10 +17,12 @@ use serde::{Deserialize, Serialize};
 use crate::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
+use super::worker_id::WorkerId;
+
 /// Monotonic per-mailbox sequence number.
 ///
 /// Note: Sequence numbers are local to a single mailbox direction for a
-/// specific perspective.
+/// specific worker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Sequence(pub u64);
 
@@ -43,8 +45,8 @@ pub enum MessageKind {
 /// Stable reference to a published bundle.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MessageRef {
-    /// Perspective that owns the mailbox where the bundle was published.
-    pub perspective: PerspectiveName,
+    /// Worker that owns the mailbox where the bundle was published.
+    pub worker_id: WorkerId,
     /// Kind of published bundle.
     pub kind: MessageKind,
     /// Monotonic mailbox-local sequence number.
@@ -88,6 +90,10 @@ pub struct BundleEnvelope {
     /// Mailbox protocol version.
     pub protocol: u32,
     /// Active worker identity.
+    pub worker_id: WorkerId,
+    /// Bidding group to which the worker belongs.
+    pub bidding_group: PerspectiveName,
+    /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
     /// Kind of bundle.
     pub kind: MessageKind,
