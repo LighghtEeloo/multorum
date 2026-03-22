@@ -56,7 +56,7 @@ fn setup_repo() -> (TempDir, FsOrchestratorService, String) {
 
     let head = git(dir.path(), &["rev-parse", "HEAD"]);
     let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
-    orchestrator.rulebook_switch(head.clone()).unwrap();
+    orchestrator.rulebook_switch().unwrap();
     (dir, orchestrator, head)
 }
 
@@ -402,10 +402,10 @@ fn delete_worker_rejects_live_worker() {
 }
 
 #[test]
-fn rulebook_switch_canonicalizes_symbolic_revision_before_persistence() {
+fn rulebook_switch_persists_canonical_head_commit() {
     let (repo, orchestrator, head) = setup_repo();
 
-    let switch = orchestrator.rulebook_switch("HEAD".to_owned()).unwrap();
+    let switch = orchestrator.rulebook_switch().unwrap();
     assert_eq!(switch.active_commit.as_str(), head);
 
     let status = orchestrator.status().unwrap();
@@ -414,9 +414,8 @@ fn rulebook_switch_canonicalizes_symbolic_revision_before_persistence() {
     let active_rulebook =
         fs::read_to_string(repo.path().join(".multorum/orchestrator/active-rulebook.toml"))
             .unwrap();
-    assert!(active_rulebook.contains(&format!("rulebook_commit = \"{head}\"")));
     assert!(active_rulebook.contains(&format!("base_commit = \"{head}\"")));
-    assert!(!active_rulebook.contains("\"HEAD\""));
+    assert!(!active_rulebook.contains("rulebook_commit"));
 }
 
 #[test]

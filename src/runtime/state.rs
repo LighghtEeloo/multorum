@@ -183,9 +183,8 @@ pub struct WorkerDetail {
     pub state: WorkerState,
     /// Absolute path to the managed worker worktree.
     pub worktree_path: PathBuf,
-    /// Canonical rulebook commit governing the worker.
-    pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical base code commit from which the worker was created.
+    /// Canonical base commit pinning both the worker's code snapshot and
+    /// its governing rulebook.
     pub base_commit: CanonicalCommitHash,
     /// Canonical submitted worker head commit when present.
     pub submitted_head_commit: Option<CanonicalCommitHash>,
@@ -203,15 +202,16 @@ pub struct WorkerStatus {
 }
 
 /// Worker contract view exported to frontends.
+///
+/// The worker's governing rulebook is the one committed at `base_commit`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkerContractView {
     /// Worker identity.
     pub worker_id: WorkerId,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
-    /// Canonical rulebook commit governing the worker.
-    pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical base code commit from which the worktree was created.
+    /// Canonical base commit pinning both the worker's code snapshot and
+    /// its governing rulebook.
     pub base_commit: CanonicalCommitHash,
     /// Path to the compiled read set file.
     pub read_set_path: PathBuf,

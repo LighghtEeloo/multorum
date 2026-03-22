@@ -190,7 +190,7 @@ The read set names the stable context for the role. It tells the orchestrator wh
 
 ## Workers
 
-A *worker* is a runtime execution of a perspective. Worker creation pins a worker to a specific rulebook commit, a specific base commit, and the compiled read and write sets derived from that perspective at that moment. Perspectives are static policy; workers are ephemeral attempts.
+A *worker* is a runtime execution of a perspective. Worker creation pins a worker to the base commit and the compiled read and write sets derived from that perspective at that moment. The worker's governing rulebook is the one committed at its base commit. Perspectives are static policy; workers are ephemeral attempts.
 
 ### Bidding Groups
 
@@ -199,8 +199,7 @@ When the orchestrator wants multiple attempts at the same role, it may create mu
 All workers in the same bidding group share:
 
 - the same perspective
-- the same pinned rulebook commit
-- the same pinned base commit
+- the same pinned base commit (and therefore the same governing rulebook)
 - the same compiled read set
 - the same compiled write set
 
@@ -312,7 +311,7 @@ This approach deliberately delegates immutability enforcement to git rather than
 
 ### Rulebook Lifecycle
 
-The orchestrator evolves the rulebook by committing changes to `rulebook.toml` in the normal git workflow. Multorum never automatically acts on a new commit. When the orchestrator is ready to advance to a new rulebook version, it issues an explicit `rulebook switch` instruction with the target commit hash. Multorum then validates the switch and, if valid, activates the new rulebook.
+The orchestrator evolves the rulebook by committing changes to `rulebook.toml` in the normal git workflow. Multorum never automatically acts on a new commit. When the orchestrator is ready to advance to a new rulebook version, it issues an explicit `rulebook switch` instruction. Multorum resolves `HEAD`, validates the switch, and, if valid, activates the rulebook at that commit. There is no separate commit argument — the repository-wide rulebook is always consistent with `HEAD`.
 
 The history of rulebook evolution is inspectable with standard git tooling:
 
@@ -397,7 +396,7 @@ Multorum addresses this by making the authoring constraint a matter of enforceme
 
 ### Git Worktrees
 
-Each sub-codebase is a git worktree, created from the canonical codebase at the commit hash pinned when the rulebook was activated:
+Each sub-codebase is a git worktree, created from the canonical codebase at the base commit pinned when the rulebook was activated:
 
 ```
 git worktree add .multorum/worktrees/<worker-id> <pinned-base-commit>
@@ -418,7 +417,7 @@ At worker creation time, Multorum creates the following runtime files inside the
 ```text
 .multorum/
   rulebook.toml      # checked out from the pinned commit
-  contract.toml      # runtime — worker id, perspective, pinned rulebook commit, base commit
+  contract.toml      # runtime — worker id, perspective, pinned base commit
   read-set.txt       # runtime — compiled read set for worker guidance
   write-set.txt      # runtime — compiled write set for enforcement and audit
   inbox/
@@ -637,16 +636,16 @@ Orchestrator-local instructions operate on the main workspace control plane unde
 **`rulebook init`**
 Initializes the project's `.multorum/` directory. Multorum creates `.multorum/` if it does not already exist, writes the default commented `rulebook.toml` template shown above, prepares `.multorum/.gitignore` so runtime directories stay ignored within that subtree, prepares the local orchestrator runtime directories, and verifies that the recommended ignore entries are present. The instruction must not overwrite an existing `.multorum/rulebook.toml`; if a rulebook already exists, initialization is rejected so project policy is never replaced implicitly.
 
-**`rulebook switch <commit-hash>`**
-Validates and activates a new version of the rulebook. Multorum compiles the target rulebook, treats each target perspective as a candidate future bidding group, and runs the conflict check against all currently active bidding groups. If the check passes, the new rulebook is activated. If it fails, the instruction is rejected and Multorum reports which active bidding groups are blocking the switch.
+**`rulebook switch`**
+Validates and activates the rulebook at `HEAD`. Multorum resolves the current `HEAD` commit, compiles the rulebook there, treats each target perspective as a candidate future bidding group, and runs the conflict check against all currently active bidding groups. If the check passes, the new rulebook is activated and `HEAD` becomes the pinned base commit for future workers. If it fails, the instruction is rejected and Multorum reports which active bidding groups are blocking the switch.
 
-**`rulebook validate <commit-hash>`**
-Performs a dry run of the switch validation without making any changes. Useful for the orchestrator to check whether a switch is currently possible before committing to it.
+**`rulebook validate`**
+Performs a dry run of the switch validation against `HEAD` without making any changes. Useful for the orchestrator to check whether a switch is currently possible before committing to it.
 
 ### Worker Lifecycle Instructions
 
 **`create <perspective-name>`**
-Compiles the file sets for the named perspective, derives the candidate bidding group's read and write sets, and checks them against the materialized read and write sets of all active bidding groups. If the worker joins an existing bidding group, Multorum instead checks that the compiled sets are identical to that group's existing boundary. Once the check passes, Multorum creates a git worktree at the pinned HEAD commit, records the worker's bidding-group membership under the orchestrator-supplied worker id or a default auto-assigned one, installs the client-side write hook, materializes the worker-local runtime files in `.multorum/`, and injects the read set as worker guidance metadata. Multorum also prepares empty inbox and outbox mailboxes for the worker and may publish an initial `task` bundle into the worker inbox. Worker creation transitions the worker directly to ACTIVE.
+Compiles the file sets for the named perspective, derives the candidate bidding group's read and write sets, and checks them against the materialized read and write sets of all active bidding groups. If the worker joins an existing bidding group, Multorum instead checks that the compiled sets are identical to that group's existing boundary. Once the check passes, Multorum creates a git worktree at the pinned base commit, records the worker's bidding-group membership under the orchestrator-supplied worker id or a default auto-assigned one, installs the client-side write hook, materializes the worker-local runtime files in `.multorum/`, and injects the read set as worker guidance metadata. Multorum also prepares empty inbox and outbox mailboxes for the worker and may publish an initial `task` bundle into the worker inbox. Worker creation transitions the worker directly to ACTIVE.
 
 **`resolve <worker-id>`**
 Publishes a `resolve` bundle into the worker's inbox. The bundle carries both the state transition and the resolution content. Once the worker acknowledges it, Multorum transitions the worker from BLOCKED to ACTIVE.

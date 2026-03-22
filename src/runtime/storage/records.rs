@@ -13,17 +13,24 @@ use crate::runtime::{Sequence, WorkerId, WorkerState};
 use crate::vcs::CanonicalCommitHash;
 
 /// Active rulebook projection stored under `.multorum/orchestrator/`.
+///
+/// The rulebook is always the one committed at `base_commit`. There is no
+/// separate rulebook pin — the repository-wide rulebook is consistent with
+/// the pinned base snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ActiveRulebookRecord {
-    /// Canonical commit that owns the active committed rulebook.
-    pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical pinned base commit for newly created workers.
+    /// Canonical commit pinning both the active rulebook and the base
+    /// snapshot for newly created workers.
     pub base_commit: CanonicalCommitHash,
     /// Activation timestamp.
     pub activated_at: String,
 }
 
 /// Orchestrator-local projection for one live or historical worker.
+///
+/// The worker's rulebook is the one committed at `base_commit`. There is
+/// no separate rulebook pin — the rulebook governing the worker is always
+/// the version present in the snapshot the worker was created from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct WorkerRecord {
     /// Unique worker identity.
@@ -34,9 +41,8 @@ pub(crate) struct WorkerRecord {
     pub state: WorkerState,
     /// Absolute path to the managed worktree.
     pub worktree_path: PathBuf,
-    /// Canonical rulebook commit pinned into the worker contract.
-    pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical base code commit from which the worker was created.
+    /// Canonical base commit pinning both the worker's code snapshot and
+    /// its governing rulebook.
     pub base_commit: CanonicalCommitHash,
     /// Canonical submitted worker commit when the worker is in `COMMITTED`.
     pub submitted_head_commit: Option<CanonicalCommitHash>,

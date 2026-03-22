@@ -82,11 +82,11 @@ pub trait OrchestratorService {
     /// Initialize `.multorum/` with the default committed artifacts.
     fn rulebook_init(&self) -> Result<RulebookInit>;
 
-    /// Dry-run validation of a rulebook switch.
-    fn rulebook_validate(&self, commit: String) -> Result<RulebookValidation>;
+    /// Dry-run validation of a rulebook switch against HEAD.
+    fn rulebook_validate(&self) -> Result<RulebookValidation>;
 
-    /// Activate a rulebook commit after validation succeeds.
-    fn rulebook_switch(&self, commit: String) -> Result<RulebookSwitch>;
+    /// Activate the HEAD rulebook after validation succeeds.
+    fn rulebook_switch(&self) -> Result<RulebookSwitch>;
 
     /// List compiled perspective summaries from the active rulebook.
     fn list_perspectives(&self) -> Result<Vec<PerspectiveSummary>>;
@@ -389,21 +389,13 @@ impl OrchestratorService for FsOrchestratorService {
         self.fs.initialize_rulebook()
     }
 
-    fn rulebook_validate(&self, commit: String) -> Result<RulebookValidation> {
-        let commit = self.fs.vcs().resolve_commit(
-            self.fs.workspace_root(),
-            &commit,
-            "resolve rulebook commit",
-        )?;
+    fn rulebook_validate(&self) -> Result<RulebookValidation> {
+        let commit = self.fs.vcs().head_commit(self.fs.workspace_root())?;
         self.validate_rulebook_commit(&commit)
     }
 
-    fn rulebook_switch(&self, commit: String) -> Result<RulebookSwitch> {
-        let commit = self.fs.vcs().resolve_commit(
-            self.fs.workspace_root(),
-            &commit,
-            "resolve rulebook commit",
-        )?;
+    fn rulebook_switch(&self) -> Result<RulebookSwitch> {
+        let commit = self.fs.vcs().head_commit(self.fs.workspace_root())?;
         let validation = self.validate_rulebook_commit(&commit)?;
         if !validation.ok {
             return Err(RuntimeError::RulebookConflict {
@@ -412,14 +404,11 @@ impl OrchestratorService for FsOrchestratorService {
             });
         }
 
-        let record = ActiveRulebookRecord {
-            rulebook_commit: commit.clone(),
-            base_commit: commit.clone(),
-            activated_at: timestamp_now(),
-        };
+        let record =
+            ActiveRulebookRecord { base_commit: commit.clone(), activated_at: timestamp_now() };
         self.fs.store_active_rulebook(&record)?;
-        tracing::info!(rulebook_commit = %record.rulebook_commit, "activated rulebook");
-        Ok(RulebookSwitch { active_commit: record.rulebook_commit })
+        tracing::info!(base_commit = %record.base_commit, "activated rulebook");
+        Ok(RulebookSwitch { active_commit: record.base_commit })
     }
 
     fn list_perspectives(&self) -> Result<Vec<PerspectiveSummary>> {
@@ -463,7 +452,6 @@ impl OrchestratorService for FsOrchestratorService {
             perspective: record.perspective,
             state: record.state,
             worktree_path: record.worktree_path,
-            rulebook_commit: record.rulebook_commit,
             base_commit: record.base_commit,
             submitted_head_commit: record.submitted_head_commit,
         })
@@ -504,7 +492,6 @@ impl OrchestratorService for FsOrchestratorService {
             perspective: perspective.clone(),
             state: WorkerState::Active,
             worktree_path: worktree_path.clone(),
-            rulebook_commit: active.rulebook_commit,
             base_commit: active.base_commit,
             submitted_head_commit: None,
         };
@@ -635,7 +622,7 @@ impl OrchestratorService for FsOrchestratorService {
             });
         }
 
-        let worker_rulebook = self.fs.load_compiled_rulebook(&record.rulebook_commit)?;
+        let worker_rulebook = self.fs.load_compiled_rulebook(&record.base_commit)?;
         let allowed_skips = validate_skip_request(&worker_rulebook, &skip_checks)?;
         let changed_files = self.fs.vcs().changed_files(
             &record.worktree_path,
@@ -702,7 +689,7 @@ impl OrchestratorService for FsOrchestratorService {
     }
 
     fn status(&self) -> Result<OrchestratorStatus> {
-        let active_rulebook_commit = self.fs.load_active_rulebook()?.rulebook_commit;
+        let active_rulebook_commit = self.fs.load_active_rulebook()?.base_commit;
         let active_perspectives = self.list_bidding_groups()?;
         let workers = self.list_workers()?;
 

@@ -316,24 +316,18 @@ pub enum RulebookCommand {
     /// committed rulebook.
     Init,
 
-    /// Validate and activate a new rulebook version.
+    /// Validate and activate the HEAD rulebook.
     ///
-    /// Compiles the target rulebook and checks that no active
+    /// Compiles the rulebook at HEAD and checks that no active
     /// bidding-group boundary conflicts with any candidate boundary in
     /// the new rulebook. If valid, the new rulebook becomes active.
-    Switch {
-        /// The git commit hash pinning the rulebook to activate.
-        commit: String,
-    },
+    Switch,
 
     /// Dry-run rulebook validation without making changes.
     ///
     /// Performs the same validation as `rulebook switch` but does not
     /// activate. Useful to test whether a switch is currently possible.
-    Validate {
-        /// The git commit hash pinning the rulebook to validate.
-        commit: String,
-    },
+    Validate,
 }
 
 impl RulebookCommand {
@@ -344,12 +338,12 @@ impl RulebookCommand {
                 let result = services.orchestrator.rulebook_init()?;
                 println!("{result:#?}");
             }
-            | Self::Switch { commit } => {
-                let result = services.orchestrator.rulebook_switch(commit)?;
+            | Self::Switch => {
+                let result = services.orchestrator.rulebook_switch()?;
                 println!("{result:#?}");
             }
-            | Self::Validate { commit } => {
-                let result = services.orchestrator.rulebook_validate(commit)?;
+            | Self::Validate => {
+                let result = services.orchestrator.rulebook_validate()?;
                 println!("{result:#?}");
             }
         }

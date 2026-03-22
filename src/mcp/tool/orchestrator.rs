@@ -2,12 +2,6 @@
 
 use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor};
 
-const RULEBOOK_COMMIT_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
-    name: "commit",
-    description: "Canonical or symbolic commit identifying the rulebook version.",
-    required: true,
-}];
-
 const GET_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
     name: "worker_id",
     description: "Runtime worker identity to inspect.",
@@ -94,13 +88,13 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "rulebook_validate",
-            description: "Dry-run validation of a rulebook commit switch.",
-            inputs: RULEBOOK_COMMIT_INPUTS,
+            description: "Dry-run validation of the HEAD rulebook against active bidding groups.",
+            inputs: &[],
         },
         ToolDescriptor {
             name: "rulebook_switch",
-            description: "Activate a new rulebook commit after validation.",
-            inputs: RULEBOOK_COMMIT_INPUTS,
+            description: "Activate the HEAD rulebook after validation.",
+            inputs: &[],
         },
         ToolDescriptor {
             name: "list_perspectives",

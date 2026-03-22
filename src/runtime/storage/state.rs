@@ -82,7 +82,7 @@ impl RuntimeFs {
         &self,
     ) -> Result<(ActiveRulebookRecord, CompiledRulebook), RuntimeError> {
         let active = self.load_active_rulebook()?;
-        let compiled = self.load_compiled_rulebook(&active.rulebook_commit)?;
+        let compiled = self.load_compiled_rulebook(&active.base_commit)?;
         Ok((active, compiled))
     }
 
@@ -154,7 +154,6 @@ impl RuntimeFs {
         let contract = WorkerContractView {
             worker_id: record.worker_id.clone(),
             perspective: record.perspective.clone(),
-            rulebook_commit: record.rulebook_commit.clone(),
             base_commit: record.base_commit.clone(),
             read_set_path: worker_paths.read_set(),
             write_set_path: worker_paths.write_set(),
