@@ -581,13 +581,13 @@ The same mailbox protocol is used for post-review feedback and final submission:
 
 ## The Pre-Merge Pipeline
 
-Before a worker's commit is integrated into the canonical codebase, it must pass the pre-merge pipeline. This pipeline consists of a mandatory hard check followed by a configurable sequence of project-defined checks.
+Before a worker's commit is integrated into the canonical codebase, it must pass the pre-merge pipeline. This pipeline starts with mandatory scope enforcement, then continues through the project's configured validation checks.
 
-### Gate 1: File Set Check (Non-Negotiable)
+### Scope Enforcement: Compiled Write Set (Mandatory)
 
 Multorum always verifies that every file touched by the worker's commit is within that worker's compiled write set. This check cannot be skipped, waived, or overridden by any party. It is the server-side enforcement of the worker's declared scope and, at system level, of the safety property between bidding groups.
 
-### Gate 2: User-Defined Checks
+### Project Validation Checks: Rulebook Pipeline
 
 The project may define a pipeline of additional checks in the rulebook: building, testing, linting, formatting, or any other command. These run in the declared order after the file set check passes.
 
@@ -613,7 +613,7 @@ The evidence submission model works as follows:
 
 1. The worker includes structured evidence in its report or commit submission — the check name, the claimed result (pass or fail), and the raw output
 2. The orchestrator reviews the evidence and decides whether to trust it
-3. If trusted, the orchestrator instructs Multorum to skip that gate for this integration
+3. If trusted, the orchestrator instructs Multorum to skip that project-defined check for this integration
 4. If not trusted, Multorum runs the check regardless
 
 Evidence should carry the actual output of the check, not merely an assertion. This gives the orchestrator — whether human or LLM — enough information to make an informed trust decision rather than accepting the worker's claim blindly.

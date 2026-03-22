@@ -1,8 +1,8 @@
 //! Check pipeline declarations from the `[checks]` rulebook table.
 //!
 //! Checks are project-defined commands that run after the mandatory
-//! file-set enforcement gate. The rulebook declares the ordered
-//! pipeline and a named table for each check.
+//! compiled-write-set scope check. The rulebook declares the ordered
+//! validation pipeline and a named table for each check.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::{fmt, str::FromStr};
