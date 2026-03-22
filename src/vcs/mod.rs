@@ -69,7 +69,7 @@ pub trait VersionControl: std::fmt::Debug + Send + Sync {
     ) -> Result<(), RuntimeError>;
 
     /// Install backend-local ignore rules and mutation guards inside a
-    /// worker worktree created by provisioning.
+    /// worker worktree created during worker creation.
     fn install_worker_runtime_support(&self, worktree_root: &Path) -> Result<(), RuntimeError>;
 
     /// Read one repository-relative file from a specific commit.

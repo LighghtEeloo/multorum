@@ -8,8 +8,8 @@ use toml::Value;
 use multorum::perspective::PerspectiveName;
 use multorum::rulebook::Rulebook;
 use multorum::runtime::{
-    BundlePayload, FsOrchestratorService, FsWorkerService, MessageKind, OrchestratorService,
-    ProvisionWorker, ReplyReference, RuntimeError, WorkerService, WorkerState,
+    BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, MessageKind,
+    OrchestratorService, ReplyReference, RuntimeError, WorkerService, WorkerState,
 };
 
 fn perspective() -> PerspectiveName {
@@ -108,7 +108,7 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     fs::write(&task_body, "# initial task\n").unwrap();
 
     let provision = orchestrator
-        .provision_worker(ProvisionWorker::new(perspective()).with_task(BundlePayload {
+        .create_worker(CreateWorker::new(perspective()).with_task(BundlePayload {
             body_path: Some(task_body.clone()),
             ..BundlePayload::default()
         }))
@@ -168,9 +168,9 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
 }
 
 #[test]
-fn integrate_worker_cherry_picks_allowed_changes() {
+fn merge_worker_cherry_picks_allowed_changes() {
     let (repo, orchestrator, _) = setup_repo();
-    let provision = orchestrator.provision_worker(ProvisionWorker::new(perspective())).unwrap();
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
@@ -182,11 +182,10 @@ fn integrate_worker_cherry_picks_allowed_changes() {
     worker.send_commit(head_commit.clone(), BundlePayload::default()).unwrap();
     assert_eq!(worker.status().unwrap().state, WorkerState::Committed);
 
-    let integration =
-        orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap();
-    assert_eq!(integration.state, WorkerState::Merged);
-    assert!(integration.ran_checks.is_empty());
-    assert!(!provision.worktree_path.exists(), "integrated worktree should be removed");
+    let merge = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new()).unwrap();
+    assert_eq!(merge.state, WorkerState::Merged);
+    assert!(merge.ran_checks.is_empty());
+    assert!(provision.worktree_path.exists(), "merged worktree should be preserved");
     assert_eq!(
         fs::read_to_string(repo.path().join("src/owned.rs")).unwrap(),
         "pub fn owned() -> i32 { 3 }\n"
@@ -196,8 +195,8 @@ fn integrate_worker_cherry_picks_allowed_changes() {
 #[test]
 fn same_perspective_can_spawn_multiple_workers_and_close_the_group_on_integration() {
     let (_repo, orchestrator, _) = setup_repo();
-    let first = orchestrator.provision_worker(ProvisionWorker::new(perspective())).unwrap();
-    let second = orchestrator.provision_worker(ProvisionWorker::new(perspective())).unwrap();
+    let first = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let second = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
 
     assert_ne!(first.worker_id, second.worker_id);
     assert_eq!(first.perspective, second.perspective);
@@ -218,20 +217,20 @@ fn same_perspective_can_spawn_multiple_workers_and_close_the_group_on_integratio
     let head_commit = git(&first.worktree_path, &["rev-parse", "HEAD"]);
 
     worker.send_commit(head_commit, BundlePayload::default()).unwrap();
-    orchestrator.integrate_worker(first.worker_id.clone(), Vec::new()).unwrap();
+    orchestrator.merge_worker(first.worker_id.clone(), Vec::new()).unwrap();
 
-    assert!(!first.worktree_path.exists(), "integrated worktree should be removed");
-    assert!(!second.worktree_path.exists(), "sibling worktree should be discarded");
+    assert!(first.worktree_path.exists(), "merged worktree should be preserved");
+    assert!(second.worktree_path.exists(), "discarded sibling worktree should be preserved");
     assert!(orchestrator.status().unwrap().workers.is_empty());
 }
 
 #[test]
-fn provision_worker_uses_explicit_worker_id_when_requested() {
+fn create_worker_uses_explicit_worker_id_when_requested() {
     let (_repo, orchestrator, _) = setup_repo();
     let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
 
     let provision = orchestrator
-        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
         .unwrap();
 
     assert_eq!(provision.worker_id, worker_id);
@@ -240,33 +239,33 @@ fn provision_worker_uses_explicit_worker_id_when_requested() {
 }
 
 #[test]
-fn provision_worker_rejects_duplicate_explicit_worker_id() {
+fn create_worker_rejects_duplicate_explicit_worker_id() {
     let (_repo, orchestrator, _) = setup_repo();
     let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
 
     orchestrator
-        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
         .unwrap();
 
     let error = orchestrator
-        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
         .unwrap_err();
     assert!(matches!(error, RuntimeError::WorkerIdExists(actual) if actual == worker_id));
 }
 
 #[test]
-fn provision_worker_reuses_explicit_worker_id_after_discard() {
+fn create_worker_reuses_explicit_worker_id_after_discard() {
     let (_repo, orchestrator, _) = setup_repo();
     let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
 
     let first = orchestrator
-        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
         .unwrap();
     orchestrator.discard_worker(worker_id.clone()).unwrap();
-    assert!(!first.worktree_path.exists());
+    assert!(first.worktree_path.exists());
 
     let second = orchestrator
-        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
         .unwrap();
 
     assert_eq!(second.worker_id, worker_id);
@@ -277,12 +276,12 @@ fn provision_worker_reuses_explicit_worker_id_after_discard() {
 }
 
 #[test]
-fn provision_worker_reuses_explicit_worker_id_after_merge() {
+fn create_worker_reuses_explicit_worker_id_after_merge() {
     let (_repo, orchestrator, _) = setup_repo();
     let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
 
     let first = orchestrator
-        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
         .unwrap();
     let worker = FsWorkerService::new(&first.worktree_path).unwrap();
     fs::write(first.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 9 }\n").unwrap();
@@ -290,11 +289,11 @@ fn provision_worker_reuses_explicit_worker_id_after_merge() {
     git(&first.worktree_path, &["commit", "-m", "incr: finalize reused worker id"]);
     let head_commit = git(&first.worktree_path, &["rev-parse", "HEAD"]);
     worker.send_commit(head_commit, BundlePayload::default()).unwrap();
-    orchestrator.integrate_worker(worker_id.clone(), Vec::new()).unwrap();
-    assert!(!first.worktree_path.exists());
+    orchestrator.merge_worker(worker_id.clone(), Vec::new()).unwrap();
+    assert!(first.worktree_path.exists());
 
     let second = orchestrator
-        .provision_worker(ProvisionWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
         .unwrap();
 
     assert_eq!(second.worker_id, worker_id);
@@ -302,6 +301,40 @@ fn provision_worker_reuses_explicit_worker_id_after_merge() {
     assert_eq!(second.worktree_path, first.worktree_path);
     assert!(second.worktree_path.exists());
     assert_eq!(orchestrator.get_worker(worker_id).unwrap().state, WorkerState::Active);
+}
+
+#[test]
+fn delete_worker_removes_workspace_after_discard() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let created = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    orchestrator.discard_worker(created.worker_id.clone()).unwrap();
+    assert!(created.worktree_path.exists());
+
+    let deleted = orchestrator.delete_worker(created.worker_id.clone()).unwrap();
+
+    assert_eq!(deleted.worker_id, created.worker_id);
+    assert_eq!(deleted.state, WorkerState::Discarded);
+    assert_eq!(deleted.worktree_path, created.worktree_path);
+    assert!(deleted.deleted_workspace);
+    assert!(!created.worktree_path.exists());
+}
+
+#[test]
+fn delete_worker_rejects_live_worker() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let created = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    let error = orchestrator.delete_worker(created.worker_id).unwrap_err();
+
+    assert!(matches!(
+        error,
+        RuntimeError::InvalidState {
+            operation,
+            expected,
+            actual: WorkerState::Active,
+        } if operation == "delete worker workspace" && expected == "MERGED or DISCARDED"
+    ));
 }
 
 #[test]
@@ -325,7 +358,7 @@ fn rulebook_switch_canonicalizes_symbolic_revision_before_persistence() {
 #[test]
 fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() {
     let (_repo, orchestrator, _) = setup_repo();
-    let provision = orchestrator.provision_worker(ProvisionWorker::new(perspective())).unwrap();
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
@@ -351,15 +384,14 @@ fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() 
     let worker_state: Value = toml::from_str(&worker_state).unwrap();
     assert_eq!(worker_state["submitted_head_commit"].as_str(), Some(head_commit.as_str()));
 
-    let integration =
-        orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap();
+    let integration = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new()).unwrap();
     assert_eq!(integration.state, WorkerState::Merged);
 }
 
 #[test]
 fn send_commit_canonicalizes_short_hash_before_storage_and_integration() {
     let (_repo, orchestrator, _) = setup_repo();
-    let provision = orchestrator.provision_worker(ProvisionWorker::new(perspective())).unwrap();
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
@@ -377,15 +409,14 @@ fn send_commit_canonicalizes_short_hash_before_storage_and_integration() {
     let outbox_envelope: Value = toml::from_str(&outbox_envelope).unwrap();
     assert_eq!(outbox_envelope["head_commit"].as_str(), Some(head_commit.as_str()));
 
-    let integration =
-        orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap();
+    let integration = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new()).unwrap();
     assert_eq!(integration.state, WorkerState::Merged);
 }
 
 #[test]
 fn send_report_canonicalizes_optional_head_commit_before_storage() {
     let (_repo, orchestrator, _) = setup_repo();
-    let provision = orchestrator.provision_worker(ProvisionWorker::new(perspective())).unwrap();
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
@@ -408,9 +439,9 @@ fn send_report_canonicalizes_optional_head_commit_before_storage() {
 }
 
 #[test]
-fn integrate_rejects_paths_outside_the_compiled_write_set() {
+fn merge_rejects_paths_outside_the_compiled_write_set() {
     let (_repo, orchestrator, _) = setup_repo();
-    let provision = orchestrator.provision_worker(ProvisionWorker::new(perspective())).unwrap();
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
     let base_commit = worker.contract().unwrap().base_commit;
 
@@ -424,7 +455,7 @@ fn integrate_rejects_paths_outside_the_compiled_write_set() {
     let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
     worker.send_commit(head_commit.clone(), BundlePayload::default()).unwrap();
-    let error = orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap_err();
+    let error = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new()).unwrap_err();
     assert!(matches!(
         error,
         RuntimeError::WriteSetViolation {
@@ -441,9 +472,9 @@ fn integrate_rejects_paths_outside_the_compiled_write_set() {
 }
 
 #[test]
-fn integrate_rejects_when_worker_head_moves_after_submission() {
+fn merge_rejects_when_worker_head_moves_after_submission() {
     let (_repo, orchestrator, _) = setup_repo();
-    let provision = orchestrator.provision_worker(ProvisionWorker::new(perspective())).unwrap();
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     fs::write(provision.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
@@ -459,7 +490,7 @@ fn integrate_rejects_when_worker_head_moves_after_submission() {
     git(&provision.worktree_path, &["commit", "-m", "incr: move worker head after submission"]);
     let current_head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
-    let error = orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap_err();
+    let error = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new()).unwrap_err();
     assert!(matches!(
         error,
         RuntimeError::WorkerHeadMismatch {
@@ -474,7 +505,7 @@ fn integrate_rejects_when_worker_head_moves_after_submission() {
 #[test]
 fn send_commit_reports_missing_commit_with_worktree_context() {
     let (_repo, orchestrator, _) = setup_repo();
-    let provision = orchestrator.provision_worker(ProvisionWorker::new(perspective())).unwrap();
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
     let error = worker.send_commit("deadbeef".to_owned(), BundlePayload::default()).unwrap_err();

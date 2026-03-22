@@ -16,8 +16,8 @@ use super::{
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference},
     error::{Result, RuntimeError},
     state::{
-        BiddingGroupSummary, DiscardResult, IntegrateResult, OrchestratorStatus,
-        PerspectiveSummary, ProvisionResult, RulebookInit, RulebookSwitch, RulebookValidation,
+        BiddingGroupSummary, CreateResult, DeleteResult, DiscardResult, MergeResult,
+        OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookSwitch, RulebookValidation,
         WorkerDetail, WorkerState, WorkerSummary,
     },
     storage::{
@@ -27,7 +27,7 @@ use super::{
     worker_id::WorkerId,
 };
 
-/// Request to provision one worker from a compiled perspective.
+/// Request to create one worker from a compiled perspective.
 ///
 /// The orchestrator may provide `worker_id` to pin the runtime identity
 /// used for mailbox routing and filesystem placement. When `worker_id`
@@ -35,10 +35,10 @@ use super::{
 /// id automatically.
 ///
 /// Note: Explicit worker ids may be reused after a previous worker with
-/// the same id reaches a finalized state. Provisioning then replaces the
+/// the same id reaches a finalized state. Worker creation then replaces the
 /// persisted projection with a fresh active worker.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProvisionWorker {
+pub struct CreateWorker {
     /// Perspective to instantiate.
     pub perspective: PerspectiveName,
     /// Optional orchestrator-selected worker identity.
@@ -47,8 +47,8 @@ pub struct ProvisionWorker {
     pub task: Option<BundlePayload>,
 }
 
-impl ProvisionWorker {
-    /// Construct a provisioning request for one perspective.
+impl CreateWorker {
+    /// Construct a create request for one perspective.
     pub fn new(perspective: PerspectiveName) -> Self {
         Self { perspective, worker_id: None, task: None }
     }
@@ -89,11 +89,11 @@ pub trait OrchestratorService {
     /// Load one worker detail view.
     fn get_worker(&self, worker_id: WorkerId) -> Result<WorkerDetail>;
 
-    /// Provision a worker worktree and optional initial task bundle.
+    /// Create a worker workspace and optional initial task bundle.
     ///
     /// Any path-backed payload files are moved into `.multorum/` storage
     /// if publication succeeds.
-    fn provision_worker(&self, request: ProvisionWorker) -> Result<ProvisionResult>;
+    fn create_worker(&self, request: CreateWorker) -> Result<CreateResult>;
 
     /// Publish a `resolve` bundle to the worker inbox.
     ///
@@ -111,13 +111,14 @@ pub trait OrchestratorService {
         &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;
 
-    /// Tear down a worker without integration.
+    /// Finalize a worker without integration while preserving its workspace.
     fn discard_worker(&self, worker_id: WorkerId) -> Result<DiscardResult>;
 
-    /// Run the pre-merge pipeline and integrate the worker submission.
-    fn integrate_worker(
-        &self, worker_id: WorkerId, skip_checks: Vec<String>,
-    ) -> Result<IntegrateResult>;
+    /// Delete one finalized worker workspace.
+    fn delete_worker(&self, worker_id: WorkerId) -> Result<DeleteResult>;
+
+    /// Run the pre-merge pipeline and merge the worker submission.
+    fn merge_worker(&self, worker_id: WorkerId, skip_checks: Vec<String>) -> Result<MergeResult>;
 
     /// Return the current orchestrator status projection.
     fn status(&self) -> Result<OrchestratorStatus>;
@@ -245,9 +246,9 @@ impl FsOrchestratorService {
             .map_err(|_| RuntimeError::CheckFailed("failed to allocate worker id".to_owned()))
     }
 
-    fn resolve_worker_id(
+    fn resolve_create_worker_id(
         &self, perspective: &PerspectiveName, worker_id: Option<WorkerId>,
-    ) -> Result<WorkerId> {
+    ) -> Result<(WorkerId, Option<WorkerRecord>)> {
         if let Some(worker_id) = worker_id {
             if let Some(record) = self
                 .fs
@@ -258,14 +259,15 @@ impl FsOrchestratorService {
                 if is_live_worker_state(record.state) {
                     return Err(RuntimeError::WorkerIdExists(worker_id));
                 }
+                return Ok((worker_id, Some(record)));
             }
-            return Ok(worker_id);
+            return Ok((worker_id, None));
         }
 
-        self.allocate_worker_id(perspective)
+        Ok((self.allocate_worker_id(perspective)?, None))
     }
 
-    fn validate_provision_boundary(
+    fn validate_create_boundary(
         &self, perspective: &PerspectiveName, candidate: &CompiledPerspective,
     ) -> Result<()> {
         let active_groups = self.active_bidding_groups()?;
@@ -297,13 +299,34 @@ impl FsOrchestratorService {
         Ok(())
     }
 
-    fn discard_worker_record(&self, record: &mut WorkerRecord) -> Result<()> {
+    fn cleanup_workspace_before_create(&self, record: &WorkerRecord) -> Result<()> {
         if record.worktree_path.exists() {
             self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
+        }
+        Ok(())
+    }
+
+    fn finalize_discarded_worker(&self, record: &mut WorkerRecord) -> Result<()> {
+        // Note: Discard finalizes worker lifecycle state but preserves the
+        // workspace so the orchestrator can inspect or delete it explicitly later.
+        if record.worktree_path.exists() {
+            tracing::debug!(
+                worker_id = %record.worker_id,
+                root = %record.worktree_path.display(),
+                "preserving discarded worker workspace"
+            );
         }
         record.state = WorkerState::Discarded;
         record.submitted_head_commit = None;
         self.fs.store_worker_record(record)
+    }
+
+    fn delete_worker_workspace(&self, record: &WorkerRecord) -> Result<bool> {
+        if !record.worktree_path.exists() {
+            return Ok(false);
+        }
+        self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
+        Ok(true)
     }
 
     fn publish_worker_inbox(
@@ -435,16 +458,20 @@ impl OrchestratorService for FsOrchestratorService {
         })
     }
 
-    fn provision_worker(&self, request: ProvisionWorker) -> Result<ProvisionResult> {
-        let ProvisionWorker { perspective, worker_id, task } = request;
+    fn create_worker(&self, request: CreateWorker) -> Result<CreateResult> {
+        let CreateWorker { perspective, worker_id, task } = request;
         let (active, compiled) = self.fs.load_active_compiled_rulebook()?;
         let compiled_perspective = compiled
             .perspectives()
             .get(&perspective)
             .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?;
-        self.validate_provision_boundary(&perspective, compiled_perspective)?;
+        self.validate_create_boundary(&perspective, compiled_perspective)?;
 
-        let worker_id = self.resolve_worker_id(&perspective, worker_id)?;
+        let (worker_id, previous_finalized_record) =
+            self.resolve_create_worker_id(&perspective, worker_id)?;
+        if let Some(record) = previous_finalized_record.as_ref() {
+            self.cleanup_workspace_before_create(record)?;
+        }
         let worktree_path = self.fs.worker_paths(&worker_id).worktree_root().to_path_buf();
         self.fs.vcs().create_worktree(
             self.fs.workspace_root(),
@@ -487,10 +514,10 @@ impl OrchestratorService for FsOrchestratorService {
             worker_id = %worker_id,
             perspective = %perspective,
             root = %worktree_path.display(),
-            "provisioned active worker"
+            "created active worker"
         );
 
-        Ok(ProvisionResult {
+        Ok(CreateResult {
             worker_id,
             perspective,
             worktree_path,
@@ -521,7 +548,7 @@ impl OrchestratorService for FsOrchestratorService {
             });
         }
 
-        self.discard_worker_record(&mut record)?;
+        self.finalize_discarded_worker(&mut record)?;
 
         tracing::info!(worker_id = %record.worker_id, perspective = %record.perspective, "discarded worker");
         Ok(DiscardResult {
@@ -531,13 +558,37 @@ impl OrchestratorService for FsOrchestratorService {
         })
     }
 
-    fn integrate_worker(
-        &self, worker_id: WorkerId, skip_checks: Vec<String>,
-    ) -> Result<IntegrateResult> {
+    fn delete_worker(&self, worker_id: WorkerId) -> Result<DeleteResult> {
+        let record = self.fs.load_worker_record(&worker_id)?;
+        if !matches!(record.state, WorkerState::Merged | WorkerState::Discarded) {
+            return Err(RuntimeError::InvalidState {
+                operation: "delete worker workspace",
+                expected: "MERGED or DISCARDED",
+                actual: record.state,
+            });
+        }
+
+        let deleted_workspace = self.delete_worker_workspace(&record)?;
+        tracing::info!(
+            worker_id = %record.worker_id,
+            perspective = %record.perspective,
+            deleted_workspace,
+            "deleted worker workspace"
+        );
+        Ok(DeleteResult {
+            worker_id: record.worker_id,
+            perspective: record.perspective,
+            state: record.state,
+            worktree_path: record.worktree_path,
+            deleted_workspace,
+        })
+    }
+
+    fn merge_worker(&self, worker_id: WorkerId, skip_checks: Vec<String>) -> Result<MergeResult> {
         let mut record = self.fs.load_worker_record(&worker_id)?;
         if record.state != WorkerState::Committed {
             return Err(RuntimeError::InvalidState {
-                operation: "integrate worker",
+                operation: "merge worker",
                 expected: "COMMITTED",
                 actual: record.state,
             });
@@ -603,15 +654,16 @@ impl OrchestratorService for FsOrchestratorService {
 
         self.fs.vcs().ensure_clean_workspace(self.fs.workspace_root())?;
         self.fs.vcs().integrate_commit(self.fs.workspace_root(), &head_commit)?;
-        self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
 
+        // Note: Merge finalizes worker lifecycle state but preserves the
+        // workspace so the orchestrator can inspect or delete it explicitly later.
         record.state = WorkerState::Merged;
         self.fs.store_worker_record(&record)?;
 
         for mut sibling in self.active_workers()?.into_iter().filter(|sibling| {
             sibling.worker_id != record.worker_id && sibling.perspective == record.perspective
         }) {
-            self.discard_worker_record(&mut sibling)?;
+            self.finalize_discarded_worker(&mut sibling)?;
         }
 
         tracing::info!(
@@ -620,7 +672,7 @@ impl OrchestratorService for FsOrchestratorService {
             head_commit = %head_commit,
             "merged worker"
         );
-        Ok(IntegrateResult {
+        Ok(MergeResult {
             worker_id: record.worker_id,
             perspective: record.perspective,
             state: record.state,

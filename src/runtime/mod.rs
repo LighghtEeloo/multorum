@@ -22,13 +22,13 @@ pub use bundle::{
 };
 pub use error::{Result, RuntimeError};
 pub use mailbox::{AckRef, MailboxDirection};
-pub use orchestrator::{FsOrchestratorService, OrchestratorService, ProvisionWorker};
+pub use orchestrator::{CreateWorker, FsOrchestratorService, OrchestratorService};
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};
 pub use projection::TranscriptView;
 pub use state::{
-    BiddingGroupSummary, DiscardResult, IntegrateResult, MailboxMessageView, OrchestratorStatus,
-    PerspectiveSummary, ProvisionResult, RulebookInit, RulebookSwitch, RulebookValidation,
-    WorkerContractView, WorkerDetail, WorkerState, WorkerStatus, WorkerSummary,
+    BiddingGroupSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,
+    MergeResult, OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookSwitch,
+    RulebookValidation, WorkerContractView, WorkerDetail, WorkerState, WorkerStatus, WorkerSummary,
 };
 pub use worker::{FsWorkerService, WorkerService};
 pub use worker_id::{WorkerId, WorkerIdError};

@@ -20,16 +20,22 @@ use super::{Sequence, bundle::MessageKind, mailbox::MailboxDirection};
 pub enum WorkerState {
     /// The worktree and runtime surface have been created and the worker may run.
     ///
-    /// Note: Provisioning transitions directly into `ACTIVE`; Multorum does
-    /// not model a separate idle post-provisioning state.
+    /// Note: Worker creation transitions directly into `ACTIVE`; Multorum does
+    /// not model a separate idle post-creation state.
     Active,
     /// The worker is blocked on orchestrator input.
     Blocked,
     /// The worker has submitted a commit and is frozen pending review.
     Committed,
     /// The worker has been merged into the canonical codebase.
+    ///
+    /// Note: Finalization does not tear down the worker workspace.
+    /// Workspace deletion is a separate explicit orchestrator action.
     Merged,
     /// The worker has been discarded without integration.
+    ///
+    /// Note: Finalization does not tear down the worker workspace.
+    /// Workspace deletion is a separate explicit orchestrator action.
     Discarded,
 }
 
@@ -88,9 +94,9 @@ pub struct RulebookInit {
     pub gitignore_path: PathBuf,
 }
 
-/// Result of provisioning a worker.
+/// Result of creating a worker.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ProvisionResult {
+pub struct CreateResult {
     /// New worker identity.
     pub worker_id: WorkerId,
     /// Perspective instantiated by the worker.
@@ -114,9 +120,24 @@ pub struct DiscardResult {
     pub state: WorkerState,
 }
 
-/// Result of integrating a worker submission.
+/// Result of deleting one finalized worker workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct IntegrateResult {
+pub struct DeleteResult {
+    /// Deleted worker identity.
+    pub worker_id: WorkerId,
+    /// Perspective held by the worker.
+    pub perspective: PerspectiveName,
+    /// Final worker state preserved after workspace deletion.
+    pub state: WorkerState,
+    /// Absolute path to the worker workspace.
+    pub worktree_path: PathBuf,
+    /// Whether a workspace directory existed and was removed.
+    pub deleted_workspace: bool,
+}
+
+/// Result of merging a worker submission.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MergeResult {
     /// Merged worker identity.
     pub worker_id: WorkerId,
     /// Perspective held by the merged worker.
@@ -164,7 +185,7 @@ pub struct WorkerDetail {
     pub worktree_path: PathBuf,
     /// Canonical rulebook commit governing the worker.
     pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical base code commit from which the worker was provisioned.
+    /// Canonical base code commit from which the worker was created.
     pub base_commit: CanonicalCommitHash,
     /// Canonical submitted worker head commit when present.
     pub submitted_head_commit: Option<CanonicalCommitHash>,
@@ -190,7 +211,7 @@ pub struct WorkerContractView {
     pub perspective: PerspectiveName,
     /// Canonical rulebook commit governing the worker.
     pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical base code commit from which the worktree was provisioned.
+    /// Canonical base code commit from which the worktree was created.
     pub base_commit: CanonicalCommitHash,
     /// Path to the compiled read set file.
     pub read_set_path: PathBuf,

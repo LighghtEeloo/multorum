@@ -4,7 +4,8 @@
 //! stores the authoritative control plane, worker contract, compiled
 //! file sets, and mailbox bundles. This module centralizes that on-disk
 //! layout and the small amount of version-control orchestration needed
-//! to provision worktrees and integrate submitted commits.
+//! to create worktrees, delete finalized workspaces, and integrate
+//! submitted commits.
 
 mod mailbox;
 mod records;

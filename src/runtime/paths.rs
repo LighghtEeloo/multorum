@@ -86,7 +86,7 @@ impl OrchestratorPaths {
     /// Construct orchestrator path helpers from the runtime root.
     ///
     /// Note: This constructor does not canonicalize because the runtime
-    /// directory is created lazily during activation and provisioning.
+    /// directory is created lazily during activation and worker creation.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
     }

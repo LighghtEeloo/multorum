@@ -73,11 +73,11 @@ pub enum RuntimeError {
 
     /// A candidate bidding group conflicts with active runtime state.
     #[error(
-        "cannot provision perspective `{perspective}` because active perspective `{blocking_perspective}` has a {relation}: {files}",
+        "cannot create worker for perspective `{perspective}` because active perspective `{blocking_perspective}` has a {relation}: {files}",
         files = format_paths(files)
     )]
     ConflictWithActiveBiddingGroup {
-        /// Perspective being provisioned.
+        /// Perspective being created.
         perspective: PerspectiveName,
         /// Active perspective that blocks the candidate boundary.
         blocking_perspective: PerspectiveName,
@@ -111,7 +111,7 @@ pub enum RuntimeError {
         worker_id: WorkerId,
         /// Perspective instantiated by the worker.
         perspective: PerspectiveName,
-        /// Canonical base commit from which the worker was provisioned.
+        /// Canonical base commit from which the worker was created.
         base_commit: CanonicalCommitHash,
         /// Canonical submitted worker head commit.
         head_commit: CanonicalCommitHash,

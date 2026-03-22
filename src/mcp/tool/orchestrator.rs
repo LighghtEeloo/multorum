@@ -14,7 +14,7 @@ const GET_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
     required: true,
 }];
 
-const PROVISION_WORKER_INPUTS: &[ToolInputDescriptor] = &[
+const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor {
         name: "perspective",
         description: "Compiled perspective to instantiate.",
@@ -60,16 +60,16 @@ const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
     },
 ];
 
-const DISCARD_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
+const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
     name: "worker_id",
-    description: "Runtime worker identity to discard.",
+    description: "Runtime worker identity to act on.",
     required: true,
 }];
 
-const INTEGRATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
+const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor {
         name: "worker_id",
-        description: "Runtime worker identity to integrate.",
+        description: "Runtime worker identity to merge.",
         required: true,
     },
     ToolInputDescriptor {
@@ -118,9 +118,9 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
             inputs: GET_WORKER_INPUTS,
         },
         ToolDescriptor {
-            name: "provision_worker",
-            description: "Provision a worker worktree and optional initial task bundle; path-backed payload files are moved into .multorum storage.",
-            inputs: PROVISION_WORKER_INPUTS,
+            name: "create_worker",
+            description: "Create a worker workspace and optional initial task bundle; path-backed payload files are moved into .multorum storage.",
+            inputs: CREATE_WORKER_INPUTS,
         },
         ToolDescriptor {
             name: "resolve_worker",
@@ -134,13 +134,18 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "discard_worker",
-            description: "Tear down a worker without integration.",
-            inputs: DISCARD_WORKER_INPUTS,
+            description: "Finalize a worker without integration while preserving its workspace.",
+            inputs: FINALIZED_WORKER_INPUTS,
         },
         ToolDescriptor {
-            name: "integrate_worker",
-            description: "Run the pre-merge pipeline and integrate a worker submission.",
-            inputs: INTEGRATE_WORKER_INPUTS,
+            name: "delete_worker",
+            description: "Delete one finalized worker workspace.",
+            inputs: FINALIZED_WORKER_INPUTS,
+        },
+        ToolDescriptor {
+            name: "merge_worker",
+            description: "Run the pre-merge pipeline and merge a worker submission.",
+            inputs: MERGE_WORKER_INPUTS,
         },
         ToolDescriptor {
             name: "get_status",

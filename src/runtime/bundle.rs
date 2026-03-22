@@ -30,7 +30,7 @@ pub struct Sequence(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MessageKind {
-    /// Initial task assignment published during provisioning.
+    /// Initial task assignment published during worker creation.
     Task,
     /// Worker blocker report.
     Report,

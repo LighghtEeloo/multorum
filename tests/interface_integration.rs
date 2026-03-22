@@ -4,11 +4,11 @@ use multorum::cli::{Cli, Command, WorkerCommand};
 use multorum::mcp::McpServer;
 
 #[test]
-fn cli_provision_accepts_optional_worker_id() {
+fn cli_create_accepts_optional_worker_id() {
     let cli = Cli::try_parse_from([
         "multorum",
         "worker",
-        "provision",
+        "create",
         "AuthImplementor",
         "--worker-id",
         "custom_worker_7",
@@ -16,7 +16,7 @@ fn cli_provision_accepts_optional_worker_id() {
     .unwrap();
 
     match cli.command {
-        | Command::Worker { command: WorkerCommand::Provision { perspective, worker_id, .. } } => {
+        | Command::Worker { command: WorkerCommand::Create { perspective, worker_id, .. } } => {
             assert_eq!(perspective.as_str(), "AuthImplementor");
             assert_eq!(worker_id.unwrap().as_str(), "custom_worker_7");
         }
@@ -25,17 +25,66 @@ fn cli_provision_accepts_optional_worker_id() {
 }
 
 #[test]
-fn orchestrator_mcp_provision_descriptor_exposes_optional_worker_id() {
+fn orchestrator_mcp_create_descriptor_exposes_optional_worker_id() {
     let server = McpServer::orchestrator();
-    let provision = server
+    let create = server
         .tools
         .iter()
-        .find(|tool| tool.name == "provision_worker")
-        .expect("missing provision_worker tool descriptor");
+        .find(|tool| tool.name == "create_worker")
+        .expect("missing create_worker tool descriptor");
 
-    assert!(provision.inputs.iter().any(|input| {
+    assert!(create.inputs.iter().any(|input| {
         input.name == "worker_id"
             && !input.required
             && input.description.contains("default perspective-based worker id")
+    }));
+}
+
+#[test]
+fn orchestrator_mcp_delete_descriptor_requires_worker_id() {
+    let server = McpServer::orchestrator();
+    let delete = server
+        .tools
+        .iter()
+        .find(|tool| tool.name == "delete_worker")
+        .expect("missing delete_worker tool descriptor");
+
+    assert_eq!(delete.inputs.len(), 1);
+    assert_eq!(delete.inputs[0].name, "worker_id");
+    assert!(delete.inputs[0].required);
+}
+
+#[test]
+fn cli_merge_accepts_worker_id_and_skip_checks() {
+    let cli = Cli::try_parse_from([
+        "multorum",
+        "worker",
+        "merge",
+        "custom_worker_7",
+        "--skip-check",
+        "unit",
+    ])
+    .unwrap();
+
+    match cli.command {
+        | Command::Worker { command: WorkerCommand::Merge { worker_id, skip_checks } } => {
+            assert_eq!(worker_id.as_str(), "custom_worker_7");
+            assert_eq!(skip_checks, vec!["unit"]);
+        }
+        | command => panic!("unexpected command: {command:?}"),
+    }
+}
+
+#[test]
+fn orchestrator_mcp_merge_descriptor_uses_merge_name() {
+    let server = McpServer::orchestrator();
+    let merge = server
+        .tools
+        .iter()
+        .find(|tool| tool.name == "merge_worker")
+        .expect("missing merge_worker tool descriptor");
+
+    assert!(merge.inputs.iter().any(|input| {
+        input.name == "worker_id" && input.required && input.description.contains("merge")
     }));
 }

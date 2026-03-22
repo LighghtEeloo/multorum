@@ -17,7 +17,7 @@ use crate::vcs::CanonicalCommitHash;
 pub(crate) struct ActiveRulebookRecord {
     /// Canonical commit that owns the active committed rulebook.
     pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical pinned base commit for newly provisioned workers.
+    /// Canonical pinned base commit for newly created workers.
     pub base_commit: CanonicalCommitHash,
     /// Activation timestamp.
     pub activated_at: String,
@@ -36,7 +36,7 @@ pub(crate) struct WorkerRecord {
     pub worktree_path: PathBuf,
     /// Canonical rulebook commit pinned into the worker contract.
     pub rulebook_commit: CanonicalCommitHash,
-    /// Canonical base code commit from which the worker was provisioned.
+    /// Canonical base code commit from which the worker was created.
     pub base_commit: CanonicalCommitHash,
     /// Canonical submitted worker commit when the worker is in `COMMITTED`.
     pub submitted_head_commit: Option<CanonicalCommitHash>,

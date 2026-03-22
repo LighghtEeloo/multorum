@@ -23,9 +23,9 @@ The rulebook at `.multorum/rulebook.toml` defines named *perspectives*. A perspe
 - a read set: stable context that concurrent work must not modify
 - a write set: the exact files that role may change
 
-When the orchestrator provisions a worker from a perspective, Multorum creates a git worktree pinned to the active rulebook's base commit and materializes the compiled read and write sets into the worker-local runtime surface.
+When the orchestrator creates a worker from a perspective, Multorum creates a git worktree pinned to the active rulebook's base commit and materializes the compiled read and write sets into the worker-local runtime surface.
 
-If the orchestrator wants multiple attempts at the same role, it can provision multiple workers from the same perspective. Those workers form a *bidding group*: they share the same base snapshot and scope, and at most one of them may ultimately merge.
+If the orchestrator wants multiple attempts at the same role, it can create multiple workers from the same perspective. Those workers form a *bidding group*: they share the same base snapshot and scope, and at most one of them may ultimately merge.
 
 The active rulebook is immutable by commit hash. Changing `rulebook.toml` on disk does nothing until the orchestrator explicitly switches Multorum to a new committed version.
 
@@ -43,11 +43,11 @@ This means:
 
 Workers are allowed to read the full codebase. The read set is guidance plus a stability guarantee, not a filesystem restriction.
 
-Workers may not create new files. The write set is a closed list of existing paths compiled at provisioning time. If new files are needed, the orchestrator must change the rulebook and reprovision.
+Workers may not create new files. The write set is a closed list of existing paths compiled at worker creation time. If new files are needed, the orchestrator must change the rulebook and create a fresh worker.
 
 ## Runtime Shape
 
-The main workspace owns the orchestrator control plane under `.multorum/orchestrator/`. Each worker worktree has its own `.multorum/` runtime surface containing:
+The main workspace owns the orchestrator control plane under `.multorum/orchestrator/`. Each worker workspace has its own `.multorum/` runtime surface containing:
 
 - `contract.toml`
 - `read-set.txt`
@@ -59,12 +59,14 @@ All orchestrator-worker communication is file-based. Messages are directory bund
 
 Workers move through a small lifecycle:
 
-- `ACTIVE`: provisioned and running
+- `ACTIVE`: created and running
 - `BLOCKED`: waiting for orchestrator input after a `report`
 - `COMMITTED`: submission frozen pending orchestrator action
-- `MERGED` or `DISCARDED`: terminal outcomes
+- `MERGED` or `DISCARDED`: finalized outcomes; the workspace is preserved until an explicit delete
 
-## Integration
+Finalization and workspace deletion are separate actions. `merge` and `discard` change lifecycle state, while `delete` removes a finalized worker workspace. If the orchestrator reuses an explicit worker id after `MERGED` or `DISCARDED`, Multorum replaces the old finalized workspace with a fresh one for the new worker.
+
+## Merge
 
 Before any worker submission merges, Multorum runs a pre-merge pipeline:
 
@@ -72,6 +74,15 @@ Before any worker submission merges, Multorum runs a pre-merge pipeline:
 2. project-defined checks from the rulebook, such as build, lint, or test
 
 Workers may attach evidence and ask the orchestrator to skip specific project-defined checks, but the write-set check is never skippable.
+
+## Worker Commands
+
+The orchestrator-side worker lifecycle commands are:
+
+- `create`: create a worker workspace from a perspective
+- `merge`: run the pre-merge pipeline and merge a committed worker
+- `discard`: finalize a worker without merging while preserving its workspace
+- `delete`: remove a finalized worker workspace
 
 ## Rulebook Example
 

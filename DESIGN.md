@@ -9,7 +9,7 @@
 5. [Workers](#workers)
 6. [The Rulebook](#the-rulebook)
 7. [Project Layout](#project-layout)
-8. [Sub-Codebase Provisioning](#sub-codebase-provisioning)
+8. [Worker Creation](#worker-creation)
 9. [The Worker State Machine](#the-worker-state-machine)
 10. [The Mailbox Protocol](#the-mailbox-protocol)
 11. [The Pre-Merge Pipeline](#the-pre-merge-pipeline)
@@ -19,7 +19,7 @@
 
 ## Introduction
 
-Multorum is a programming tool that manages multiple simultaneous perspectives on a single codebase. It is designed primarily for AI agent orchestration workflows, where a coordinating agent (the *orchestrator*) decomposes a development goal into discrete tasks and assigns each task to an independent agent (a *worker*). Each worker operates in an isolated environment with precisely scoped access to the codebase, then submits its work back to the orchestrator for integration.
+Multorum is a programming tool that manages multiple simultaneous perspectives on a single codebase. It is designed primarily for AI agent orchestration workflows, where a coordinating agent (the *orchestrator*) decomposes a development goal into discrete tasks and assigns each task to an independent agent (a *worker*). Each worker operates in an isolated environment with precisely scoped access to the codebase, then submits its work back to the orchestrator for merge.
 
 ### The Problem Multorum Solves
 
@@ -41,7 +41,7 @@ The orchestrator is the sole coordination authority in a Multorum workflow. It m
 
 - Decomposing development goals into discrete tasks
 - Declaring the rulebook that governs which workers exist and what they may access
-- Issuing instructions to Multorum to provision, resume, and integrate workers
+- Issuing instructions to Multorum to create, resume, merge, discard, and delete workers
 - Receiving and resolving worker reports
 - Evolving the rulebook as the project matures
 
@@ -56,13 +56,13 @@ The orchestrator communicates downward to Multorum and to individual workers. Wo
 
 ### Workers and Perspectives
 
-A *perspective* is a declaration in the rulebook that defines a named role, its write scope, and its read scope. A *worker* is a runtime instantiation of a perspective, executing a task inside the environment that Multorum provisions for that role.
+A *perspective* is a declaration in the rulebook that defines a named role, its write scope, and its read scope. A *worker* is a runtime instantiation of a perspective, executing a task inside the environment that Multorum creates for that role.
 
-The distinction matters: perspectives are static declarations that live in the rulebook; workers are runtime entities with lifecycle state. A perspective can exist in the rulebook without any live workers. When the orchestrator provisions multiple workers from the same perspective against the same pinned snapshot, those workers form a *bidding group*: several competing executions of one declared role, of which at most one may ultimately be merged.
+The distinction matters: perspectives are static declarations that live in the rulebook; workers are runtime entities with lifecycle state. A perspective can exist in the rulebook without any live workers. When the orchestrator creates multiple workers from the same perspective against the same pinned snapshot, those workers form a *bidding group*: several competing executions of one declared role, of which at most one may ultimately be merged.
 
 ### The Canonical Codebase
 
-There is one canonical codebase, managed under version control. It represents the authoritative state of the project. Workers never write to it directly. All changes flow through Multorum's pre-merge pipeline before being integrated into the canonical codebase by the orchestrator.
+There is one canonical codebase, managed under version control. It represents the authoritative state of the project. Workers never write to it directly. All changes flow through Multorum's pre-merge pipeline before being merged into the canonical codebase by the orchestrator.
 
 ---
 
@@ -151,7 +151,7 @@ Candidate bidding group from selected perspective
 Compare candidate read/write sets against every active bidding group's materialized read/write sets
         │
         ▼
-Provision worker and materialize identical read/write sets in its runtime
+Create worker and materialize identical read/write sets in its runtime
 ```
 
 ### Constraints
@@ -190,11 +190,11 @@ The read set names the stable context for the role. It tells the orchestrator wh
 
 ## Workers
 
-A *worker* is a runtime execution of a perspective. Provisioning pins a worker to a specific rulebook commit, a specific base commit, and the compiled read and write sets derived from that perspective at that moment. Perspectives are static policy; workers are ephemeral attempts.
+A *worker* is a runtime execution of a perspective. Worker creation pins a worker to a specific rulebook commit, a specific base commit, and the compiled read and write sets derived from that perspective at that moment. Perspectives are static policy; workers are ephemeral attempts.
 
 ### Bidding Groups
 
-When the orchestrator wants multiple attempts at the same role, it may provision multiple workers from one perspective. Those workers form a *bidding group*. A bidding group is the runtime unit of competition and merge selection.
+When the orchestrator wants multiple attempts at the same role, it may create multiple workers from one perspective. Those workers form a *bidding group*. A bidding group is the runtime unit of competition and merge selection.
 
 All workers in the same bidding group share:
 
@@ -204,7 +204,7 @@ All workers in the same bidding group share:
 - the same compiled read set
 - the same compiled write set
 
-Because workers inside a bidding group are alternative realizations of the same declared role, they are not isolated from each other by file ownership. Instead, they are kept comparable: they start from the same snapshot and operate under the same scope. Only one worker from a bidding group may be integrated into the canonical codebase. Once one member is selected for integration, the remaining members of that group are discarded.
+Because workers inside a bidding group are alternative realizations of the same declared role, they are not isolated from each other by file ownership. Instead, they are kept comparable: they start from the same snapshot and operate under the same scope. Only one worker from a bidding group may be merged into the canonical codebase. Once one member is selected for merge, the remaining members of that group are discarded.
 
 ### The Conflict-Free Invariant
 
@@ -223,15 +223,15 @@ Inside a bidding group `B`, all workers are instantiations of the same perspecti
 - `write(x) = write(y)`
 - `read(x) = read(y)`
 
-This is why the conflict-free invariant belongs at the worker boundary rather than the perspective boundary. Perspectives declare ownership once; bidding groups are the concurrent runtime entities that must not interfere with each other. Once a valid set of bidding groups is active, workers execute in full parallel with no runtime conflict detection, arbitration, or rollback between groups. Integration stays conflict-free because each written file has at most one active writing group, and within a group the orchestrator selects at most one submission to merge.
+This is why the conflict-free invariant belongs at the worker boundary rather than the perspective boundary. Perspectives declare ownership once; bidding groups are the concurrent runtime entities that must not interfere with each other. Once a valid set of bidding groups is active, workers execute in full parallel with no runtime conflict detection, arbitration, or rollback between groups. Merge stays conflict-free because each written file has at most one active writing group, and within a group the orchestrator selects at most one submission to merge.
 
 ### When It Is Checked
 
 Multorum checks the conflict-free invariant when concurrent runtime state would change:
 
-- On `provision`, it takes the selected perspective's compiled read and write sets as the candidate bidding-group boundary.
-- If the worker being provisioned joins an existing bidding group, Multorum checks equality with that group's materialized read and write sets.
-- If the worker being provisioned creates a new bidding group, Multorum checks the candidate group's read and write sets against every other active bidding group's materialized read and write sets.
+- On `create`, it takes the selected perspective's compiled read and write sets as the candidate bidding-group boundary.
+- If the worker being created joins an existing bidding group, Multorum checks equality with that group's materialized read and write sets.
+- If the worker being created creates a new bidding group, Multorum checks the candidate group's read and write sets against every other active bidding group's materialized read and write sets.
 - On `rulebook switch`, Multorum compiles the target rulebook and checks every target perspective's candidate read and write sets against every currently active bidding group's materialized read and write sets.
 
 In other words, conflict freedom is checked against the runtime state that already exists, not against perspectives in isolation.
@@ -280,7 +280,7 @@ clippy = "cargo clippy --workspace --all-targets -- -D warnings"
 test = "cargo test --workspace"
 ```
 
-This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `check` table to make the example complete. Workers created from `AuthImplementor` and `AuthTester` may run in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across those groups. The `check` table defines the ordered pre-merge pipeline that every submitted change must pass before integration.
+This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `check` table to make the example complete. Workers created from `AuthImplementor` and `AuthTester` may run in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across those groups. The `check` table defines the ordered pre-merge pipeline that every submitted change must pass before merge.
 
 ### Default Rulebook Template
 
@@ -337,7 +337,7 @@ A rulebook switch is valid if and only if it does not conflict with any currentl
 
 If this check passes, the switch is valid regardless of how extensively the rest of the rulebook has changed. Perspectives may be renamed, restructured, or entirely replaced — as long as the files actively being worked on are undisturbed, the switch proceeds.
 
-If the check fails, Multorum rejects the switch and reports which active bidding groups are blocking it. The orchestrator must wait for those groups to complete and integrate before retrying.
+If the check fails, Multorum rejects the switch and reports which active bidding groups are blocking it. The orchestrator must wait for those groups to complete and merge before retrying.
 
 ---
 
@@ -351,7 +351,7 @@ A Multorum project adds a `.multorum/` directory to the project root. Every work
     .gitignore          # committed — ignores Multorum runtime directories
     rulebook.toml        # committed — perspectives, file sets, check pipeline
     orchestrator/        # gitignored — orchestrator control plane and audit data
-    worktrees/           # gitignored — git worktrees for active workers
+    worktrees/           # gitignored — git worktrees for managed worker workspaces
   src/
   tests/
   ...
@@ -365,7 +365,7 @@ A Multorum project adds a `.multorum/` directory to the project root. Every work
 
 In the main workspace, **`.multorum/orchestrator/`** contains the orchestrator's local control-plane data: the active rulebook commit, worker state projections, integration records, check results, and audit logs. This data is local to the machine and does not travel with the repository.
 
-**`.multorum/worktrees/`** contains one subdirectory per active worker, each being a git worktree. These are created and destroyed by Multorum as workers are started, integrated, or discarded.
+**`.multorum/worktrees/`** contains one subdirectory per worker workspace, each being a git worktree. Multorum creates these directories on `create`. Finalized workers keep their workspaces until the orchestrator explicitly issues `delete`.
 
 Inside each worker worktree, the worker-local **`.multorum/`** directory contains the runtime contract, the compiled read and write sets, the inbox and outbox mailboxes, and any runtime artifacts attached to messages. These files are authoritative for orchestrator-worker communication, but they are local runtime state rather than project configuration. When the orchestrator or worker submits payloads by filesystem path, Multorum moves them into this runtime area and becomes responsible for retaining them.
 
@@ -382,9 +382,9 @@ Multorum verifies that these entries are present during `rulebook init` and warn
 
 ---
 
-## Sub-Codebase Provisioning
+## Worker Creation
 
-When the orchestrator issues a `provision` instruction for a perspective, Multorum creates an isolated working environment for a new worker. This environment is called a *sub-codebase*. Repeated provisioning from the same perspective creates additional workers in the same bidding group so the orchestrator can compare alternative implementations under one declared scope.
+When the orchestrator issues a `create` instruction for a perspective, Multorum creates an isolated working environment for a new worker. This environment is called a *sub-codebase*. Repeated creation from the same perspective creates additional workers in the same bidding group so the orchestrator can compare alternative implementations under one declared scope.
 
 ### The Layered View Problem
 
@@ -405,18 +405,20 @@ git worktree add .multorum/worktrees/<worker-id> <pinned-base-commit>
 
 All worktrees are created from the same pinned commit. This means every worker starts from an identical snapshot of the codebase, and that snapshot does not change for the lifetime of the worker's task — even if the orchestrator integrates other workers' commits into HEAD in the meantime. Workers in the same bidding group therefore begin from the same world and differ only in how they execute the assignment.
 
-This stability is intentional. Each worker operates on a predictable, immutable world. The orchestrator is responsible for decomposing work such that workers do not depend on each other's in-progress output. If such a dependency exists, the orchestrator should sequence the tasks across separate provisioning steps rather than running them concurrently.
+This stability is intentional. Each worker operates on a predictable, immutable world. The orchestrator is responsible for decomposing work such that workers do not depend on each other's in-progress output. If such a dependency exists, the orchestrator should sequence the tasks across separate worker creation steps rather than running them concurrently.
+
+If the orchestrator explicitly reuses a worker id after that worker reaches `MERGED` or `DISCARDED`, Multorum first removes the finalized worker's old git worktree registration and then creates a fresh workspace at the same managed path. Worker-id reuse is therefore a request for a new worker, not a request to reopen old runtime state.
 
 ### Worker-Local Runtime
 
 Every worker worktree has its own `.multorum/` directory, distinct from the orchestrator's `.multorum/` directory in the main workspace. Multorum uses this worker-local directory as the worker's runtime control surface.
 
-At provisioning time, Multorum creates the following runtime files inside the worker worktree:
+At worker creation time, Multorum creates the following runtime files inside the worker worktree:
 
 ```text
 .multorum/
   rulebook.toml      # checked out from the pinned commit
-  contract.toml      # runtime — worker id, bidding group, perspective, pinned rulebook commit, base commit
+  contract.toml      # runtime — worker id, perspective, pinned rulebook commit, base commit
   read-set.txt       # runtime — compiled read set for worker guidance
   write-set.txt      # runtime — compiled write set for enforcement and audit
   inbox/
@@ -434,7 +436,7 @@ Any payload passed by path during mailbox publication is **consumed** rather tha
 
 ### Write Enforcement
 
-Write set enforcement is implemented as a server-side pre-merge check in Multorum's integration pipeline. When a worker submits its commit, Multorum verifies that every changed file is within that worker's compiled write set before allowing integration. This is a hard check that cannot be waived.
+Write set enforcement is implemented as a server-side pre-merge check in Multorum's merge pipeline. When a worker submits its commit, Multorum verifies that every changed file is within that worker's compiled write set before allowing merge. This is a hard check that cannot be waived.
 
 A client-side git hook may additionally be installed in the worktree as an early-warning mechanism for the worker, but client-side hooks are not considered authoritative — they can be bypassed. The server-side check is the enforcement point.
 
@@ -446,7 +448,7 @@ This design acknowledges that LLM-based agents often need to navigate the codeba
 
 ### New Files
 
-Workers may not create files that were not present in the codebase at provisioning time. The write set, compiled from the rulebook, is a closed list of existing files. If a worker determines that its task cannot be completed without creating a new file, it must report back to the orchestrator rather than creating the file unilaterally. The orchestrator may then update the rulebook to declare the new file, switch to the updated rulebook, and re-provision the affected worker.
+Workers may not create files that were not present in the codebase at worker creation time. The write set, compiled from the rulebook, is a closed list of existing files. If a worker determines that its task cannot be completed without creating a new file, it must report back to the orchestrator rather than creating the file unilaterally. The orchestrator may then update the rulebook to declare the new file, switch to the updated rulebook, and create a fresh worker.
 
 This constraint keeps the compiled file lists authoritative and ensures that every file in the system has an explicit, declared owner.
 
@@ -454,14 +456,14 @@ This constraint keeps the compiled file lists authoritative and ensures that eve
 
 ## The Worker State Machine
 
-A worker progresses through a defined set of states during its lifecycle. Multorum enforces valid state transitions and rejects instructions that would produce invalid ones. This state machine is defined per worker; a bidding group is simply a set of workers moving through the same machine independently until one is selected for integration or the group is discarded.
+A worker progresses through a defined set of states during its lifecycle. Multorum enforces valid state transitions and rejects instructions that would produce invalid ones. This state machine is defined per worker; a bidding group is simply a set of workers moving through the same machine independently until one is selected for merge or the group is discarded.
 
 ```
                  BLOCKED
                     ▲ │
              report │ │ resolve
                     │ ▼
-provision ───────► ACTIVE
+create ─────────► ACTIVE
                     │ ▲
              commit │ │ revise
                     ▼ │
@@ -476,24 +478,26 @@ provision ───────► ACTIVE
 
 - **ACTIVE** — the worktree has been created, the worker's environment is ready, and execution may proceed immediately.
 - **BLOCKED** — the worker has reported a blocker and is awaiting orchestrator resolution. The worker is suspended; no execution occurs in this state.
-- **COMMITTED** — the worker has completed its task and submitted a commit to Multorum. The worktree is frozen pending orchestrator action: integration, revision, or discard.
-- **MERGED** — the worker's commit has passed the pre-merge pipeline and been merged into the canonical codebase. The worktree is released.
-- **DISCARDED** — the worker's worktree has been torn down without integration. The work is abandoned.
+- **COMMITTED** — the worker has completed its task and submitted a commit to Multorum. The worktree is frozen pending orchestrator action: merge, revision, or discard.
+- **MERGED** — the worker's commit has passed the pre-merge pipeline and been merged into the canonical codebase. The worktree remains available for inspection until the orchestrator explicitly deletes it.
+- **DISCARDED** — the worker has been finalized without merge. The worktree remains available for inspection until the orchestrator explicitly deletes it.
 
-Integrating one worker is also a group-level decision: once a worker in a bidding group reaches `MERGED`, every sibling worker in that bidding group becomes `DISCARDED`.
+Merging one worker is also a group-level decision: once a worker in a bidding group reaches `MERGED`, every sibling worker in that bidding group becomes `DISCARDED`.
 
 ### Valid Transitions
 
 | From | To | Trigger |
 |---|---|---|
-| provision | ACTIVE | Multorum creates the worktree and runtime surface |
+| create | ACTIVE | Multorum creates the worktree and runtime surface |
 | ACTIVE | BLOCKED | Worker issues `report` |
 | ACTIVE | COMMITTED | Worker submits commit |
 | BLOCKED | ACTIVE | Orchestrator issues `resolve` |
 | COMMITTED | ACTIVE | Orchestrator issues `revise`; worker resumes to address problems |
-| COMMITTED | MERGED | Orchestrator issues `integrate`; pre-merge checks pass |
+| COMMITTED | MERGED | Orchestrator issues `merge`; pre-merge checks pass |
 | COMMITTED | DISCARDED | Orchestrator issues `discard` |
 | ACTIVE | DISCARDED | Orchestrator issues `discard` |
+
+`delete` is not a lifecycle transition. It removes the git worktree for a worker that is already in `MERGED` or `DISCARDED`.
 
 ---
 
@@ -522,7 +526,6 @@ Every message is represented as a directory bundle published atomically into a m
 
 - `protocol` — protocol version
 - `worker` — the unique worker identity
-- `bidding_group` — the worker's bidding group
 - `perspective` — the perspective name
 - `kind` — message type, such as `task`, `report`, `resolve`, `revise`, or `commit`
 - `sequence` — a monotonic number unique within the mailbox
@@ -547,9 +550,9 @@ Each mailbox subtree has exactly one writer:
 
 The original message bundle is immutable once published. Receipt is recorded by writing a small acknowledgement file with the same sequence number into the corresponding `ack/` directory. This avoids rename races, preserves an audit trail, and keeps concurrent access simple: no directory has more than one writer.
 
-The unique runtime identity is the worker id, not the perspective name. Perspective and bidding-group metadata still travel in the envelope so the orchestrator can reason about role ownership and merge selection, but mailbox routing is unambiguous even when several workers share one perspective. The orchestrator may choose that worker id explicitly when provisioning; if it does not, Multorum assigns a default worker id automatically. Multorum avoids temporal ambiguity by requiring provisioning to start with empty mailboxes and by archiving or removing the entire worktree runtime state when the worker is integrated or discarded.
+The unique runtime identity is the worker id, not the perspective name. Perspective metadata still travels in the envelope so the orchestrator can reason about role ownership and merge selection, and bidding-group membership is derived from active workers that share one perspective and boundary. Mailbox routing is therefore unambiguous even when several workers share one perspective. The orchestrator may choose that worker id explicitly when creating a worker; if it does not, Multorum assigns a default worker id automatically. Multorum avoids temporal ambiguity by requiring worker creation to start with empty mailboxes and by preserving finalized worker state until the orchestrator either deletes the workspace or reuses that worker id for a fresh worker.
 
-Provisioning may seed the worker inbox with an initial `task` bundle carrying the orchestrator's assignment and any supporting material. This keeps the initial task description in the same transport as later resolutions and revisions.
+Worker creation may seed the worker inbox with an initial `task` bundle carrying the orchestrator's assignment and any supporting material. This keeps the initial task description in the same transport as later resolutions and revisions.
 
 ### Worker Reports
 
@@ -560,7 +563,7 @@ Workers may send `report` bundles for any reason that prevents confident, correc
 - **Permission issues** — the task requires creating a new file or writing outside the write set
 - **Ambiguity** — the task description is underspecified or a design choice needs explicit judgment
 - **Structural issues** — the required change cuts across perspective boundaries or the necessary destination does not exist yet
-- **Evidence submission** — the worker wants the orchestrator to review test output or other execution evidence before integration
+- **Evidence submission** — the worker wants the orchestrator to review test output or other execution evidence before merge
 
 When Multorum accepts a `report` bundle from the worker outbox, it transitions the worker from ACTIVE to BLOCKED. The orchestrator answers by writing a `resolve` bundle into the worker inbox. When that bundle is acknowledged, the worker returns to ACTIVE and resumes from the preserved worktree state.
 
@@ -571,13 +574,13 @@ The same mailbox protocol is used for post-review feedback and final submission:
 - a worker writes a `commit` bundle to the outbox to submit its git commit and any evidence
 - the orchestrator writes a `revise` bundle to the inbox to request changes after review or failed checks
 
-`discard` is an orchestrator-local teardown action, not a content-carrying mailbox message. This unifies initial task delivery, blocker resolution, revision requests, and final submission into one transport. There is no separate out-of-band channel for task content.
+`discard`, `merge`, and `delete` are orchestrator-local actions, not content-carrying mailbox messages. This unifies initial task delivery, blocker resolution, revision requests, and final submission into one transport. There is no separate out-of-band channel for task content.
 
 ---
 
 ## The Pre-Merge Pipeline
 
-Before a worker's commit is integrated into the canonical codebase, it must pass the pre-merge pipeline. This pipeline starts with mandatory scope enforcement, then continues through the project's configured validation checks.
+Before a worker's commit is merged into the canonical codebase, it must pass the pre-merge pipeline. This pipeline starts with mandatory scope enforcement, then continues through the project's configured validation checks.
 
 ### Scope Enforcement: Compiled Write Set (Mandatory)
 
@@ -605,12 +608,12 @@ The evidence submission model works as follows:
 
 1. The worker includes structured evidence in its report or commit submission — the check name, the claimed result (pass or fail), and the raw output
 2. The orchestrator reviews the evidence and decides whether to trust it
-3. If trusted, the orchestrator instructs Multorum to skip that project-defined check for this integration
+3. If trusted, the orchestrator instructs Multorum to skip that project-defined check for this merge
 4. If not trusted, Multorum runs the check regardless
 
 Evidence should carry the actual output of the check, not merely an assertion. This gives the orchestrator — whether human or LLM — enough information to make an informed trust decision rather than accepting the worker's claim blindly.
 
-Failed evidence is valid to submit. A worker may report that tests failed on specific cases and ask the orchestrator to make a judgment call rather than letting the failure block integration.
+Failed evidence is valid to submit. A worker may report that tests failed on specific cases and ask the orchestrator to make a judgment call rather than letting the failure block merge.
 
 ### Check Policies
 
@@ -642,8 +645,8 @@ Performs a dry run of the switch validation without making any changes. Useful f
 
 ### Worker Lifecycle Instructions
 
-**`provision <perspective-name>`**
-Compiles the file sets for the named perspective, derives the candidate bidding group's read and write sets, and checks them against the materialized read and write sets of all active bidding groups. If the worker joins an existing bidding group, Multorum instead checks that the compiled sets are identical to that group's existing boundary. Once the check passes, Multorum creates a git worktree at the pinned HEAD commit, records the worker's bidding-group membership under the orchestrator-supplied worker id or a default auto-assigned one, installs the client-side write hook, materializes the worker-local runtime files in `.multorum/`, and injects the read set as worker guidance metadata. Multorum also prepares empty inbox and outbox mailboxes for the worker and may publish an initial `task` bundle into the worker inbox. Provisioning transitions the worker directly to ACTIVE.
+**`create <perspective-name>`**
+Compiles the file sets for the named perspective, derives the candidate bidding group's read and write sets, and checks them against the materialized read and write sets of all active bidding groups. If the worker joins an existing bidding group, Multorum instead checks that the compiled sets are identical to that group's existing boundary. Once the check passes, Multorum creates a git worktree at the pinned HEAD commit, records the worker's bidding-group membership under the orchestrator-supplied worker id or a default auto-assigned one, installs the client-side write hook, materializes the worker-local runtime files in `.multorum/`, and injects the read set as worker guidance metadata. Multorum also prepares empty inbox and outbox mailboxes for the worker and may publish an initial `task` bundle into the worker inbox. Worker creation transitions the worker directly to ACTIVE.
 
 **`resolve <worker-id>`**
 Publishes a `resolve` bundle into the worker's inbox. The bundle carries both the state transition and the resolution content. Once the worker acknowledges it, Multorum transitions the worker from BLOCKED to ACTIVE.
@@ -652,17 +655,20 @@ Publishes a `resolve` bundle into the worker's inbox. The bundle carries both th
 Publishes a `revise` bundle into the worker's inbox. The bundle carries the required changes. Once the worker acknowledges it, Multorum returns the committed worker to ACTIVE state so it can address the feedback.
 
 **`discard <worker-id>`**
-Tears down a worker's worktree without integrating its work. It may be issued while the worker is ACTIVE or COMMITTED.
+Finalizes a worker without merging its work. It may be issued while the worker is ACTIVE or COMMITTED. The worker's workspace is preserved for later inspection or explicit deletion.
 
-### Integration Instructions
+**`delete <worker-id>`**
+Removes the git worktree for a worker that is already in `MERGED` or `DISCARDED`. `delete` does not change lifecycle state; it only tears down the preserved workspace.
 
-**`integrate <worker-id>`**
-Runs the pre-merge pipeline against the worker's commit. If all checks pass, integrates the commit into the canonical codebase and transitions the worker to MERGED. Sibling workers in the same bidding group are then discarded, since only one worker from the group may merge. If any check fails, the instruction is rejected and the worker remains in COMMITTED state pending orchestrator action.
+### Merge Instructions
+
+**`merge <worker-id>`**
+Runs the pre-merge pipeline against the worker's commit. If all checks pass, merges the commit into the canonical codebase and transitions the worker to MERGED. Sibling workers in the same bidding group are then discarded, since only one worker from the group may merge. If any check fails, the instruction is rejected and the worker remains in COMMITTED state pending orchestrator action.
 
 ### Worker-Facing Instructions
 
 **`commit <worker-id>`**
-Issued by the worker by publishing a `commit` bundle into its outbox. The bundle includes the submitted git commit hash and may include evidence artifacts. When Multorum accepts the bundle, it freezes the worktree and transitions the worker from ACTIVE to COMMITTED. The orchestrator then decides whether to `integrate`, `revise`, or `discard` the submission.
+Issued by the worker by publishing a `commit` bundle into its outbox. The bundle includes the submitted git commit hash and may include evidence artifacts. When Multorum accepts the bundle, it freezes the worktree and transitions the worker from ACTIVE to COMMITTED. The orchestrator then decides whether to `merge`, `revise`, or `discard` the submission.
 
 **`report <worker-id>`**
 Issued by the worker by publishing a `report` bundle into its outbox. When Multorum accepts the bundle, it transitions the worker to BLOCKED and records the payload for orchestrator review.

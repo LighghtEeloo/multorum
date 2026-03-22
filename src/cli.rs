@@ -20,8 +20,8 @@ use clap::{Args, Parser, Subcommand};
 use crate::{
     perspective::PerspectiveName,
     runtime::{
-        self, FsOrchestratorService, FsWorkerService, OrchestratorService, ProvisionWorker,
-        WorkerId, WorkerService,
+        self, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerId,
+        WorkerService,
     },
 };
 
@@ -171,8 +171,8 @@ pub enum BiddingGroupCommand {
 /// Orchestrator-side worker commands.
 #[derive(Debug, Subcommand)]
 pub enum WorkerCommand {
-    /// Provision a new worker from one perspective.
-    Provision {
+    /// Create a new worker workspace from one perspective.
+    Create {
         /// Perspective to instantiate.
         perspective: PerspectiveName,
 
@@ -225,15 +225,21 @@ pub enum WorkerCommand {
         reply: ReplyReferenceArgs,
     },
 
-    /// Tear down a worker worktree without integration.
+    /// Finalize a worker without integration.
     Discard {
         /// Worker identity to discard.
         worker_id: WorkerId,
     },
 
-    /// Run the pre-merge pipeline and integrate one worker.
-    Integrate {
-        /// Worker identity to integrate.
+    /// Delete one finalized worker workspace.
+    Delete {
+        /// Worker identity whose workspace should be deleted.
+        worker_id: WorkerId,
+    },
+
+    /// Run the pre-merge pipeline and merge one worker.
+    Merge {
+        /// Worker identity to merge.
         worker_id: WorkerId,
 
         /// Checks to skip based on trusted worker evidence.
@@ -394,17 +400,17 @@ impl WorkerCommand {
     /// Execute one orchestrator-side worker command.
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
-            | Self::Provision { perspective, worker_id, payload } => {
+            | Self::Create { perspective, worker_id, payload } => {
                 let task =
                     (!payload.clone().into_runtime().is_empty()).then(|| payload.into_runtime());
-                let mut request = ProvisionWorker::new(perspective);
+                let mut request = CreateWorker::new(perspective);
                 if let Some(worker_id) = worker_id {
                     request = request.with_worker_id(worker_id);
                 }
                 if let Some(task) = task {
                     request = request.with_task(task);
                 }
-                let result = services.orchestrator.provision_worker(request)?;
+                let result = services.orchestrator.create_worker(request)?;
                 println!("{result:#?}");
             }
             | Self::List => {
@@ -435,8 +441,12 @@ impl WorkerCommand {
                 let result = services.orchestrator.discard_worker(worker_id)?;
                 println!("{result:#?}");
             }
-            | Self::Integrate { worker_id, skip_checks } => {
-                let result = services.orchestrator.integrate_worker(worker_id, skip_checks)?;
+            | Self::Delete { worker_id } => {
+                let result = services.orchestrator.delete_worker(worker_id)?;
+                println!("{result:#?}");
+            }
+            | Self::Merge { worker_id, skip_checks } => {
+                let result = services.orchestrator.merge_worker(worker_id, skip_checks)?;
                 println!("{result:#?}");
             }
         }
