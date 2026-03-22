@@ -25,12 +25,13 @@ pub enum PerspectiveNameError {
     InvalidChar { name: String, ch: char, pos: usize },
 }
 
-/// A violation of the safety property.
+/// A violation of the conflict-free invariant.
 ///
-/// The safety property requires that write sets are pairwise disjoint
-/// and that no file is written by one perspective and read by another.
+/// The conflict-free invariant requires that write sets are pairwise
+/// disjoint and that no file is written by one perspective and read by
+/// another.
 #[derive(Debug, Error)]
-pub enum SafetyViolation {
+pub enum ConflictViolation {
     /// Two perspectives have overlapping write sets.
     #[error(
         "write-write overlap between `{left}` and `{right}`: {} shared file(s)",
@@ -58,7 +59,7 @@ pub enum PerspectiveError {
     #[error("perspective `{perspective}` references undefined file set `{name}`")]
     UndefinedFileSet { perspective: PerspectiveName, name: fileset::Name },
 
-    /// The safety property was violated.
+    /// The conflict-free invariant was violated.
     #[error("{0}")]
-    Safety(#[from] SafetyViolation),
+    Conflict(#[from] ConflictViolation),
 }

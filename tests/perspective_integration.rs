@@ -2,8 +2,8 @@
 //!
 //! Exercises the full path: TOML deserialization of file sets and
 //! perspectives → file set compilation against a real temporary
-//! directory → perspective compilation. Runtime-facing safety checks use
-//! the same compiled perspective boundaries later.
+//! directory → perspective compilation. Runtime-facing conflict checks
+//! use the same compiled perspective boundaries later.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -11,7 +11,8 @@ use std::path::PathBuf;
 
 use multorum::fileset::{FileSetTable, enumerate_files};
 use multorum::perspective::{
-    CompiledPerspectives, PerspectiveName, PerspectiveTable, SafetyValidator, SafetyViolation,
+    CompiledPerspectives, ConflictFreeValidator, ConflictViolation, PerspectiveName,
+    PerspectiveTable,
 };
 
 fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
@@ -80,7 +81,7 @@ fn full_pipeline_with_tempdir() {
 }
 
 #[test]
-fn safety_rejects_write_write_overlap() {
+fn conflict_validator_rejects_write_write_overlap() {
     let (_dir, filesets) = setup_design_doc_filesets();
 
     let toml_str = r#"
@@ -94,12 +95,12 @@ fn safety_rejects_write_write_overlap() {
     "#;
     let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
     let compiled = table.compile(&filesets).unwrap();
-    let err = SafetyValidator::new(compiled.perspectives()).validate().unwrap_err();
-    assert!(matches!(err, SafetyViolation::WriteWriteOverlap { .. }));
+    let err = ConflictFreeValidator::new(compiled.perspectives()).validate().unwrap_err();
+    assert!(matches!(err, ConflictViolation::WriteWriteOverlap { .. }));
 }
 
 #[test]
-fn safety_rejects_write_read_overlap() {
+fn conflict_validator_rejects_write_read_overlap() {
     let (_dir, filesets) = setup_design_doc_filesets();
 
     // P writes AuthTests, Q reads AuthTests — disjoint writes but
@@ -115,8 +116,8 @@ fn safety_rejects_write_read_overlap() {
     "#;
     let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
     let compiled = table.compile(&filesets).unwrap();
-    let err = SafetyValidator::new(compiled.perspectives()).validate().unwrap_err();
-    assert!(matches!(err, SafetyViolation::WriteReadOverlap { .. }));
+    let err = ConflictFreeValidator::new(compiled.perspectives()).validate().unwrap_err();
+    assert!(matches!(err, ConflictViolation::WriteReadOverlap { .. }));
 }
 
 #[test]
@@ -129,7 +130,7 @@ fn empty_perspectives_are_valid() {
 }
 
 #[test]
-fn single_perspective_always_passes_safety() {
+fn single_perspective_always_passes_conflict_validation() {
     let (_dir, filesets) = setup_design_doc_filesets();
 
     let toml_str = r#"

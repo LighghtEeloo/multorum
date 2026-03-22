@@ -125,7 +125,7 @@ Primitive names bind globs via the `.path` key (`SpecFiles.path`, `AuthFiles.pat
 
 File set expressions are a *rulebook-level concept only*. They do not exist at runtime. When Multorum activates a rulebook, it immediately compiles all file set expressions into concrete file lists by expanding globs against the current state of the filesystem and evaluating all set operations. From that point on, Multorum works exclusively with concrete lists.
 
-Rulebook compilation produces candidate ownership sets. The safety property is checked later, when those compiled sets would become concurrent with active work.
+Rulebook compilation produces candidate ownership sets. The conflict-free invariant is checked later, when those compiled sets would become concurrent with active work.
 
 The compilation and activation flow is:
 
@@ -206,9 +206,9 @@ All workers in the same bidding group share:
 
 Because workers inside a bidding group are alternative realizations of the same declared role, they are not isolated from each other by file ownership. Instead, they are kept comparable: they start from the same snapshot and operate under the same scope. Only one worker from a bidding group may be integrated into the canonical codebase. Once one member is selected for integration, the remaining members of that group are discarded.
 
-### The Safety Property
+### The Conflict-Free Invariant
 
-The safety property is the core correctness invariant governing concurrent bidding groups:
+The conflict-free invariant is the core correctness invariant governing concurrent bidding groups:
 
 > **A file may either be written by exactly one active bidding group, or read by any number of active bidding groups — never both.**
 
@@ -223,18 +223,18 @@ Inside a bidding group `B`, all workers are instantiations of the same perspecti
 - `write(x) = write(y)`
 - `read(x) = read(y)`
 
-This is why the safety property belongs at the worker boundary rather than the perspective boundary. Perspectives declare ownership once; bidding groups are the concurrent runtime entities that must not interfere with each other. Once a valid set of bidding groups is active, workers execute in full parallel with no runtime conflict detection, arbitration, or rollback between groups. Integration stays conflict-free because each written file has at most one active writing group, and within a group the orchestrator selects at most one submission to merge.
+This is why the conflict-free invariant belongs at the worker boundary rather than the perspective boundary. Perspectives declare ownership once; bidding groups are the concurrent runtime entities that must not interfere with each other. Once a valid set of bidding groups is active, workers execute in full parallel with no runtime conflict detection, arbitration, or rollback between groups. Integration stays conflict-free because each written file has at most one active writing group, and within a group the orchestrator selects at most one submission to merge.
 
 ### When It Is Checked
 
-Multorum checks the safety property when concurrent runtime state would change:
+Multorum checks the conflict-free invariant when concurrent runtime state would change:
 
 - On `provision`, it takes the selected perspective's compiled read and write sets as the candidate bidding-group boundary.
 - If the worker being provisioned joins an existing bidding group, Multorum checks equality with that group's materialized read and write sets.
 - If the worker being provisioned creates a new bidding group, Multorum checks the candidate group's read and write sets against every other active bidding group's materialized read and write sets.
 - On `rulebook switch`, Multorum compiles the target rulebook and checks every target perspective's candidate read and write sets against every currently active bidding group's materialized read and write sets.
 
-In other words, safety is checked against the runtime state that already exists, not against perspectives in isolation.
+In other words, conflict freedom is checked against the runtime state that already exists, not against perspectives in isolation.
 
 ---
 
@@ -581,7 +581,7 @@ Before a worker's commit is integrated into the canonical codebase, it must pass
 
 ### Scope Enforcement: Compiled Write Set (Mandatory)
 
-Multorum always verifies that every file touched by the worker's commit is within that worker's compiled write set. This check cannot be skipped, waived, or overridden by any party. It is the server-side enforcement of the worker's declared scope and, at system level, of the safety property between bidding groups.
+Multorum always verifies that every file touched by the worker's commit is within that worker's compiled write set. This check cannot be skipped, waived, or overridden by any party. It is the server-side enforcement of the worker's declared scope and, at system level, of the conflict-free invariant between bidding groups.
 
 ### Project Validation Checks: Rulebook Pipeline
 
@@ -635,7 +635,7 @@ Orchestrator-local instructions operate on the main workspace control plane unde
 Initializes the project's `.multorum/` directory. Multorum creates `.multorum/` if it does not already exist, writes the default commented `rulebook.toml` template shown above, prepares `.multorum/.gitignore` so runtime directories stay ignored within that subtree, prepares the local orchestrator runtime directories, and verifies that the recommended ignore entries are present. The instruction must not overwrite an existing `.multorum/rulebook.toml`; if a rulebook already exists, initialization is rejected so project policy is never replaced implicitly.
 
 **`rulebook switch <commit-hash>`**
-Validates and activates a new version of the rulebook. Multorum compiles the target rulebook, treats each target perspective as a candidate future bidding group, and runs the safety check against all currently active bidding groups. If the check passes, the new rulebook is activated. If it fails, the instruction is rejected and Multorum reports which active bidding groups are blocking the switch.
+Validates and activates a new version of the rulebook. Multorum compiles the target rulebook, treats each target perspective as a candidate future bidding group, and runs the conflict check against all currently active bidding groups. If the check passes, the new rulebook is activated. If it fails, the instruction is rejected and Multorum reports which active bidding groups are blocking the switch.
 
 **`rulebook validate <commit-hash>`**
 Performs a dry run of the switch validation without making any changes. Useful for the orchestrator to check whether a switch is currently possible before committing to it.

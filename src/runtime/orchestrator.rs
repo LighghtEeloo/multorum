@@ -601,7 +601,7 @@ fn boundary_conflict(
     let write_write =
         candidate.write().intersection(active.write()).cloned().collect::<BTreeSet<_>>();
     if !write_write.is_empty() {
-        return Some(RuntimeError::SafetyConflict {
+        return Some(RuntimeError::ConflictWithActiveBiddingGroup {
             perspective: candidate_name.clone(),
             blocking_group: active_name.clone(),
             relation: "write/write overlap",
@@ -612,7 +612,7 @@ fn boundary_conflict(
     let candidate_write_active_read =
         candidate.write().intersection(active.read()).cloned().collect::<BTreeSet<_>>();
     if !candidate_write_active_read.is_empty() {
-        return Some(RuntimeError::SafetyConflict {
+        return Some(RuntimeError::ConflictWithActiveBiddingGroup {
             perspective: candidate_name.clone(),
             blocking_group: active_name.clone(),
             relation: "candidate write overlaps active read",
@@ -623,7 +623,7 @@ fn boundary_conflict(
     let candidate_read_active_write =
         candidate.read().intersection(active.write()).cloned().collect::<BTreeSet<_>>();
     if !candidate_read_active_write.is_empty() {
-        return Some(RuntimeError::SafetyConflict {
+        return Some(RuntimeError::ConflictWithActiveBiddingGroup {
             perspective: candidate_name.clone(),
             blocking_group: active_name.clone(),
             relation: "candidate read overlaps active write",

@@ -3,7 +3,7 @@
 //! Takes a [`PerspectiveTable`] and a pre-compiled file set map
 //! (`BTreeMap<fileset::Name, BTreeSet<PathBuf>>`), evaluates each
 //! perspective's read and write expressions, and returns the concrete
-//! file lists that runtime safety checks later consume.
+//! file lists that runtime conflict checks later consume.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;

@@ -51,7 +51,7 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,
             | RuntimeError::AlreadyAcknowledged => McpErrorCode::AlreadyAcknowledged,
             | RuntimeError::RulebookConflict { .. } => McpErrorCode::RulebookConflict,
-            | RuntimeError::SafetyConflict { .. }
+            | RuntimeError::ConflictWithActiveBiddingGroup { .. }
             | RuntimeError::BiddingGroupBoundaryMismatch { .. }
             | RuntimeError::CheckFailed(_) => McpErrorCode::CheckFailed,
             | RuntimeError::WriteSetViolation { .. } => McpErrorCode::WriteSetViolation,

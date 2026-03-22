@@ -4,17 +4,17 @@
 //! set and a read set, both expressed as file set algebra expressions.
 //! Perspectives are compiled against a pre-compiled file set table to
 //! produce concrete file lists. Runtime services later use those
-//! compiled lists when they validate bidding-group safety against the
-//! active workers that already exist.
+//! compiled lists when they validate bidding-group conflict freedom
+//! against the active workers that already exist.
 
 pub mod compile;
+pub mod validation;
 pub mod decl;
 pub mod error;
 pub mod name;
-pub mod safety;
 
 pub use compile::{CompiledPerspective, CompiledPerspectives};
+pub use validation::ConflictFreeValidator;
 pub use decl::{PerspectiveDecl, PerspectiveTable};
 pub use error::*;
 pub use name::PerspectiveName;
-pub use safety::SafetyValidator;

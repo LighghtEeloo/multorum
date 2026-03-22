@@ -72,7 +72,7 @@ pub enum RuntimeError {
         "cannot provision perspective `{perspective}` because active bidding group `{blocking_group}` has a {relation}: {files}",
         files = format_paths(files)
     )]
-    SafetyConflict {
+    ConflictWithActiveBiddingGroup {
         /// Perspective being provisioned.
         perspective: PerspectiveName,
         /// Active bidding group that blocks the candidate boundary.
