@@ -59,6 +59,21 @@ pub struct RulebookSwitch {
     pub active_commit: CanonicalCommitHash,
 }
 
+/// Summary of one active bidding group.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BiddingGroupSummary {
+    /// Stable bidding-group identifier.
+    pub bidding_group: PerspectiveName,
+    /// Perspective instantiated by workers in the group.
+    pub perspective: PerspectiveName,
+    /// Live workers currently competing in the group.
+    pub worker_ids: Vec<WorkerId>,
+    /// Number of files in the materialized stable context.
+    pub read_count: usize,
+    /// Number of files in the materialized write boundary.
+    pub write_count: usize,
+}
+
 /// Result of initializing `.multorum/` for a workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RulebookInit {
@@ -122,6 +137,8 @@ pub struct IntegrateResult {
 pub struct OrchestratorStatus {
     /// Active canonical rulebook commit hash.
     pub active_rulebook_commit: CanonicalCommitHash,
+    /// Current bidding-group summaries.
+    pub bidding_groups: Vec<BiddingGroupSummary>,
     /// Current worker summaries.
     pub workers: Vec<WorkerSummary>,
 }
@@ -137,6 +154,27 @@ pub struct WorkerSummary {
     pub perspective: PerspectiveName,
     /// Current projected lifecycle state.
     pub state: WorkerState,
+}
+
+/// Detailed orchestrator-side view of one worker.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct WorkerDetail {
+    /// Worker identity.
+    pub worker_id: WorkerId,
+    /// Bidding group to which the worker belongs.
+    pub bidding_group: PerspectiveName,
+    /// Perspective held by the worker.
+    pub perspective: PerspectiveName,
+    /// Current projected lifecycle state.
+    pub state: WorkerState,
+    /// Absolute path to the managed worker worktree.
+    pub worktree_path: PathBuf,
+    /// Canonical rulebook commit governing the worker.
+    pub rulebook_commit: CanonicalCommitHash,
+    /// Canonical base code commit from which the worker was provisioned.
+    pub base_commit: CanonicalCommitHash,
+    /// Canonical submitted worker head commit when present.
+    pub submitted_head_commit: Option<CanonicalCommitHash>,
 }
 
 /// Worker-local status output.

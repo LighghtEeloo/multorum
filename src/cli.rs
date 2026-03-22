@@ -4,18 +4,14 @@
 //! orchestrator instruction issued through this CLI. Multorum is
 //! purely reactive — it never acts on its own initiative.
 //!
-//! The instruction set is grouped into four categories:
+//! The command surface follows the runtime model directly:
 //!
-//! - **Rulebook** — `rulebook init`, `rulebook switch`, `rulebook validate`
-//! - **Worker lifecycle** — `provision`, `resolve`, `revise`, `discard`
-//! - **Integration** — `integrate`
-//! - **Query** — `status`
-//!
-//! Worker-originated instructions (`commit` and `report`) are represented
-//! here as CLI commands so the same typed runtime service layer can back
-//! both sides of the mailbox protocol. In the mailbox-based design,
-//! these commands publish message bundles into the worker outbox, while
-//! `resolve` and `revise` publish bundles into the worker inbox.
+//! - `rulebook` manages committed configuration.
+//! - `perspective` inspects declared roles from the active rulebook.
+//! - `bidding-group` inspects active competing groups.
+//! - `worker` addresses orchestrator-side operations on concrete workers.
+//! - `local` addresses worker-local operations from inside a provisioned
+//!   worktree.
 
 use std::path::PathBuf;
 
@@ -120,31 +116,63 @@ impl ReplyReferenceArgs {
     }
 }
 
-/// The orchestrator instruction set.
-///
-/// Each variant corresponds to one instruction described in
-/// `DESIGN.md` §10 "The Orchestrator Instruction Set".
+/// Top-level CLI commands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    // ── Rulebook instructions ───────────────────────────────────
-    //
     /// Manage the active rulebook.
     Rulebook {
         #[command(subcommand)]
         command: RulebookCommand,
     },
 
-    // ── Worker lifecycle instructions ───────────────────────────
-    //
-    /// Create a sub-codebase with a perspective.
-    ///
-    /// Compiles the perspective's file sets, creates a git worktree at
-    /// the pinned commit, installs the client-side write hook,
-    /// materializes the worker-local runtime files, and injects
-    /// read-set guidance metadata. The orchestrator may also seed the
-    /// worker inbox with an initial `task` bundle.
+    /// Inspect compiled perspectives from the active rulebook.
+    Perspective {
+        #[command(subcommand)]
+        command: PerspectiveCommand,
+    },
+
+    /// Inspect active bidding groups.
+    BiddingGroup {
+        #[command(subcommand)]
+        command: BiddingGroupCommand,
+    },
+
+    /// Operate on orchestrator-visible workers.
+    Worker {
+        #[command(subcommand)]
+        command: WorkerCommand,
+    },
+
+    /// Operate on the current provisioned worker worktree.
+    Local {
+        #[command(subcommand)]
+        command: LocalCommand,
+    },
+
+    /// Return the full orchestrator status snapshot.
+    Status,
+}
+
+/// Perspective inspection commands.
+#[derive(Debug, Subcommand)]
+pub enum PerspectiveCommand {
+    /// List compiled perspectives from the active rulebook.
+    List,
+}
+
+/// Active bidding-group inspection commands.
+#[derive(Debug, Subcommand)]
+pub enum BiddingGroupCommand {
+    /// List active bidding groups.
+    List,
+}
+
+/// Orchestrator-side worker commands.
+#[derive(Debug, Subcommand)]
+pub enum WorkerCommand {
+    /// Provision a new worker from one perspective.
     Provision {
-        /// The perspective name to provision.
+        /// Perspective to instantiate.
         perspective: PerspectiveName,
 
         /// Optional payload for the initial `task` bundle.
@@ -152,13 +180,18 @@ pub enum Command {
         payload: BundlePayloadArgs,
     },
 
-    /// Unblock a worker after orchestrator resolution.
-    ///
-    /// Publishes a `resolve` bundle into the worker inbox. Once the
-    /// bundle is acknowledged, the worker transitions from BLOCKED to
-    /// ACTIVE.
+    /// List active workers.
+    List,
+
+    /// Show one worker in detail.
+    Show {
+        /// Worker identity to inspect.
+        worker_id: WorkerId,
+    },
+
+    /// Publish a `resolve` bundle to a blocked worker inbox.
     Resolve {
-        /// The worker id of the blocked worker.
+        /// Worker identity to resolve.
         worker_id: WorkerId,
 
         /// Optional payload for the `resolve` bundle.
@@ -170,13 +203,9 @@ pub enum Command {
         reply: ReplyReferenceArgs,
     },
 
-    /// Return a committed worker to active state for rework.
-    ///
-    /// Publishes a `revise` bundle into the worker inbox. Once the
-    /// bundle is acknowledged, the worker transitions from COMMITTED
-    /// to ACTIVE and resumes with the preserved worktree.
+    /// Publish a `revise` bundle to a committed worker inbox.
     Revise {
-        /// The worker id of the committed worker.
+        /// Worker identity to revise.
         worker_id: WorkerId,
 
         /// Optional payload for the `revise` bundle.
@@ -188,60 +217,46 @@ pub enum Command {
         reply: ReplyReferenceArgs,
     },
 
-    /// Tear down a worker's worktree without integrating.
-    ///
-    /// Valid from ACTIVE or COMMITTED states. The work is abandoned
-    /// and the worktree is released. Transitions to DISCARDED.
+    /// Tear down a worker worktree without integration.
     Discard {
-        /// The worker id to discard.
+        /// Worker identity to discard.
         worker_id: WorkerId,
     },
 
-    // ── Integration instructions ────────────────────────────────
-    //
-    /// Run the pre-merge pipeline and integrate a worker's commit.
-    ///
-    /// Gate 1 (file set check) always runs. Gate 2 (user-defined checks)
-    /// runs according to check policies and any evidence-based skip
-    /// instructions from the orchestrator.
+    /// Run the pre-merge pipeline and integrate one worker.
     Integrate {
-        /// The worker id to integrate.
+        /// Worker identity to integrate.
         worker_id: WorkerId,
 
         /// Checks to skip based on trusted worker evidence.
-        ///
-        /// The orchestrator may instruct Multorum to skip specific
-        /// `skippable` checks when the worker has submitted trusted
-        /// evidence. The file set check cannot be skipped.
         #[arg(long = "skip-check", value_name = "CHECK")]
         skip_checks: Vec<String>,
     },
+}
 
-    // ── Worker-facing instructions ──────────────────────────────
-    //
-    /// Submit the worker's task as complete.
-    ///
-    /// Must be run from within the worker worktree. Publishes a `commit`
-    /// bundle into the worker outbox. Once accepted, Multorum freezes
-    /// the worktree and transitions the worker from ACTIVE to COMMITTED.
-    /// The orchestrator then decides whether to `integrate`, `revise`,
-    /// or `discard` the submission.
-    Commit {
-        /// The git commit hash submitted by the worker.
-        #[arg(long = "head-commit", value_name = "COMMIT")]
-        head_commit: String,
+/// Worker-local commands.
+#[derive(Debug, Subcommand)]
+pub enum LocalCommand {
+    /// Load the immutable worker contract for the current worktree.
+    Contract,
 
-        /// Optional payload for the `commit` bundle.
-        #[command(flatten)]
-        payload: BundlePayloadArgs,
+    /// Return the projected worker status for the current worktree.
+    Status,
+
+    /// List inbox messages after an optional sequence.
+    Inbox {
+        /// Only return messages after this sequence number.
+        #[arg(long = "after", value_name = "SEQUENCE")]
+        after: Option<u64>,
     },
 
-    /// Signal that a worker is blocked.
-    ///
-    /// Must be run from within the worker worktree. Publishes a `report`
-    /// bundle into the worker outbox. Once accepted, Multorum transitions
-    /// the worker to BLOCKED. The payload is opaque to Multorum — it is
-    /// recorded without interpretation.
+    /// Acknowledge one inbox message.
+    Ack {
+        /// Sequence number to acknowledge.
+        sequence: u64,
+    },
+
+    /// Publish a blocker report from the current worktree.
     Report {
         /// Optional git commit hash relevant to the report.
         #[arg(long = "head-commit", value_name = "COMMIT")]
@@ -256,13 +271,16 @@ pub enum Command {
         payload: BundlePayloadArgs,
     },
 
-    // ── Query instructions ──────────────────────────────────────
-    //
-    /// Query the current state of all workers.
-    ///
-    /// Returns the active rulebook commit hash, the state of each
-    /// worker, and a summary of any blocked workers awaiting resolution.
-    Status,
+    /// Publish a completed worker submission from the current worktree.
+    Commit {
+        /// The git commit hash submitted by the worker.
+        #[arg(long = "head-commit", value_name = "COMMIT")]
+        head_commit: String,
+
+        /// Optional payload for the `commit` bundle.
+        #[command(flatten)]
+        payload: BundlePayloadArgs,
+    },
 }
 
 /// Rulebook management subcommands.
@@ -325,10 +343,61 @@ impl Command {
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
             | Self::Rulebook { command } => command.execute(services)?,
+            | Self::Perspective { command } => command.execute(services)?,
+            | Self::BiddingGroup { command } => command.execute(services)?,
+            | Self::Worker { command } => command.execute(services)?,
+            | Self::Local { command } => command.execute(services)?,
+            | Self::Status => {
+                let result = services.orchestrator.status()?;
+                println!("{result:#?}");
+            }
+        }
+        Ok(())
+    }
+}
+
+impl PerspectiveCommand {
+    /// Execute one perspective inspection command.
+    pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
+        match self {
+            | Self::List => {
+                let result = services.orchestrator.list_perspectives()?;
+                println!("{result:#?}");
+            }
+        }
+        Ok(())
+    }
+}
+
+impl BiddingGroupCommand {
+    /// Execute one bidding-group inspection command.
+    pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
+        match self {
+            | Self::List => {
+                let result = services.orchestrator.list_bidding_groups()?;
+                println!("{result:#?}");
+            }
+        }
+        Ok(())
+    }
+}
+
+impl WorkerCommand {
+    /// Execute one orchestrator-side worker command.
+    pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
+        match self {
             | Self::Provision { perspective, payload } => {
                 let task =
                     (!payload.clone().into_runtime().is_empty()).then(|| payload.into_runtime());
                 let result = services.orchestrator.provision_worker(perspective, task)?;
+                println!("{result:#?}");
+            }
+            | Self::List => {
+                let result = services.orchestrator.list_workers()?;
+                println!("{result:#?}");
+            }
+            | Self::Show { worker_id } => {
+                let result = services.orchestrator.get_worker(worker_id)?;
                 println!("{result:#?}");
             }
             | Self::Resolve { worker_id, payload, reply } => {
@@ -355,13 +424,33 @@ impl Command {
                 let result = services.orchestrator.integrate_worker(worker_id, skip_checks)?;
                 println!("{result:#?}");
             }
-            | Self::Commit { head_commit, payload } => {
-                let worker = services.worker()?;
-                let result = worker.send_commit(head_commit, payload.into_runtime())?;
+        }
+        Ok(())
+    }
+}
+
+impl LocalCommand {
+    /// Execute one worker-local command.
+    pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
+        let worker = services.worker()?;
+        match self {
+            | Self::Contract => {
+                let result = worker.contract()?;
+                println!("{result:#?}");
+            }
+            | Self::Status => {
+                let result = worker.status()?;
+                println!("{result:#?}");
+            }
+            | Self::Inbox { after } => {
+                let result = worker.read_inbox(after.map(runtime::Sequence))?;
+                println!("{result:#?}");
+            }
+            | Self::Ack { sequence } => {
+                let result = worker.ack_inbox(runtime::Sequence(sequence))?;
                 println!("{result:#?}");
             }
             | Self::Report { head_commit, reply, payload } => {
-                let worker = services.worker()?;
                 let result = worker.send_report(
                     head_commit,
                     reply.into_runtime(),
@@ -369,8 +458,8 @@ impl Command {
                 )?;
                 println!("{result:#?}");
             }
-            | Self::Status => {
-                let result = services.orchestrator.status()?;
+            | Self::Commit { head_commit, payload } => {
+                let result = worker.send_commit(head_commit, payload.into_runtime())?;
                 println!("{result:#?}");
             }
         }

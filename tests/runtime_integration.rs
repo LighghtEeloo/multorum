@@ -201,6 +201,12 @@ fn same_perspective_can_spawn_multiple_workers_and_close_the_group_on_integratio
     assert_ne!(first.worker_id, second.worker_id);
     assert_eq!(first.bidding_group, second.bidding_group);
     assert_eq!(first.perspective, second.perspective);
+    assert_eq!(orchestrator.list_bidding_groups().unwrap().len(), 1);
+    assert_eq!(orchestrator.list_workers().unwrap().len(), 2);
+    assert_eq!(
+        orchestrator.get_worker(first.worker_id.clone()).unwrap().worktree_path,
+        first.worktree_path
+    );
     assert_eq!(orchestrator.status().unwrap().workers.len(), 2);
 
     let worker = FsWorkerService::new(&first.worktree_path).unwrap();

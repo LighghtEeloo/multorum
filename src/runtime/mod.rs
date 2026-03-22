@@ -26,9 +26,9 @@ pub use orchestrator::{FsOrchestratorService, OrchestratorService};
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};
 pub use projection::TranscriptView;
 pub use state::{
-    DiscardResult, IntegrateResult, MailboxMessageView, OrchestratorStatus, PerspectiveSummary,
-    ProvisionResult, RulebookInit, RulebookSwitch, RulebookValidation, WorkerContractView,
-    WorkerState, WorkerStatus, WorkerSummary,
+    BiddingGroupSummary, DiscardResult, IntegrateResult, MailboxMessageView, OrchestratorStatus,
+    PerspectiveSummary, ProvisionResult, RulebookInit, RulebookSwitch, RulebookValidation,
+    WorkerContractView, WorkerDetail, WorkerState, WorkerStatus, WorkerSummary,
 };
 pub use worker::{FsWorkerService, WorkerService};
 pub use worker_id::{WorkerId, WorkerIdError};

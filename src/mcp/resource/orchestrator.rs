@@ -7,7 +7,7 @@ pub fn descriptors() -> Vec<ResourceDescriptor> {
     vec![
         ResourceDescriptor {
             uri: "multorum://orchestrator/status",
-            description: "Projected orchestrator status for all active workers.",
+            description: "Projected orchestrator snapshot including bidding groups and workers.",
         },
         ResourceDescriptor {
             uri: "multorum://orchestrator/rulebook/active",
@@ -18,8 +18,16 @@ pub fn descriptors() -> Vec<ResourceDescriptor> {
             description: "Compiled perspective summaries from the active rulebook.",
         },
         ResourceDescriptor {
+            uri: "multorum://orchestrator/bidding-groups",
+            description: "Active bidding-group summaries for the current runtime.",
+        },
+        ResourceDescriptor {
             uri: "multorum://orchestrator/workers",
             description: "Worker summary listing for the current runtime.",
+        },
+        ResourceDescriptor {
+            uri: "multorum://orchestrator/workers/{worker}",
+            description: "Detailed orchestrator-side view of one worker.",
         },
         ResourceDescriptor {
             uri: "multorum://orchestrator/workers/{worker}/contract",

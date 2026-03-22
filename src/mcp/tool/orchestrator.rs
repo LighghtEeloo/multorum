@@ -22,6 +22,18 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
             description: "List compiled perspectives from the active rulebook.",
         },
         ToolDescriptor {
+            name: "list_bidding_groups",
+            description: "List active bidding groups and their worker membership.",
+        },
+        ToolDescriptor {
+            name: "list_workers",
+            description: "List active workers in the current runtime.",
+        },
+        ToolDescriptor {
+            name: "get_worker",
+            description: "Load one worker detail view by worker id.",
+        },
+        ToolDescriptor {
             name: "provision_worker",
             description: "Provision a worker worktree and optional initial task bundle; path-backed payload files are moved into .multorum storage.",
         },
@@ -43,7 +55,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "get_status",
-            description: "Return the orchestrator status projection.",
+            description: "Return the full orchestrator runtime snapshot.",
         },
     ]
 }
