@@ -254,7 +254,29 @@ fn create_worker_rejects_duplicate_explicit_worker_id() {
 }
 
 #[test]
-fn create_worker_reuses_explicit_worker_id_after_discard() {
+fn create_worker_rejects_reused_explicit_worker_id_while_discarded_workspace_exists() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+
+    let first = orchestrator
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .unwrap();
+    orchestrator.discard_worker(worker_id.clone()).unwrap();
+    assert!(first.worktree_path.exists());
+
+    let error = orchestrator
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        RuntimeError::ExistingWorkerWorkspace { worker_id: actual, state: WorkerState::Discarded, worktree_path }
+            if actual == worker_id && worktree_path == first.worktree_path
+    ));
+}
+
+#[test]
+fn create_worker_reuses_explicit_worker_id_after_discard_when_overwriting() {
     let (_repo, orchestrator, _) = setup_repo();
     let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
 
@@ -265,7 +287,11 @@ fn create_worker_reuses_explicit_worker_id_after_discard() {
     assert!(first.worktree_path.exists());
 
     let second = orchestrator
-        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .create_worker(
+            CreateWorker::new(perspective())
+                .with_worker_id(worker_id.clone())
+                .with_overwriting_worktree(),
+        )
         .unwrap();
 
     assert_eq!(second.worker_id, worker_id);
@@ -276,7 +302,35 @@ fn create_worker_reuses_explicit_worker_id_after_discard() {
 }
 
 #[test]
-fn create_worker_reuses_explicit_worker_id_after_merge() {
+fn create_worker_rejects_reused_explicit_worker_id_while_merged_workspace_exists() {
+    let (_repo, orchestrator, _) = setup_repo();
+    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+
+    let first = orchestrator
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .unwrap();
+    let worker = FsWorkerService::new(&first.worktree_path).unwrap();
+    fs::write(first.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 9 }\n").unwrap();
+    git(&first.worktree_path, &["add", "src/owned.rs"]);
+    git(&first.worktree_path, &["commit", "-m", "incr: finalize reused worker id"]);
+    let head_commit = git(&first.worktree_path, &["rev-parse", "HEAD"]);
+    worker.send_commit(head_commit, BundlePayload::default()).unwrap();
+    orchestrator.merge_worker(worker_id.clone(), Vec::new()).unwrap();
+    assert!(first.worktree_path.exists());
+
+    let error = orchestrator
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        RuntimeError::ExistingWorkerWorkspace { worker_id: actual, state: WorkerState::Merged, worktree_path }
+            if actual == worker_id && worktree_path == first.worktree_path
+    ));
+}
+
+#[test]
+fn create_worker_reuses_explicit_worker_id_after_merge_when_overwriting() {
     let (_repo, orchestrator, _) = setup_repo();
     let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
 
@@ -293,7 +347,11 @@ fn create_worker_reuses_explicit_worker_id_after_merge() {
     assert!(first.worktree_path.exists());
 
     let second = orchestrator
-        .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
+        .create_worker(
+            CreateWorker::new(perspective())
+                .with_worker_id(worker_id.clone())
+                .with_overwriting_worktree(),
+        )
         .unwrap();
 
     assert_eq!(second.worker_id, worker_id);
@@ -318,6 +376,12 @@ fn delete_worker_removes_workspace_after_discard() {
     assert_eq!(deleted.worktree_path, created.worktree_path);
     assert!(deleted.deleted_workspace);
     assert!(!created.worktree_path.exists());
+
+    let recreated = orchestrator
+        .create_worker(CreateWorker::new(perspective()).with_worker_id(created.worker_id.clone()))
+        .unwrap();
+    assert_eq!(recreated.worker_id, created.worker_id);
+    assert!(recreated.worktree_path.exists());
 }
 
 #[test]

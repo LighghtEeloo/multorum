@@ -12,13 +12,17 @@ fn cli_create_accepts_optional_worker_id() {
         "AuthImplementor",
         "--worker-id",
         "custom_worker_7",
+        "--overwriting-worktree",
     ])
     .unwrap();
 
     match cli.command {
-        | Command::Worker { command: WorkerCommand::Create { perspective, worker_id, .. } } => {
+        | Command::Worker {
+            command: WorkerCommand::Create { perspective, worker_id, overwriting_worktree, .. },
+        } => {
             assert_eq!(perspective.as_str(), "AuthImplementor");
             assert_eq!(worker_id.unwrap().as_str(), "custom_worker_7");
+            assert!(overwriting_worktree);
         }
         | command => panic!("unexpected command: {command:?}"),
     }
@@ -37,6 +41,11 @@ fn orchestrator_mcp_create_descriptor_exposes_optional_worker_id() {
         input.name == "worker_id"
             && !input.required
             && input.description.contains("default perspective-based worker id")
+    }));
+    assert!(create.inputs.iter().any(|input| {
+        input.name == "overwriting_worktree"
+            && !input.required
+            && input.description.contains("finalized workspace")
     }));
 }
 

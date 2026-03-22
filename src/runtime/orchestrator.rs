@@ -35,8 +35,9 @@ use super::{
 /// id automatically.
 ///
 /// Note: Explicit worker ids may be reused after a previous worker with
-/// the same id reaches a finalized state. Worker creation then replaces the
-/// persisted projection with a fresh active worker.
+/// the same id reaches a finalized state. Reuse requires either a prior
+/// workspace deletion or an explicit overwrite request when a preserved
+/// finalized workspace still exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateWorker {
     /// Perspective to instantiate.
@@ -45,12 +46,15 @@ pub struct CreateWorker {
     pub worker_id: Option<WorkerId>,
     /// Optional initial `task` bundle to seed in the worker inbox.
     pub task: Option<BundlePayload>,
+    /// Whether to replace an existing finalized workspace for the same
+    /// explicit worker id.
+    pub overwriting_worktree: bool,
 }
 
 impl CreateWorker {
     /// Construct a create request for one perspective.
     pub fn new(perspective: PerspectiveName) -> Self {
-        Self { perspective, worker_id: None, task: None }
+        Self { perspective, worker_id: None, task: None, overwriting_worktree: false }
     }
 
     /// Pin the worker to one orchestrator-selected runtime identity.
@@ -62,6 +66,13 @@ impl CreateWorker {
     /// Seed the new worker inbox with one initial `task` bundle.
     pub fn with_task(mut self, task: BundlePayload) -> Self {
         self.task = Some(task);
+        self
+    }
+
+    /// Allow worker creation to replace an existing finalized workspace
+    /// for the same explicit worker id.
+    pub fn with_overwriting_worktree(mut self) -> Self {
+        self.overwriting_worktree = true;
         self
     }
 }
@@ -459,7 +470,7 @@ impl OrchestratorService for FsOrchestratorService {
     }
 
     fn create_worker(&self, request: CreateWorker) -> Result<CreateResult> {
-        let CreateWorker { perspective, worker_id, task } = request;
+        let CreateWorker { perspective, worker_id, task, overwriting_worktree } = request;
         let (active, compiled) = self.fs.load_active_compiled_rulebook()?;
         let compiled_perspective = compiled
             .perspectives()
@@ -470,7 +481,16 @@ impl OrchestratorService for FsOrchestratorService {
         let (worker_id, previous_finalized_record) =
             self.resolve_create_worker_id(&perspective, worker_id)?;
         if let Some(record) = previous_finalized_record.as_ref() {
-            self.cleanup_workspace_before_create(record)?;
+            if record.worktree_path.exists() {
+                if !overwriting_worktree {
+                    return Err(RuntimeError::ExistingWorkerWorkspace {
+                        worker_id: record.worker_id.clone(),
+                        state: record.state,
+                        worktree_path: record.worktree_path.clone(),
+                    });
+                }
+                self.cleanup_workspace_before_create(record)?;
+            }
         }
         let worktree_path = self.fs.worker_paths(&worker_id).worktree_root().to_path_buf();
         self.fs.vcs().create_worktree(

@@ -183,6 +183,11 @@ pub enum WorkerCommand {
         #[arg(long = "worker-id", value_name = "WORKER")]
         worker_id: Option<WorkerId>,
 
+        /// Replace an existing finalized workspace for the same
+        /// explicit worker id.
+        #[arg(long = "overwriting-worktree")]
+        overwriting_worktree: bool,
+
         /// Optional payload for the initial `task` bundle.
         #[command(flatten)]
         payload: BundlePayloadArgs,
@@ -400,12 +405,15 @@ impl WorkerCommand {
     /// Execute one orchestrator-side worker command.
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
-            | Self::Create { perspective, worker_id, payload } => {
+            | Self::Create { perspective, worker_id, overwriting_worktree, payload } => {
                 let task =
                     (!payload.clone().into_runtime().is_empty()).then(|| payload.into_runtime());
                 let mut request = CreateWorker::new(perspective);
                 if let Some(worker_id) = worker_id {
                     request = request.with_worker_id(worker_id);
+                }
+                if overwriting_worktree {
+                    request = request.with_overwriting_worktree();
                 }
                 if let Some(task) = task {
                     request = request.with_task(task);

@@ -37,6 +37,22 @@ pub enum RuntimeError {
     #[error("worker id already belongs to a live worker: {0}")]
     WorkerIdExists(WorkerId),
 
+    /// A finalized worker still has a preserved workspace at the
+    /// managed path for the requested id.
+    #[error(
+        "worker `{worker_id}` already has a preserved {state} workspace at `{worktree_path}`; delete it first or request overwrite",
+        state = worker_state_name(*state),
+        worktree_path = worktree_path.display()
+    )]
+    ExistingWorkerWorkspace {
+        /// Worker whose preserved finalized workspace still exists.
+        worker_id: WorkerId,
+        /// Finalized state currently recorded for the worker.
+        state: WorkerState,
+        /// Managed path to the preserved workspace.
+        worktree_path: PathBuf,
+    },
+
     /// The worker state machine does not permit the requested action.
     #[error(
         "{operation} requires worker state {expected}; found {actual}",

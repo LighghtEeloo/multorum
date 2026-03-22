@@ -50,6 +50,7 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,
             | RuntimeError::UnknownWorker(_) => McpErrorCode::UnknownWorker,
             | RuntimeError::WorkerIdExists(_) => McpErrorCode::WorkerIdExists,
+            | RuntimeError::ExistingWorkerWorkspace { .. } => McpErrorCode::InvalidState,
             | RuntimeError::InvalidState { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,
             | RuntimeError::AlreadyAcknowledged => McpErrorCode::AlreadyAcknowledged,

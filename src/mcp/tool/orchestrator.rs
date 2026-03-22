@@ -26,6 +26,11 @@ const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
         required: false,
     },
     ToolInputDescriptor {
+        name: "overwriting_worktree",
+        description: "Optional flag to replace an existing finalized workspace for the same explicit worker id.",
+        required: false,
+    },
+    ToolInputDescriptor {
         name: "body",
         description: "Optional Markdown file to move into the seeded task bundle body.",
         required: false,

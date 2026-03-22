@@ -654,16 +654,14 @@ Publishes a `resolve` bundle into the worker's inbox. The bundle carries both th
 **`revise <worker-id>`**
 Publishes a `revise` bundle into the worker's inbox. The bundle carries the required changes. Once the worker acknowledges it, Multorum returns the committed worker to ACTIVE state so it can address the feedback.
 
+**`merge <worker-id>`**
+Runs the pre-merge pipeline against the worker's commit. If all checks pass, merges the commit into the canonical codebase and transitions the worker to MERGED. Sibling workers in the same bidding group are then discarded, since only one worker from the group may merge. If any check fails, the instruction is rejected and the worker remains in COMMITTED state pending orchestrator action.
+
 **`discard <worker-id>`**
 Finalizes a worker without merging its work. It may be issued while the worker is ACTIVE or COMMITTED. The worker's workspace is preserved for later inspection or explicit deletion.
 
 **`delete <worker-id>`**
 Removes the git worktree for a worker that is already in `MERGED` or `DISCARDED`. `delete` does not change lifecycle state; it only tears down the preserved workspace.
-
-### Merge Instructions
-
-**`merge <worker-id>`**
-Runs the pre-merge pipeline against the worker's commit. If all checks pass, merges the commit into the canonical codebase and transitions the worker to MERGED. Sibling workers in the same bidding group are then discarded, since only one worker from the group may merge. If any check fails, the instruction is rejected and the worker remains in COMMITTED state pending orchestrator action.
 
 ### Worker-Facing Instructions
 
