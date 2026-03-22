@@ -184,7 +184,7 @@ fn integrate_worker_cherry_picks_allowed_changes() {
 
     let integration =
         orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap();
-    assert_eq!(integration.state, WorkerState::Integrated);
+    assert_eq!(integration.state, WorkerState::Merged);
     assert!(integration.ran_checks.is_empty());
     assert!(!provision.worktree_path.exists(), "integrated worktree should be removed");
     assert_eq!(
@@ -273,7 +273,7 @@ fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() 
 
     let integration =
         orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap();
-    assert_eq!(integration.state, WorkerState::Integrated);
+    assert_eq!(integration.state, WorkerState::Merged);
 }
 
 #[test]
@@ -299,7 +299,7 @@ fn send_commit_canonicalizes_short_hash_before_storage_and_integration() {
 
     let integration =
         orchestrator.integrate_worker(provision.worker_id.clone(), Vec::new()).unwrap();
-    assert_eq!(integration.state, WorkerState::Integrated);
+    assert_eq!(integration.state, WorkerState::Merged);
 }
 
 #[test]

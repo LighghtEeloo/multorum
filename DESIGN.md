@@ -469,7 +469,7 @@ provision ───────► ACTIVE
                      │
              ┌───────┴───────┐
              ▼               ▼
-         INTEGRATED       DISCARDED
+            MERGED        DISCARDED
 ```
 
 ### States
@@ -477,10 +477,10 @@ provision ───────► ACTIVE
 - **ACTIVE** — the worktree has been created, the worker's environment is ready, and execution may proceed immediately.
 - **BLOCKED** — the worker has reported a blocker and is awaiting orchestrator resolution. The worker is suspended; no execution occurs in this state.
 - **COMMITTED** — the worker has completed its task and submitted a commit to Multorum. The worktree is frozen pending orchestrator action: integration, revision, or discard.
-- **INTEGRATED** — the worker's commit has passed the pre-merge pipeline and been integrated into the canonical codebase. The worktree is released.
+- **MERGED** — the worker's commit has passed the pre-merge pipeline and been merged into the canonical codebase. The worktree is released.
 - **DISCARDED** — the worker's worktree has been torn down without integration. The work is abandoned.
 
-Integrating one worker is also a group-level decision: once a worker in a bidding group reaches `INTEGRATED`, every sibling worker in that bidding group becomes `DISCARDED`.
+Integrating one worker is also a group-level decision: once a worker in a bidding group reaches `MERGED`, every sibling worker in that bidding group becomes `DISCARDED`.
 
 ### Valid Transitions
 
@@ -491,7 +491,7 @@ Integrating one worker is also a group-level decision: once a worker in a biddin
 | ACTIVE | COMMITTED | Worker submits commit |
 | BLOCKED | ACTIVE | Orchestrator issues `resolve` |
 | COMMITTED | ACTIVE | Orchestrator issues `revise`; worker resumes to address problems |
-| COMMITTED | INTEGRATED | Orchestrator issues `integrate`; pre-merge checks pass |
+| COMMITTED | MERGED | Orchestrator issues `integrate`; pre-merge checks pass |
 | COMMITTED | DISCARDED | Orchestrator issues `discard` |
 | ACTIVE | DISCARDED | Orchestrator issues `discard` |
 
@@ -657,7 +657,7 @@ Tears down a worker's worktree without integrating its work. It may be issued wh
 ### Integration Instructions
 
 **`integrate <worker-id>`**
-Runs the pre-merge pipeline against the worker's commit. If all checks pass, integrates the commit into the canonical codebase and transitions the worker to INTEGRATED. Sibling workers in the same bidding group are then discarded, since only one worker from the group may merge. If any check fails, the instruction is rejected and the worker remains in COMMITTED state pending orchestrator action.
+Runs the pre-merge pipeline against the worker's commit. If all checks pass, integrates the commit into the canonical codebase and transitions the worker to MERGED. Sibling workers in the same bidding group are then discarded, since only one worker from the group may merge. If any check fails, the instruction is rejected and the worker remains in COMMITTED state pending orchestrator action.
 
 ### Worker-Facing Instructions
 

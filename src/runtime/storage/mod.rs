@@ -121,7 +121,7 @@ impl MessageKind {
 
 /// Return `true` when a worker still participates in runtime conflict checks.
 pub(super) fn is_live_worker_state(state: WorkerState) -> bool {
-    !matches!(state, WorkerState::Integrated | WorkerState::Discarded)
+    !matches!(state, WorkerState::Merged | WorkerState::Discarded)
 }
 
 /// Return `true` when a worker may still produce mailbox submissions.

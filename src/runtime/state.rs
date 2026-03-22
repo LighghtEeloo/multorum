@@ -27,8 +27,8 @@ pub enum WorkerState {
     Blocked,
     /// The worker has submitted a commit and is frozen pending review.
     Committed,
-    /// The worker has been integrated into the canonical codebase.
-    Integrated,
+    /// The worker has been merged into the canonical codebase.
+    Merged,
     /// The worker has been discarded without integration.
     Discarded,
 }
@@ -119,11 +119,11 @@ pub struct DiscardResult {
 /// Result of integrating a worker submission.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct IntegrateResult {
-    /// Integrated worker identity.
+    /// Merged worker identity.
     pub worker_id: WorkerId,
     /// Bidding group selected for integration.
     pub bidding_group: PerspectiveName,
-    /// Perspective held by the integrated worker.
+    /// Perspective held by the merged worker.
     pub perspective: PerspectiveName,
     /// Final worker state.
     pub state: WorkerState,

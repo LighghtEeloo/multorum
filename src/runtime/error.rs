@@ -214,7 +214,7 @@ fn worker_state_name(state: WorkerState) -> &'static str {
         | WorkerState::Active => "ACTIVE",
         | WorkerState::Blocked => "BLOCKED",
         | WorkerState::Committed => "COMMITTED",
-        | WorkerState::Integrated => "INTEGRATED",
+        | WorkerState::Merged => "MERGED",
         | WorkerState::Discarded => "DISCARDED",
     }
 }

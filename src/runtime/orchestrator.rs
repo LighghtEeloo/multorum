@@ -560,7 +560,7 @@ impl OrchestratorService for FsOrchestratorService {
         self.fs.vcs().integrate_commit(self.fs.workspace_root(), &head_commit)?;
         self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
 
-        record.state = WorkerState::Integrated;
+        record.state = WorkerState::Merged;
         self.fs.store_worker_record(&record)?;
 
         for mut sibling in self.active_workers()?.into_iter().filter(|sibling| {
@@ -573,7 +573,7 @@ impl OrchestratorService for FsOrchestratorService {
             worker_id = %record.worker_id,
             perspective = %record.perspective,
             head_commit = %head_commit,
-            "integrated worker"
+            "merged worker"
         );
         Ok(IntegrateResult {
             worker_id: record.worker_id,
