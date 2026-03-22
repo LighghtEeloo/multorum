@@ -137,7 +137,7 @@ pub(super) fn validate_skip_request(
     for requested in skip_checks {
         let name = CheckName::new(requested)
             .map_err(|_| RuntimeError::CheckFailed(format!("unknown check `{requested}`")))?;
-        let Some(decl) = rulebook.checks().get(&name) else {
+        let Some(decl) = rulebook.check().get(&name) else {
             return Err(RuntimeError::CheckFailed(format!("unknown check `{requested}`")));
         };
         if decl.policy() != CheckPolicy::Skippable {

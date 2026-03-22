@@ -1,8 +1,8 @@
-//! Check pipeline declarations from the `[checks]` rulebook table.
+//! Check pipeline declarations from the `[check]` rulebook table.
 //!
 //! Checks are project-defined commands that run after the mandatory
 //! compiled-write-set scope check. The rulebook declares the ordered
-//! validation pipeline and a named table for each check.
+//! validation pipeline plus named command and policy maps.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::{fmt, str::FromStr};
@@ -111,11 +111,12 @@ impl CheckDecl {
     }
 }
 
-/// The complete set of check declarations from a rulebook's `[checks]`
+/// The complete set of check declarations from a rulebook's `[check]`
 /// table.
 ///
-/// The table contains an ordered `pipeline` plus a named declaration
-/// for every check referenced by that pipeline.
+/// The table contains an ordered `pipeline`, a `[check.command]` map
+/// for shell commands, and an optional `[check.policy]` map keyed by
+/// the same check names.
 #[derive(Debug, Clone, Default)]
 pub struct CheckTable {
     pipeline: Vec<CheckName>,
@@ -208,18 +209,13 @@ impl CompiledChecks {
 }
 
 #[derive(serde::Deserialize)]
-struct RawCheckDecl {
-    command: String,
-    #[serde(default)]
-    policy: CheckPolicy,
-}
-
-#[derive(serde::Deserialize)]
 struct RawCheckTable {
     #[serde(default)]
     pipeline: Vec<String>,
-    #[serde(flatten)]
-    declarations: BTreeMap<String, RawCheckDecl>,
+    #[serde(default)]
+    command: BTreeMap<String, String>,
+    #[serde(default)]
+    policy: BTreeMap<String, CheckPolicy>,
 }
 
 impl<'de> de::Deserialize<'de> for CheckTable {
@@ -235,10 +231,23 @@ impl<'de> de::Deserialize<'de> for CheckTable {
             .map(|name| CheckName::new(&name).map_err(de::Error::custom))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let mut declarations = BTreeMap::new();
-        for (name, decl) in raw.declarations {
+        let mut policies = BTreeMap::new();
+        for (name, policy) in raw.policy {
             let name = CheckName::new(&name).map_err(de::Error::custom)?;
-            declarations.insert(name, CheckDecl::new(decl.command, decl.policy));
+            policies.insert(name, policy);
+        }
+
+        let mut declarations = BTreeMap::new();
+        for (name, command) in raw.command {
+            let name = CheckName::new(&name).map_err(de::Error::custom)?;
+            let policy = policies.remove(&name).unwrap_or_default();
+            declarations.insert(name, CheckDecl::new(command, policy));
+        }
+
+        if let Some((name, _)) = policies.into_iter().next() {
+            return Err(de::Error::custom(format!(
+                "check policy references undefined command `{name}`"
+            )));
         }
 
         Ok(Self { pipeline, declarations })
@@ -271,8 +280,8 @@ mod tests {
             r#"
             pipeline = ["lint"]
 
-            [lint]
-            command = "cargo clippy"
+            [command]
+            lint = "cargo clippy"
         "#,
         )
         .unwrap();
@@ -287,9 +296,11 @@ mod tests {
             r#"
             pipeline = ["test"]
 
-            [test]
-            command = "cargo test"
-            policy = "skippable"
+            [command]
+            test = "cargo test"
+
+            [policy]
+            test = "skippable"
         "#,
         )
         .unwrap();
@@ -317,8 +328,8 @@ mod tests {
             r#"
             pipeline = ["lint", "lint"]
 
-            [lint]
-            command = "cargo clippy"
+            [command]
+            lint = "cargo clippy"
         "#,
         )
         .unwrap();
@@ -333,8 +344,8 @@ mod tests {
             r#"
             pipeline = []
 
-            [lint]
-            command = "cargo clippy"
+            [command]
+            lint = "cargo clippy"
         "#,
         )
         .unwrap();
@@ -349,8 +360,8 @@ mod tests {
             r#"
             pipeline = ["lint"]
 
-            [lint]
-            command = "   "
+            [command]
+            lint = "   "
         "#,
         )
         .unwrap();
@@ -365,5 +376,18 @@ mod tests {
         let compiled = checks.compile().unwrap();
         assert!(compiled.is_empty());
         assert!(compiled.pipeline().is_empty());
+    }
+
+    #[test]
+    fn policy_without_command_is_rejected() {
+        let error = toml::from_str::<CheckTable>(
+            r#"
+            [policy]
+            test = "skippable"
+        "#,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("undefined command `test`"));
     }
 }

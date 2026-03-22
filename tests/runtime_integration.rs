@@ -26,7 +26,7 @@ fn rulebook_toml() -> &'static str {
         read = "Other"
         write = "Owned"
 
-        [checks]
+        [check]
         pipeline = []
     "#
 }
@@ -83,7 +83,7 @@ fn rulebook_init_creates_default_committed_files() {
     let rulebook = Rulebook::from_workspace_root(dir.path()).unwrap();
     assert!(rulebook.filesets().definitions().is_empty());
     assert!(rulebook.perspectives().declarations().is_empty());
-    assert!(rulebook.checks().pipeline().is_empty());
+    assert!(rulebook.check().pipeline().is_empty());
 }
 
 #[test]
@@ -91,14 +91,14 @@ fn rulebook_init_refuses_to_overwrite_existing_rulebook() {
     let dir = tempfile::tempdir().unwrap();
     let rulebook_path = dir.path().join(".multorum/rulebook.toml");
     fs::create_dir_all(rulebook_path.parent().unwrap()).unwrap();
-    fs::write(&rulebook_path, "[checks]\npipeline = []\n").unwrap();
+    fs::write(&rulebook_path, "[check]\npipeline = []\n").unwrap();
     let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
     let canonical_rulebook_path = rulebook_path.canonicalize().unwrap();
 
     let error = orchestrator.rulebook_init().unwrap_err();
 
     assert!(matches!(error, RuntimeError::RulebookExists(path) if path == canonical_rulebook_path));
-    assert_eq!(fs::read_to_string(rulebook_path).unwrap(), "[checks]\npipeline = []\n");
+    assert_eq!(fs::read_to_string(rulebook_path).unwrap(), "[check]\npipeline = []\n");
 }
 
 #[test]

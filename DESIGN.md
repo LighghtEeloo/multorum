@@ -271,20 +271,16 @@ write = "AuthFiles - AuthSpecs - AuthTests"
 read  = "AuthSpecs | AuthTests"
 write = "AuthTests"
 
-[checks]
+[check]
 pipeline = ["fmt", "clippy", "test"]
 
-[checks.fmt]
-command = "cargo fmt --check"
-
-[checks.clippy]
-command = "cargo clippy --workspace --all-targets -- -D warnings"
-
-[checks.test]
-command = "cargo test --workspace"
+[check.command]
+fmt = "cargo fmt --check"
+clippy = "cargo clippy --workspace --all-targets -- -D warnings"
+test = "cargo test --workspace"
 ```
 
-This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `checks` table to make the example complete. Bidding groups provisioned from `AuthImplementor` and `AuthTester` may run in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across those groups. The `checks` table defines the ordered pre-merge pipeline that every submitted change must pass before integration.
+This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `check` table to make the example complete. Bidding groups provisioned from `AuthImplementor` and `AuthTester` may run in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across those groups. The `check` table defines the ordered pre-merge pipeline that every submitted change must pass before integration.
 
 ### Default Rulebook Template
 
@@ -301,8 +297,8 @@ This rulebook reuses the same file set vocabulary introduced earlier, then adds 
 [perspectives]
 
 # Add pre-merge gates in execution order.
-# Each name in `pipeline` should later get a `[checks.<name>]` table with a command.
-[checks]
+# Add commands under `[check.command]` and optional skip policies under `[check.policy]`.
+[check]
 pipeline = []
 ```
 
@@ -592,17 +588,13 @@ Multorum always verifies that every file touched by the worker's commit is withi
 The project may define a pipeline of additional checks in the rulebook: building, testing, linting, formatting, or any other command. These run in the declared order after the file set check passes.
 
 ```toml
-[checks]
+[check]
 pipeline = ["lint", "build", "test"]
 
-[checks.lint]
-command = "npm run lint"
-
-[checks.build]
-command = "npm run build"
-
-[checks.test]
-command = "npm run test"
+[check.command]
+lint = "npm run lint"
+build = "npm run build"
+test = "npm run test"
 ```
 
 ### Evidence and Trust Negotiation
@@ -622,7 +614,7 @@ Failed evidence is valid to submit. A worker may report that tests failed on spe
 
 ### Check Policies
 
-Individual checks can be assigned a policy in the rulebook:
+Individual checks can be assigned a policy in the rulebook under `[check.policy]`:
 
 - `always` — the check always runs, regardless of any evidence submitted
 - `skippable` — the check may be skipped if the orchestrator accepts the worker's evidence

@@ -67,9 +67,9 @@ fn full_pipeline_from_workspace_root() {
 
     assert_eq!(compiled.filesets().len(), 5);
     assert_eq!(compiled.perspectives().len(), 2);
-    assert_eq!(compiled.checks().len(), 3);
+    assert_eq!(compiled.check().len(), 3);
     assert_eq!(
-        compiled.checks().pipeline(),
+        compiled.check().pipeline(),
         &[
             CheckName::new("fmt").unwrap(),
             CheckName::new("clippy").unwrap(),
@@ -91,11 +91,11 @@ fn full_pipeline_from_workspace_root() {
 fn compile_rejects_duplicate_check_pipeline_entries() {
     let workspace = setup_workspace(
         r#"
-            [checks]
+            [check]
             pipeline = ["lint", "lint"]
 
-            [checks.lint]
-            command = "cargo clippy"
+            [check.command]
+            lint = "cargo clippy"
         "#,
         &["src/main.rs"],
     );
@@ -110,11 +110,11 @@ fn compile_rejects_duplicate_check_pipeline_entries() {
 fn compile_rejects_unused_declared_check() {
     let workspace = setup_workspace(
         r#"
-            [checks]
+            [check]
             pipeline = []
 
-            [checks.lint]
-            command = "cargo clippy"
+            [check.command]
+            lint = "cargo clippy"
         "#,
         &["src/main.rs"],
     );
@@ -136,7 +136,7 @@ fn compile_surfaces_perspective_undefined_fileset_errors() {
             read  = "MissingFiles"
             write = "AuthFiles"
 
-            [checks]
+            [check]
             pipeline = []
         "#,
         &["auth/login.rs"],
@@ -161,6 +161,6 @@ fn compile_with_explicit_file_list_matches_workspace_compilation() {
 
     assert_eq!(from_root.filesets(), from_explicit_files.filesets());
     assert_eq!(from_root.perspectives().len(), from_explicit_files.perspectives().len());
-    assert_eq!(from_root.checks().pipeline(), from_explicit_files.checks().pipeline());
+    assert_eq!(from_root.check().pipeline(), from_explicit_files.check().pipeline());
     assert_eq!(from_root.perspective_summaries(), from_explicit_files.perspective_summaries());
 }

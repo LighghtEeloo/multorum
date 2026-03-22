@@ -8,6 +8,6 @@
 [perspectives]
 
 # Add pre-merge gates in execution order.
-# Each name in `pipeline` should later get a `[checks.<name>]` table with a command.
-[checks]
+# Add commands under `[check.command]` and optional skip policies under `[check.policy]`.
+[check]
 pipeline = []

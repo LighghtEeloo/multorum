@@ -3,7 +3,7 @@
 //! This module is the aggregate entry point for rulebook loading and
 //! compilation. A [`Rulebook`] models the committed TOML artifact,
 //! while [`CompiledRulebook`] exposes the concrete file sets,
-//! perspectives, and check pipeline that runtime code consumes.
+//! perspectives, and the validated `[check]` pipeline that runtime code consumes.
 //!
 //! The rulebook module deliberately stops at typed loading and
 //! compilation. Git pinning, active-rulebook switching, and runtime

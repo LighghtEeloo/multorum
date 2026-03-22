@@ -17,12 +17,12 @@ use super::error::RulebookError;
 ///
 /// - `filesets` is the compiled output of the raw file set algebra.
 /// - `perspectives` contains concrete read/write sets for each declared perspective.
-/// - `checks` has already passed pipeline validation.
+/// - `check` has already passed pipeline validation.
 #[derive(Debug, Clone)]
 pub struct CompiledRulebook {
     filesets: BTreeMap<fileset::Name, BTreeSet<PathBuf>>,
     perspectives: CompiledPerspectives,
-    checks: CompiledChecks,
+    check: CompiledChecks,
 }
 
 impl CompiledRulebook {
@@ -37,8 +37,8 @@ impl CompiledRulebook {
     }
 
     /// The validated check pipeline.
-    pub fn checks(&self) -> &CompiledChecks {
-        &self.checks
+    pub fn check(&self) -> &CompiledChecks {
+        &self.check
     }
 
     /// Build runtime-friendly summaries of the compiled perspectives.
@@ -60,18 +60,18 @@ impl Rulebook {
     pub fn compile(&self, files: &[PathBuf]) -> Result<CompiledRulebook, RulebookError> {
         tracing::debug!(file_count = files.len(), "compiling rulebook");
 
-        let checks = self.checks().compile()?;
+        let check = self.check().compile()?;
         let filesets = self.filesets().compile(files)?;
         let perspectives = self.perspectives().compile(&filesets)?;
 
         tracing::debug!(
             fileset_count = filesets.len(),
             perspective_count = perspectives.len(),
-            check_count = checks.len(),
+            check_count = check.len(),
             "compiled rulebook"
         );
 
-        Ok(CompiledRulebook { filesets, perspectives, checks })
+        Ok(CompiledRulebook { filesets, perspectives, check })
     }
 
     /// Compile this rulebook by enumerating files under a project root.
@@ -109,15 +109,15 @@ mod tests {
             read  = "AuthSpecs"
             write = "AuthTests"
 
-            [checks]
+            [check]
             pipeline = ["lint", "test"]
 
-            [checks.lint]
-            command = "cargo clippy"
+            [check.command]
+            lint = "cargo clippy"
+            test = "cargo test"
 
-            [checks.test]
-            command = "cargo test"
-            policy = "skippable"
+            [check.policy]
+            test = "skippable"
         "#,
         )
         .unwrap()
@@ -142,9 +142,9 @@ mod tests {
 
         assert_eq!(compiled.filesets().len(), 5);
         assert_eq!(compiled.perspectives().len(), 2);
-        assert_eq!(compiled.checks().len(), 2);
+        assert_eq!(compiled.check().len(), 2);
         assert_eq!(
-            compiled.checks().get(&CheckName::new("test").unwrap()).unwrap().policy(),
+            compiled.check().get(&CheckName::new("test").unwrap()).unwrap().policy(),
             CheckPolicy::Skippable
         );
     }
@@ -177,7 +177,7 @@ mod tests {
             [filesets]
             Broken = "MissingFiles"
 
-            [checks]
+            [check]
             pipeline = []
         "#,
         )
@@ -203,7 +203,7 @@ mod tests {
             read  = "SpecFiles"
             write = "AuthFiles"
 
-            [checks]
+            [check]
             pipeline = []
         "#,
         )

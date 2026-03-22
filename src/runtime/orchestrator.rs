@@ -545,9 +545,9 @@ impl OrchestratorService for FsOrchestratorService {
 
         let mut ran_checks = Vec::new();
         let mut skipped_checks = Vec::new();
-        for check_name in worker_rulebook.checks().pipeline() {
+        for check_name in worker_rulebook.check().pipeline() {
             let decl = worker_rulebook
-                .checks()
+                .check()
                 .get(check_name)
                 .expect("compiled checks contain every pipeline entry");
             if allowed_skips.contains(check_name) {

@@ -32,7 +32,7 @@ pub struct Rulebook {
     #[serde(default)]
     perspectives: PerspectiveTable,
     #[serde(default)]
-    checks: CheckTable,
+    check: CheckTable,
 }
 
 impl Rulebook {
@@ -81,8 +81,8 @@ impl Rulebook {
     }
 
     /// The raw check declarations.
-    pub fn checks(&self) -> &CheckTable {
-        &self.checks
+    pub fn check(&self) -> &CheckTable {
+        &self.check
     }
 }
 
@@ -114,24 +114,24 @@ mod tests {
             read  = "AuthSpecs"
             write = "AuthTests"
 
-            [checks]
+            [check]
             pipeline = ["lint", "test"]
 
-            [checks.lint]
-            command = "cargo clippy"
+            [check.command]
+            lint = "cargo clippy"
+            test = "cargo test"
 
-            [checks.test]
-            command = "cargo test"
-            policy = "skippable"
+            [check.policy]
+            test = "skippable"
         "#,
         )
         .unwrap();
 
         assert_eq!(rulebook.filesets().definitions().len(), 5);
         assert_eq!(rulebook.perspectives().declarations().len(), 2);
-        assert_eq!(rulebook.checks().pipeline().len(), 2);
+        assert_eq!(rulebook.check().pipeline().len(), 2);
         assert_eq!(
-            rulebook.checks().declarations()[&crate::rulebook::CheckName::new("test").unwrap()]
+            rulebook.check().declarations()[&crate::rulebook::CheckName::new("test").unwrap()]
                 .policy(),
             CheckPolicy::Skippable
         );
@@ -145,7 +145,7 @@ mod tests {
         fs::write(
             &rulebook_path,
             r#"
-            [checks]
+            [check]
             pipeline = []
         "#,
         )
@@ -154,7 +154,7 @@ mod tests {
         let rulebook = Rulebook::from_workspace_root(dir.path()).unwrap();
         assert!(rulebook.filesets().definitions().is_empty());
         assert!(rulebook.perspectives().declarations().is_empty());
-        assert!(rulebook.checks().pipeline().is_empty());
+        assert!(rulebook.check().pipeline().is_empty());
     }
 
     #[test]
@@ -163,6 +163,6 @@ mod tests {
 
         assert!(rulebook.filesets().definitions().is_empty());
         assert!(rulebook.perspectives().declarations().is_empty());
-        assert!(rulebook.checks().pipeline().is_empty());
+        assert!(rulebook.check().pipeline().is_empty());
     }
 }
