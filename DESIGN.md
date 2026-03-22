@@ -6,13 +6,14 @@
 2. [Core Concepts](#core-concepts)
 3. [File Set Algebra](#file-set-algebra)
 4. [Perspectives](#perspectives)
-5. [The Rulebook](#the-rulebook)
-6. [Project Layout](#project-layout)
-7. [Sub-Codebase Provisioning](#sub-codebase-provisioning)
-8. [The Worker State Machine](#the-worker-state-machine)
-9. [The Mailbox Protocol](#the-mailbox-protocol)
-10. [The Pre-Merge Pipeline](#the-pre-merge-pipeline)
-11. [The Orchestrator Instruction Set](#the-orchestrator-instruction-set)
+5. [Workers](#workers)
+6. [The Rulebook](#the-rulebook)
+7. [Project Layout](#project-layout)
+8. [Sub-Codebase Provisioning](#sub-codebase-provisioning)
+9. [The Worker State Machine](#the-worker-state-machine)
+10. [The Mailbox Protocol](#the-mailbox-protocol)
+11. [The Pre-Merge Pipeline](#the-pre-merge-pipeline)
+12. [The Orchestrator Instruction Set](#the-orchestrator-instruction-set)
 
 ---
 
@@ -55,9 +56,9 @@ The orchestrator communicates downward to Multorum and to individual workers. Wo
 
 ### Workers and Perspectives
 
-A *perspective* is a declaration in the rulebook that defines a named role, its write scope, and its read scope. A *worker* is an agent currently assigned to a perspective and executing a task within the environment that Multorum provisions for that perspective.
+A *perspective* is a declaration in the rulebook that defines a named role, its write scope, and its read scope. A *worker* is a runtime instantiation of a perspective, executing a task inside the environment that Multorum provisions for that role.
 
-The distinction matters: perspectives are static declarations that live in the rulebook; workers are runtime entities with lifecycle state. A perspective can exist in the rulebook without a worker currently holding it.
+The distinction matters: perspectives are static declarations that live in the rulebook; workers are runtime entities with lifecycle state. A perspective can exist in the rulebook without any live workers. When the orchestrator provisions multiple workers from the same perspective against the same pinned snapshot, those workers form a *bidding group*: several competing executions of one declared role, of which at most one may ultimately be merged.
 
 ### The Canonical Codebase
 
@@ -118,13 +119,15 @@ read  = "AuthSpecs | AuthTests"
 write = "AuthTests"
 ```
 
-Primitive names bind globs via the `.path` key (`SpecFiles.path`, `AuthFiles.path`). Compound names (`AuthSpecs`, `AuthTests`) reference other names through set expressions, narrowing a module to a cross-cutting concern via intersection. Perspectives then use union and difference to partition the module: `AuthImplementor` writes only production code by subtracting specs and tests from the full auth set, while `AuthTester` writes only tests. The two write sets are disjoint, satisfying the safety property.
+Primitive names bind globs via the `.path` key (`SpecFiles.path`, `AuthFiles.path`). Compound names (`AuthSpecs`, `AuthTests`) reference other names through set expressions, narrowing a module to a cross-cutting concern via intersection. Perspectives then use union and difference to partition the module: `AuthImplementor` writes only production code by subtracting specs and tests from the full auth set, while `AuthTester` writes only tests. The two write sets are disjoint, so bidding groups provisioned from those perspectives may run concurrently.
 
 ### Compilation
 
 File set expressions are a *rulebook-level concept only*. They do not exist at runtime. When Multorum activates a rulebook, it immediately compiles all file set expressions into concrete file lists by expanding globs against the current state of the filesystem and evaluating all set operations. From that point on, Multorum works exclusively with concrete lists.
 
-The compilation pipeline is:
+Rulebook compilation produces candidate ownership sets. The safety property is checked later, when those compiled sets would become concurrent with active work.
+
+The compilation and activation flow is:
 
 ```
 Rulebook file set expressions
@@ -139,7 +142,16 @@ Evaluate all set operations
 Concrete file lists per perspective
         │
         ▼
-Safety property validation
+Rulebook structural validation
+        │
+        ▼
+Candidate bidding group from selected perspective
+        │
+        ▼
+Compare candidate read/write sets against every active bidding group's materialized read/write sets
+        │
+        ▼
+Provision worker and materialize identical read/write sets in its runtime
 ```
 
 ### Constraints
@@ -149,6 +161,8 @@ The file set algebra imposes a few constraints that Multorum validates at compil
 - **No cycles** — a named file set may not reference itself, directly or transitively
 - **No undefined references** — every name used in an expression must be defined in the rulebook
 - **Empty sets** — a file set that compiles to an empty list is valid; Multorum warns but does not error
+
+Compile-time validation only proves that the rulebook is well-formed and that its file-set expressions reduce to concrete lists. It does not by itself prove that any particular worker may run concurrently with the workers that are already active.
 
 ---
 
@@ -165,33 +179,62 @@ write = "AuthFiles - AuthSpecs - AuthTests"
 ```
 
 - *Name*: an identifier (`AuthImplementor`) that the orchestrator uses to reference the perspective in instructions.
-- *Write Set*: a file set expression that compiles to the exact list of files this perspective may modify. Write enforcement is absolute: changes to files outside the write set are rejected at integration time.
-- *Read Set*: a file set expression identifying files that are relevant to the perspective's task and guaranteed stable for the duration of the session. The read set is guidance, not a hard restriction — workers can read any file in the codebase, but the read set communicates what the orchestrator considers relevant and promises not to change.
+- *Write Set*: a file set expression that compiles to the exact list of files any worker instantiated from this perspective may modify. Write enforcement is absolute: submitted changes to files outside the compiled write set are rejected.
+- *Read Set*: a file set expression identifying files relevant to the role and required to remain stable against other active bidding groups while that role is active. The read set is guidance, not a hard restriction — workers can read any file in the codebase, but the read set communicates what the orchestrator considers relevant and what concurrent work must leave untouched.
 
-### Perspectives vs. Workers
+### Declaration Semantics
 
-Perspectives are static declarations; workers are runtime entities. A perspective exists in the rulebook whether or not a worker currently holds it. Multiple provisioning cycles may use the same perspective at different times, but at most one worker may hold a given perspective at any time.
+The write set is a closed, compiled list of files. A perspective authorizes modifications only to files that existed in the codebase at rulebook activation time and that appear in its compiled write set. Creating new files requires orchestrator intervention and a new rulebook version.
 
-### Write Semantics
+The read set names the stable context for the role. It tells the orchestrator which files must remain untouched by other concurrent work when the perspective is instantiated, and it tells workers where the intended context for the task lives.
 
-The write set is a closed, compiled list of files. A perspective may only modify files that existed in the codebase at rulebook activation time and that appear in its compiled write set. Creating new files requires orchestrator intervention — the worker reports back, the orchestrator amends the rulebook, and the worker is re-provisioned.
+## Workers
 
-### Read Semantics
+A *worker* is a runtime execution of a perspective. Provisioning pins a worker to a specific rulebook commit, a specific base commit, and the compiled read and write sets derived from that perspective at that moment. Perspectives are static policy; workers are ephemeral attempts.
 
-The read set is a stability contract. Files in a perspective's read set are guaranteed not to be written by any other perspective (enforced by the safety property below). A worker can rely on those files being unchanged for the entire session. The read set also signals relevance — it tells the worker where to look for context.
+### Bidding Groups
+
+When the orchestrator wants multiple attempts at the same role, it may provision multiple workers from one perspective. Those workers form a *bidding group*. A bidding group is the runtime unit of competition and merge selection.
+
+All workers in the same bidding group share:
+
+- the same perspective
+- the same pinned rulebook commit
+- the same pinned base commit
+- the same compiled read set
+- the same compiled write set
+
+Because workers inside a bidding group are alternative realizations of the same declared role, they are not isolated from each other by file ownership. Instead, they are kept comparable: they start from the same snapshot and operate under the same scope. Only one worker from a bidding group may be integrated into the canonical codebase. Once one member is selected for integration, the remaining members of that group are discarded.
 
 ### The Safety Property
 
-The safety property is the core correctness invariant governing perspectives:
+The safety property is the core correctness invariant governing concurrent bidding groups:
 
-> **A file may either be written by exactly one perspective, or read by any number of perspectives — never both.**
+> **A file may either be written by exactly one active bidding group, or read by any number of active bidding groups — never both.**
 
-For any two distinct perspectives P and Q in a compiled rulebook:
+For any two distinct active bidding groups `G` and `H` in a compiled rulebook:
 
-- `write(P) ∩ write(Q) = ∅` — write sets are pairwise disjoint
-- `write(P) ∩ read(Q) = ∅` — no file is written by one perspective and read by another
+- `write(G) ∩ write(H) = ∅` — write sets are pairwise disjoint across groups
+- `write(G) ∩ read(H) = ∅` — no file written by one group appears in another group's stable context
+- `read(G) ∩ write(H) = ∅` — the same condition viewed from the other group's stable context
 
-This is enforced statically at rulebook compile time. Once a valid rulebook is active, workers execute in full parallel with no runtime conflict detection, arbitration, or rollback. Integration of worker commits into the canonical codebase is always conflict-free — each written file has exactly one authoritative source.
+Inside a bidding group `B`, all workers are instantiations of the same perspective, so for any workers `x` and `y` in `B`:
+
+- `write(x) = write(y)`
+- `read(x) = read(y)`
+
+This is why the safety property belongs at the worker boundary rather than the perspective boundary. Perspectives declare ownership once; bidding groups are the concurrent runtime entities that must not interfere with each other. Once a valid set of bidding groups is active, workers execute in full parallel with no runtime conflict detection, arbitration, or rollback between groups. Integration stays conflict-free because each written file has at most one active writing group, and within a group the orchestrator selects at most one submission to merge.
+
+### When It Is Checked
+
+Multorum checks the safety property when concurrent runtime state would change:
+
+- On `provision`, it takes the selected perspective's compiled read and write sets as the candidate bidding-group boundary.
+- If the provisioned worker joins an existing bidding group, Multorum checks equality with that group's materialized read and write sets.
+- If the provisioned worker creates a new bidding group, Multorum checks the candidate group's read and write sets against every other active bidding group's materialized read and write sets.
+- On `rulebook switch`, Multorum compiles the target rulebook and checks every target perspective's candidate read and write sets against every currently active bidding group's materialized read and write sets.
+
+In other words, safety is checked against the runtime state that already exists, not against perspectives in isolation.
 
 ---
 
@@ -241,7 +284,7 @@ command = "cargo clippy --workspace --all-targets -- -D warnings"
 command = "cargo test --workspace"
 ```
 
-This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `checks` table to make the example complete. `AuthImplementor` and `AuthTester` may work in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across perspectives. The `checks` table defines the ordered pre-merge pipeline that every submitted change must pass before integration.
+This rulebook reuses the same file set vocabulary introduced earlier, then adds the project-level `checks` table to make the example complete. Bidding groups provisioned from `AuthImplementor` and `AuthTester` may run in parallel because their write sets are disjoint, while `AuthSpecs` stays read-only across those groups. The `checks` table defines the ordered pre-merge pipeline that every submitted change must pass before integration.
 
 ### Default Rulebook Template
 
@@ -254,7 +297,7 @@ This rulebook reuses the same file set vocabulary introduced earlier, then adds 
 
 # Add one table per perspective under `[perspectives.<Name>]`.
 # `write` names the files that perspective may modify.
-# `read` names stable context files that no other perspective may write.
+# `read` names stable context files that concurrent work must not write.
 [perspectives]
 
 # Add pre-merge gates in execution order.
@@ -267,7 +310,7 @@ This template is deliberately sparse. It gives the orchestrator the minimum stru
 
 ### Immutability via Version Control
 
-Because the rulebook is a version-controlled file, every historical state of it is addressable by a git commit hash. When Multorum activates a rulebook, it pins to a specific commit. This means the rulebook governing an active set of workers is immutable by construction — changing the file on disk does not affect active workers until the orchestrator explicitly instructs Multorum to switch rulebooks.
+Because the rulebook is a version-controlled file, every historical state of it is addressable by a git commit hash. When Multorum activates a rulebook, it pins to a specific commit. This means the rulebook governing an active set of workers and bidding groups is immutable by construction — changing the file on disk does not affect active workers until the orchestrator explicitly instructs Multorum to switch rulebooks.
 
 This approach deliberately delegates immutability enforcement to git rather than inventing a separate mechanism.
 
@@ -286,15 +329,19 @@ Development phases and their rationale can be communicated through git commit me
 
 ### Rulebook Switching
 
-A rulebook switch is valid if and only if it does not conflict with any currently active worker. The unit of concern is **files**, not perspectives. Multorum validates a switch by:
+A rulebook switch is valid if and only if it does not conflict with any currently active bidding group. The unit of concern is **files**, not perspectives. Multorum validates a switch by:
 
-1. Collecting the compiled write sets of all currently active workers (as materialized at their provisioning time)
-2. Compiling the target rulebook's write and read sets
-3. Checking that no file held by an active worker's write set appears in any write or read set of the target rulebook
+1. Collecting the compiled read and write sets of all currently active bidding groups (as materialized when their workers were provisioned)
+2. Compiling the target rulebook's read and write sets per perspective
+3. Treating each target perspective as a candidate future bidding group
+4. Checking every candidate target perspective against every active bidding group:
+   - `write(target) ∩ write(active) = ∅`
+   - `write(target) ∩ read(active) = ∅`
+   - `read(target) ∩ write(active) = ∅`
 
 If this check passes, the switch is valid regardless of how extensively the rest of the rulebook has changed. Perspectives may be renamed, restructured, or entirely replaced — as long as the files actively being worked on are undisturbed, the switch proceeds.
 
-If the check fails, Multorum rejects the switch and reports which active workers are blocking it. The orchestrator must wait for those workers to complete and integrate before retrying.
+If the check fails, Multorum rejects the switch and reports which active bidding groups are blocking it. The orchestrator must wait for those groups to complete and integrate before retrying.
 
 ---
 
@@ -341,7 +388,7 @@ Multorum verifies that these entries are present during `rulebook init` and warn
 
 ## Sub-Codebase Provisioning
 
-When the orchestrator issues a `provision` instruction for a perspective, Multorum creates an isolated working environment for that worker. This environment is called a *sub-codebase*.
+When the orchestrator issues a `provision` instruction for a perspective, Multorum creates an isolated working environment for a new worker. This environment is called a *sub-codebase*. Repeated provisioning from the same perspective creates additional workers in the same bidding group so the orchestrator can compare alternative implementations under one declared scope.
 
 ### The Layered View Problem
 
@@ -357,10 +404,10 @@ Multorum addresses this by making the authoring constraint a matter of enforceme
 Each sub-codebase is a git worktree, created from the canonical codebase at the commit hash pinned when the rulebook was activated:
 
 ```
-git worktree add .multorum/worktrees/<perspective-name> <pinned-base-commit>
+git worktree add .multorum/worktrees/<worker-id> <pinned-base-commit>
 ```
 
-All worktrees are created from the same pinned commit. This means every worker starts from an identical snapshot of the codebase, and that snapshot does not change for the lifetime of the worker's task — even if the orchestrator integrates other workers' commits into HEAD in the meantime.
+All worktrees are created from the same pinned commit. This means every worker starts from an identical snapshot of the codebase, and that snapshot does not change for the lifetime of the worker's task — even if the orchestrator integrates other workers' commits into HEAD in the meantime. Workers in the same bidding group therefore begin from the same world and differ only in how they execute the assignment.
 
 This stability is intentional. Each worker operates on a predictable, immutable world. The orchestrator is responsible for decomposing work such that workers do not depend on each other's in-progress output. If such a dependency exists, the orchestrator should sequence the tasks across separate provisioning steps rather than running them concurrently.
 
@@ -373,7 +420,7 @@ At provisioning time, Multorum creates the following runtime files inside the wo
 ```text
 .multorum/
   rulebook.toml      # checked out from the pinned commit
-  contract.toml      # runtime — perspective, pinned rulebook commit, base commit
+  contract.toml      # runtime — worker id, bidding group, perspective, pinned rulebook commit, base commit
   read-set.txt       # runtime — compiled read set for worker guidance
   write-set.txt      # runtime — compiled write set for enforcement and audit
   inbox/
@@ -391,13 +438,13 @@ Any payload passed by path during mailbox publication is **consumed** rather tha
 
 ### Write Enforcement
 
-Write set enforcement is implemented as a server-side pre-merge check in Multorum's integration pipeline. When a worker submits its commit, Multorum verifies that every changed file is within the perspective's compiled write set before allowing integration. This is a hard check that cannot be waived.
+Write set enforcement is implemented as a server-side pre-merge check in Multorum's integration pipeline. When a worker submits its commit, Multorum verifies that every changed file is within that worker's compiled write set before allowing integration. This is a hard check that cannot be waived.
 
 A client-side git hook may additionally be installed in the worktree as an early-warning mechanism for the worker, but client-side hooks are not considered authoritative — they can be bypassed. The server-side check is the enforcement point.
 
 ### The Read Set as Guidance
 
-A worker's read set is not enforced at the filesystem level. The worker has access to the full codebase in its worktree and may read any file. The read set serves a different purpose: it communicates to the worker which files are the expected sources of information for the task, and guarantees that those files will not change during the session. It is a contract of stability and relevance, not a restriction.
+A worker's read set is not enforced at the filesystem level. The worker has access to the full codebase in its worktree and may read any file. The read set serves a different purpose: it communicates to the worker which files are the expected sources of information for the task, and guarantees that no other active bidding group will change them during the session. It is a contract of stability and relevance, not a restriction.
 
 This design acknowledges that LLM-based agents often need to navigate the codebase freely to understand context — chasing imports, reading interfaces, understanding patterns. Strictly enforcing the read set would make agents brittle. What matters is controlling what they *write*, not what they *read*.
 
@@ -411,7 +458,7 @@ This constraint keeps the compiled file lists authoritative and ensures that eve
 
 ## The Worker State Machine
 
-A worker progresses through a defined set of states during its lifecycle. Multorum enforces valid state transitions and rejects instructions that would produce invalid ones.
+A worker progresses through a defined set of states during its lifecycle. Multorum enforces valid state transitions and rejects instructions that would produce invalid ones. This state machine is defined per worker; a bidding group is simply a set of workers moving through the same machine independently until one is selected for integration or the group is discarded.
 
 ```
                     ┌──► BLOCKED ──┐
@@ -436,6 +483,8 @@ PROVISIONED ──► ACTIVE ◄───────────┘
 - **COMMITTED** — the worker has completed its task and submitted a commit to Multorum. The worktree is frozen pending orchestrator action: integration, revision, or discard.
 - **INTEGRATED** — the worker's commit has passed the pre-merge pipeline and been integrated into the canonical codebase. The worktree is released.
 - **DISCARDED** — the worker's worktree has been torn down without integration. The work is abandoned.
+
+Integrating one worker is also a group-level decision: once a worker in a bidding group reaches `INTEGRATED`, every sibling worker in that bidding group becomes `DISCARDED`.
 
 ### Valid Transitions
 
@@ -476,7 +525,9 @@ Every message is represented as a directory bundle published atomically into a m
 `envelope.toml` carries the routing and state-transition metadata that Multorum interprets:
 
 - `protocol` — protocol version
-- `perspective` — the active worker identity
+- `worker` — the unique worker identity
+- `bidding_group` — the worker's bidding group
+- `perspective` — the perspective name
 - `kind` — message type, such as `task`, `report`, `resolve`, `revise`, or `commit`
 - `sequence` — a monotonic number unique within the mailbox
 - `created_at` — creation timestamp
@@ -500,7 +551,7 @@ Each mailbox subtree has exactly one writer:
 
 The original message bundle is immutable once published. Receipt is recorded by writing a small acknowledgement file with the same sequence number into the corresponding `ack/` directory. This avoids rename races, preserves an audit trail, and keeps concurrent access simple: no directory has more than one writer.
 
-Because a perspective may have at most one active worker at a time, the perspective name is sufficient as the runtime identity. Multorum avoids temporal ambiguity by requiring provisioning to start with empty mailboxes and by archiving or removing the entire worktree runtime state when the worker is integrated or discarded.
+The unique runtime identity is the worker id, not the perspective name. Perspective and bidding-group metadata still travel in the envelope so the orchestrator can reason about role ownership and merge selection, but mailbox routing is unambiguous even when several workers share one perspective. Multorum avoids temporal ambiguity by requiring provisioning to start with empty mailboxes and by archiving or removing the entire worktree runtime state when the worker is integrated or discarded.
 
 Provisioning may seed the worker inbox with an initial `task` bundle carrying the orchestrator's assignment and any supporting material. This keeps the initial task description in the same transport as later resolutions and revisions.
 
@@ -534,7 +585,7 @@ Before a worker's commit is integrated into the canonical codebase, it must pass
 
 ### Gate 1: File Set Check (Non-Negotiable)
 
-Multorum always verifies that every file touched by the worker's commit is within the perspective's compiled write set. This check cannot be skipped, waived, or overridden by any party. It is the server-side enforcement of the safety property.
+Multorum always verifies that every file touched by the worker's commit is within that worker's compiled write set. This check cannot be skipped, waived, or overridden by any party. It is the server-side enforcement of the worker's declared scope and, at system level, of the safety property between bidding groups.
 
 ### Gate 2: User-Defined Checks
 
@@ -592,7 +643,7 @@ Orchestrator-local instructions operate on the main workspace control plane unde
 Initializes the project's `.multorum/` directory. Multorum creates `.multorum/` if it does not already exist, writes the default commented `rulebook.toml` template shown above, prepares `.multorum/.gitignore` so runtime directories stay ignored within that subtree, prepares the local orchestrator runtime directories, and verifies that the recommended ignore entries are present. The instruction must not overwrite an existing `.multorum/rulebook.toml`; if a rulebook already exists, initialization is rejected so project policy is never replaced implicitly.
 
 **`rulebook switch <commit-hash>`**
-Validates and activates a new version of the rulebook. Multorum runs the file-level safety check against all active workers. If the check passes, the new rulebook is compiled and activated. If it fails, the instruction is rejected and Multorum reports which active workers are blocking the switch.
+Validates and activates a new version of the rulebook. Multorum compiles the target rulebook, treats each target perspective as a candidate future bidding group, and runs the safety check against all currently active bidding groups. If the check passes, the new rulebook is activated. If it fails, the instruction is rejected and Multorum reports which active bidding groups are blocking the switch.
 
 **`rulebook validate <commit-hash>`**
 Performs a dry run of the switch validation without making any changes. Useful for the orchestrator to check whether a switch is currently possible before committing to it.
@@ -600,31 +651,31 @@ Performs a dry run of the switch validation without making any changes. Useful f
 ### Worker Lifecycle Instructions
 
 **`provision <perspective-name>`**
-Compiles the file sets for the named perspective, creates a git worktree at the pinned HEAD commit, installs the client-side write hook, materializes the worker-local runtime files in `.multorum/`, and injects the read set as worker guidance metadata. Multorum also prepares empty inbox and outbox mailboxes for the worker and may publish an initial `task` bundle into the worker inbox. Transitions the worker to PROVISIONED.
+Compiles the file sets for the named perspective, derives the candidate bidding group's read and write sets, and checks them against the materialized read and write sets of all active bidding groups. If the worker joins an existing bidding group, Multorum instead checks that the compiled sets are identical to that group's existing boundary. Once the check passes, Multorum creates a git worktree at the pinned HEAD commit, assigns a unique worker id, records the worker's bidding-group membership, installs the client-side write hook, materializes the worker-local runtime files in `.multorum/`, and injects the read set as worker guidance metadata. Multorum also prepares empty inbox and outbox mailboxes for the worker and may publish an initial `task` bundle into the worker inbox. Transitions the worker to PROVISIONED.
 
-**`resolve <perspective-name>`**
+**`resolve <worker-id>`**
 Publishes a `resolve` bundle into the worker's inbox. The bundle carries both the state transition and the resolution content. Once the worker acknowledges it, Multorum transitions the worker from BLOCKED to ACTIVE.
 
-**`revise <perspective-name>`**
+**`revise <worker-id>`**
 Publishes a `revise` bundle into the worker's inbox. The bundle carries the required changes. Once the worker acknowledges it, Multorum returns the committed worker to ACTIVE state so it can address the feedback.
 
-**`discard <perspective-name>`**
+**`discard <worker-id>`**
 Tears down a worker's worktree without integrating its work. It may be issued while the worker is ACTIVE or COMMITTED.
 
 ### Integration Instructions
 
-**`integrate <perspective-name>`**
-Runs the pre-merge pipeline against the worker's commit. If all checks pass, integrates the commit into the canonical codebase and transitions the worker to INTEGRATED. If any check fails, the instruction is rejected and the worker remains in COMMITTED state pending orchestrator action.
+**`integrate <worker-id>`**
+Runs the pre-merge pipeline against the worker's commit. If all checks pass, integrates the commit into the canonical codebase and transitions the worker to INTEGRATED. Sibling workers in the same bidding group are then discarded, since only one worker from the group may merge. If any check fails, the instruction is rejected and the worker remains in COMMITTED state pending orchestrator action.
 
 ### Worker-Facing Instructions
 
-**`commit <perspective-name>`**
+**`commit <worker-id>`**
 Issued by the worker by publishing a `commit` bundle into its outbox. The bundle includes the submitted git commit hash and may include evidence artifacts. When Multorum accepts the bundle, it freezes the worktree and transitions the worker from ACTIVE to COMMITTED. The orchestrator then decides whether to `integrate`, `revise`, or `discard` the submission.
 
-**`report <perspective-name>`**
+**`report <worker-id>`**
 Issued by the worker by publishing a `report` bundle into its outbox. When Multorum accepts the bundle, it transitions the worker to BLOCKED and records the payload for orchestrator review.
 
 ### Query Instructions
 
 **`status`**
-Returns the current state of all active workers, the active rulebook commit hash, and a summary of any blocked workers awaiting resolution. This view is derived from the orchestrator control-plane metadata together with the mailbox history, not from a single mutable global state file.
+Returns the current state of all active workers, their bidding-group membership, the active rulebook commit hash, and a summary of any blocked workers awaiting resolution. This view is derived from the orchestrator control-plane metadata together with the mailbox history, not from a single mutable global state file.
