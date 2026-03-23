@@ -32,7 +32,7 @@ fn orchestrator_server_info() {
 
 #[test]
 fn orchestrator_tool_descriptor_count() {
-    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 14);
+    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 16);
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn orchestrator_resource_descriptor_count() {
 
 #[test]
 fn orchestrator_resource_template_descriptor_count() {
-    assert_eq!(multorum::mcp::resource::orchestrator::templates().len(), 1);
+    assert_eq!(multorum::mcp::resource::orchestrator::templates().len(), 2);
 }
 
 // ===========================================================================
@@ -167,6 +167,76 @@ fn orchestrator_get_worker() {
     let detail = tool_json(&result);
     assert_eq!(detail["worker_id"], "w1");
     assert_eq!(detail["state"], "ACTIVE");
+}
+
+#[test]
+fn orchestrator_read_worker_outbox() {
+    let (_dir, svc) = setup_repo();
+    let handler = OrchestratorHandler::new(svc);
+
+    let create = handler
+        .dispatch(
+            "create_worker",
+            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+        )
+        .unwrap();
+    let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
+
+    let worker_svc = FsWorkerService::new(&worktree).unwrap();
+    let report_body = Path::new(&worktree).join("report.md");
+    fs::write(&report_body, "Need clarification.\n").unwrap();
+    worker_svc
+        .send_report(
+            None,
+            multorum::runtime::ReplyReference::default(),
+            BundlePayload { body_path: Some(report_body), ..BundlePayload::default() },
+        )
+        .unwrap();
+
+    let result =
+        handler.dispatch("read_worker_outbox", json_args(json!({"worker_id": "w1"}))).unwrap();
+    assert_tool_success(&result);
+    let outbox = tool_json(&result);
+    let messages = outbox.as_array().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["kind"], "report");
+}
+
+#[test]
+fn orchestrator_ack_worker_outbox_message() {
+    let (_dir, svc) = setup_repo();
+    let handler = OrchestratorHandler::new(svc);
+
+    let create = handler
+        .dispatch(
+            "create_worker",
+            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+        )
+        .unwrap();
+    let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
+
+    let worker_svc = FsWorkerService::new(&worktree).unwrap();
+    let report_body = Path::new(&worktree).join("report.md");
+    fs::write(&report_body, "Need clarification.\n").unwrap();
+    worker_svc
+        .send_report(
+            None,
+            multorum::runtime::ReplyReference::default(),
+            BundlePayload { body_path: Some(report_body), ..BundlePayload::default() },
+        )
+        .unwrap();
+
+    let outbox =
+        handler.dispatch("read_worker_outbox", json_args(json!({"worker_id": "w1"}))).unwrap();
+    let sequence = tool_json(&outbox).as_array().unwrap()[0]["sequence"].as_u64().unwrap();
+
+    let result = handler
+        .dispatch(
+            "ack_worker_outbox_message",
+            json_args(json!({"worker_id": "w1", "sequence": sequence})),
+        )
+        .unwrap();
+    assert_tool_success(&result);
 }
 
 #[test]
@@ -451,6 +521,37 @@ fn orchestrator_resource_unimplemented_returns_error() {
         let result = handler.read(&uri);
         assert!(result.is_err(), "resource {uri} should return not-implemented error");
     }
+}
+
+#[test]
+fn orchestrator_resource_worker_outbox() {
+    let (_dir, svc) = setup_repo();
+    let handler = OrchestratorHandler::new(svc);
+
+    let create = handler
+        .dispatch(
+            "create_worker",
+            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+        )
+        .unwrap();
+    let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
+
+    let worker_svc = FsWorkerService::new(&worktree).unwrap();
+    let report_body = Path::new(&worktree).join("report.md");
+    fs::write(&report_body, "Need clarification.\n").unwrap();
+    worker_svc
+        .send_report(
+            None,
+            multorum::runtime::ReplyReference::default(),
+            BundlePayload { body_path: Some(report_body), ..BundlePayload::default() },
+        )
+        .unwrap();
+
+    let result = handler.read("multorum://orchestrator/workers/w1/outbox").unwrap();
+    let outbox = resource_json(&result);
+    let messages = outbox.as_array().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["kind"], "report");
 }
 
 #[test]

@@ -18,6 +18,7 @@ fn orchestrator_tool_names_stable() {
     assert_eq!(
         names,
         vec![
+            "ack_worker_outbox_message",
             "create_worker",
             "delete_worker",
             "discard_worker",
@@ -26,6 +27,7 @@ fn orchestrator_tool_names_stable() {
             "list_perspectives",
             "list_workers",
             "merge_worker",
+            "read_worker_outbox",
             "resolve_worker",
             "revise_worker",
             "rulebook_init",
@@ -42,8 +44,7 @@ fn orchestrator_tool_input_schemas_stable() {
     let schemas: Vec<(&str, Vec<(&str, ToolInputType, bool)>)> = descriptors
         .iter()
         .map(|d| {
-            let inputs: Vec<_> =
-                d.inputs.iter().map(|i| (i.name, i.kind, i.required)).collect();
+            let inputs: Vec<_> = d.inputs.iter().map(|i| (i.name, i.kind, i.required)).collect();
             (d.name, inputs)
         })
         .collect();
@@ -65,6 +66,20 @@ fn orchestrator_tool_input_schemas_stable() {
     // get_worker
     let (_, inputs) = schemas.iter().find(|(n, _)| *n == "get_worker").unwrap();
     assert_eq!(inputs, &[("worker_id", ToolInputType::String, true)]);
+
+    // read_worker_outbox
+    let (_, inputs) = schemas.iter().find(|(n, _)| *n == "read_worker_outbox").unwrap();
+    assert_eq!(
+        inputs,
+        &[("worker_id", ToolInputType::String, true), ("after", ToolInputType::Integer, false),]
+    );
+
+    // ack_worker_outbox_message
+    let (_, inputs) = schemas.iter().find(|(n, _)| *n == "ack_worker_outbox_message").unwrap();
+    assert_eq!(
+        inputs,
+        &[("worker_id", ToolInputType::String, true), ("sequence", ToolInputType::Integer, true),]
+    );
 
     // create_worker
     let (_, inputs) = schemas.iter().find(|(n, _)| *n == "create_worker").unwrap();
@@ -135,7 +150,13 @@ fn orchestrator_resource_uris_stable() {
 fn orchestrator_resource_template_uris_stable() {
     let uris: Vec<&str> =
         multorum::mcp::resource::orchestrator::templates().iter().map(|d| d.uri_template).collect();
-    assert_eq!(uris, vec!["multorum://orchestrator/workers/{worker}"]);
+    assert_eq!(
+        uris,
+        vec![
+            "multorum://orchestrator/workers/{worker}",
+            "multorum://orchestrator/workers/{worker}/outbox",
+        ]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -166,8 +187,7 @@ fn worker_tool_input_schemas_stable() {
     let schemas: Vec<(&str, Vec<(&str, ToolInputType, bool)>)> = descriptors
         .iter()
         .map(|d| {
-            let inputs: Vec<_> =
-                d.inputs.iter().map(|i| (i.name, i.kind, i.required)).collect();
+            let inputs: Vec<_> = d.inputs.iter().map(|i| (i.name, i.kind, i.required)).collect();
             (d.name, inputs)
         })
         .collect();
@@ -221,11 +241,7 @@ fn worker_resource_uris_stable() {
     uris.sort();
     assert_eq!(
         uris,
-        vec![
-            "multorum://worker/contract",
-            "multorum://worker/inbox",
-            "multorum://worker/status",
-        ]
+        vec!["multorum://worker/contract", "multorum://worker/inbox", "multorum://worker/status",]
     );
 }
 

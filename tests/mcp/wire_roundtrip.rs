@@ -11,7 +11,9 @@ use rmcp::model::{CallToolRequestParams, ReadResourceRequestParams};
 use serde_json::json;
 
 use crate::support::repo::{git, setup_repo};
-use crate::support::result::{assert_tool_error, assert_tool_success, json_args, resource_text, tool_json};
+use crate::support::result::{
+    assert_tool_error, assert_tool_success, json_args, resource_text, tool_json,
+};
 use crate::support::wire::{orchestrator_duplex, worker_duplex};
 use crate::support::worker::create_worker_runtime;
 
@@ -31,7 +33,7 @@ async fn orchestrator_wire_server_info() {
 async fn orchestrator_wire_list_tools() {
     let (_dir, client) = orchestrator_duplex().await;
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 14);
+    assert_eq!(tools.len(), 16);
     client.cancel().await.unwrap();
 }
 
@@ -41,7 +43,7 @@ async fn orchestrator_wire_list_resources() {
     let resources = client.list_all_resources().await.unwrap();
     assert_eq!(resources.len(), 4);
     let templates = client.list_all_resource_templates().await.unwrap();
-    assert_eq!(templates.len(), 1);
+    assert_eq!(templates.len(), 2);
     client.cancel().await.unwrap();
 }
 
@@ -113,17 +115,11 @@ async fn worker_wire_contract_and_status() {
     let (_, worktree) = create_worker_runtime(&svc);
     let client = worker_duplex(&worktree).await;
 
-    let contract = client
-        .call_tool(CallToolRequestParams::new("get_contract"))
-        .await
-        .unwrap();
+    let contract = client.call_tool(CallToolRequestParams::new("get_contract")).await.unwrap();
     assert_tool_success(&contract);
     assert_eq!(tool_json(&contract)["perspective"], "AuthImplementor");
 
-    let status = client
-        .call_tool(CallToolRequestParams::new("get_status"))
-        .await
-        .unwrap();
+    let status = client.call_tool(CallToolRequestParams::new("get_status")).await.unwrap();
     assert_tool_success(&status);
     assert_eq!(tool_json(&status)["state"], "ACTIVE");
 
@@ -154,8 +150,8 @@ async fn wire_full_workflow() {
 
     // Step 3: Worker submits via wire.
     let worker_client = worker_duplex(worktree_path).await;
-    let commit_params =
-        CallToolRequestParams::new("send_commit").with_arguments(json_args(json!({"head_commit": head})));
+    let commit_params = CallToolRequestParams::new("send_commit")
+        .with_arguments(json_args(json!({"head_commit": head})));
     let commit = worker_client.call_tool(commit_params).await.unwrap();
     assert_tool_success(&commit);
     worker_client.cancel().await.unwrap();

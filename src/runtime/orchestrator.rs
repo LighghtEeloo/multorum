@@ -13,12 +13,13 @@ use crate::vcs::{CanonicalCommitHash, VersionControl};
 
 use super::{
     MailboxDirection, MultorumPaths,
-    bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference},
+    bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
+    mailbox::AckRef,
     state::{
-        ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MergeResult,
-        OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookInstall, RulebookUninstall,
-        RulebookValidation, WorkerDetail, WorkerState, WorkerSummary,
+        ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,
+        MergeResult, OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookInstall,
+        RulebookUninstall, RulebookValidation, WorkerDetail, WorkerState, WorkerSummary,
     },
     storage::{
         ActiveRulebookRecord, RuntimeFs, WorkerRecord, is_live_worker_state, timestamp_now,
@@ -102,6 +103,21 @@ pub trait OrchestratorService {
 
     /// Load one worker detail view.
     fn get_worker(&self, worker_id: WorkerId) -> Result<WorkerDetail>;
+
+    /// Read one worker outbox after the provided sequence number.
+    ///
+    /// Note: The outbox remains worker-owned storage. The orchestrator
+    /// addresses it by worker id rather than through a separate global
+    /// mailbox.
+    fn read_outbox(
+        &self, worker_id: WorkerId, after: Option<Sequence>,
+    ) -> Result<Vec<MailboxMessageView>>;
+
+    /// Acknowledge one consumed worker outbox bundle.
+    ///
+    /// Note: Acknowledging outbox traffic records orchestrator receipt
+    /// only; it does not change worker lifecycle state.
+    fn ack_outbox(&self, worker_id: WorkerId, sequence: Sequence) -> Result<AckRef>;
 
     /// Create a worker workspace and optional initial task bundle.
     ///
@@ -461,6 +477,29 @@ impl OrchestratorService for FsOrchestratorService {
             base_commit: record.base_commit,
             submitted_head_commit: record.submitted_head_commit,
         })
+    }
+
+    fn read_outbox(
+        &self, worker_id: WorkerId, after: Option<Sequence>,
+    ) -> Result<Vec<MailboxMessageView>> {
+        let record = self.fs.load_worker_record(&worker_id)?;
+        self.fs.list_mailbox_messages(
+            &record.worktree_path,
+            &record.worker_id,
+            MailboxDirection::Outbox,
+            after,
+        )
+    }
+
+    fn ack_outbox(&self, worker_id: WorkerId, sequence: Sequence) -> Result<AckRef> {
+        let record = self.fs.load_worker_record(&worker_id)?;
+        let ack = self.fs.acknowledge_message(
+            &record.worktree_path,
+            MailboxDirection::Outbox,
+            sequence,
+        )?;
+        tracing::info!(worker_id = %record.worker_id, sequence = sequence.0, "acknowledged worker outbox message");
+        Ok(ack)
     }
 
     fn create_worker(&self, request: CreateWorker) -> Result<CreateResult> {

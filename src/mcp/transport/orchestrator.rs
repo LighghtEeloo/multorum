@@ -18,7 +18,7 @@ use crate::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService, W
 use super::{
     args_or_empty, dispatch_tool, extract_payload, extract_reply, list_resource_templates_result,
     list_resources_result, list_tools_result, optional_bool, optional_str, optional_string_list,
-    required_str, resource_success, runtime_to_resource_error, server_info,
+    optional_u64, required_str, resource_success, runtime_to_resource_error, server_info,
 };
 
 /// MCP server handler for the orchestrator surface.
@@ -53,6 +53,18 @@ impl OrchestratorHandler {
             | "get_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
                 dispatch_tool(self.service.get_worker(worker_id))
+            }
+            | "read_worker_outbox" => {
+                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let after = optional_u64(&args, "after").map(crate::runtime::Sequence);
+                dispatch_tool(self.service.read_outbox(worker_id, after))
+            }
+            | "ack_worker_outbox_message" => {
+                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let sequence = required_u64(&args, "sequence")?;
+                dispatch_tool(
+                    self.service.ack_outbox(worker_id, crate::runtime::Sequence(sequence)),
+                )
             }
             | "create_worker" => {
                 let perspective = parse_perspective(required_str(&args, "perspective")?)?;
@@ -154,6 +166,11 @@ impl OrchestratorHandler {
                     self.service.get_worker(worker_id).map_err(runtime_to_resource_error)?;
                 resource_success(uri, &detail)
             }
+            | Some("outbox") => {
+                let messages =
+                    self.service.read_outbox(worker_id, None).map_err(runtime_to_resource_error)?;
+                resource_success(uri, &messages)
+            }
             | Some("contract" | "transcript" | "checks") => Err(ErrorData::resource_not_found(
                 format!("resource not yet implemented: {uri}"),
                 None,
@@ -213,4 +230,13 @@ fn parse_worker_id(s: &str) -> Result<WorkerId, ErrorData> {
 
 fn parse_perspective(s: &str) -> Result<crate::perspective::PerspectiveName, ErrorData> {
     s.parse().map_err(|e| ErrorData::invalid_params(format!("invalid perspective name: {e}"), None))
+}
+
+/// Extract a required u64 argument.
+fn required_u64(
+    args: &serde_json::Map<String, serde_json::Value>, key: &str,
+) -> Result<u64, ErrorData> {
+    args.get(key)
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| ErrorData::invalid_params(format!("missing required field: {key}"), None))
 }

@@ -157,6 +157,14 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     assert!(!report_body.exists(), "report body should be moved into the outbox bundle");
     assert_eq!(worker.status().unwrap().state, WorkerState::Blocked);
 
+    let outbox = orchestrator.read_outbox(provision.worker_id.clone(), None).unwrap();
+    assert_eq!(outbox.len(), 1);
+    assert_eq!(outbox[0].kind, MessageKind::Report);
+    assert!(!outbox[0].acknowledged);
+    orchestrator.ack_outbox(provision.worker_id.clone(), outbox[0].sequence).unwrap();
+    let acknowledged = orchestrator.read_outbox(provision.worker_id.clone(), None).unwrap();
+    assert!(acknowledged[0].acknowledged);
+
     let resolve_body = repo.path().join("resolve.md");
     fs::write(&resolve_body, "Use the existing API shape.\n").unwrap();
     orchestrator

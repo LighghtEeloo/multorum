@@ -110,10 +110,8 @@ fn string_list_with_non_strings() {
         .unwrap();
 
     // `skip_checks` is StringList; non-string items should be filtered out.
-    let result = handler.dispatch(
-        "merge_worker",
-        json_args(json!({"worker_id": "w1", "skip_checks": [1, true]})),
-    );
+    let result = handler
+        .dispatch("merge_worker", json_args(json!({"worker_id": "w1", "skip_checks": [1, true]})));
     // merge_worker will fail for business-logic reasons (not committed), but
     // the argument parsing itself should not cause a protocol error.
     assert!(result.is_ok(), "non-string items in StringList should not cause protocol error");
@@ -128,8 +126,7 @@ fn extra_unknown_fields_ignored() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
 
-    let result =
-        handler.dispatch("get_status", json_args(json!({"bonus": 123, "extra": "field"})));
+    let result = handler.dispatch("get_status", json_args(json!({"bonus": 123, "extra": "field"})));
     let result = result.unwrap();
     assert_tool_success(&result);
 }

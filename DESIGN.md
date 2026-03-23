@@ -431,7 +431,7 @@ Concrete resources should list only currently implemented projections. Parameter
 Current discovery rules:
 
 - concrete resources cover fixed snapshots such as orchestrator status, the active rulebook commit, worker inbox contents, and worker status
-- parameterized templates cover projections that require a runtime identity, such as orchestrator-side worker detail
+- parameterized templates cover projections that require a runtime identity, such as orchestrator-side worker detail and worker outbox listings
 - projections that are not implemented yet must not be advertised as concrete resources
 
 ### Error Contract
@@ -459,6 +459,10 @@ MCP-visible error codes are stable protocol values, independent of Rust enum var
 **`resolve <worker-id>`** — Publish `resolve` to inbox. Transition: `BLOCKED` to `ACTIVE`.
 
 **`revise <worker-id>`** — Publish `revise` to inbox. Transition: `COMMITTED` to `ACTIVE`.
+
+**`outbox <worker-id> [--after <sequence>]`** — List worker-authored bundles from that worker's outbox. No lifecycle transition.
+
+**`ack <worker-id> <sequence>`** — Record orchestrator receipt for one worker outbox bundle. No lifecycle transition.
 
 **`merge <worker-id>`** — Run merge pipeline. Transition: `COMMITTED` to `MERGED` if checks pass.
 

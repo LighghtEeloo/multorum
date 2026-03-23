@@ -248,6 +248,25 @@ pub enum WorkerCommand {
         worker_id: WorkerId,
     },
 
+    /// List outbox messages for one worker after an optional sequence.
+    Outbox {
+        /// Worker identity whose outbox should be read.
+        worker_id: WorkerId,
+
+        /// Only return messages after this sequence number.
+        #[arg(long = "after", value_name = "SEQUENCE")]
+        after: Option<u64>,
+    },
+
+    /// Acknowledge one worker outbox message.
+    Ack {
+        /// Worker identity whose outbox owns the message.
+        worker_id: WorkerId,
+
+        /// Sequence number to acknowledge.
+        sequence: u64,
+    },
+
     /// Publish a `resolve` bundle to a blocked worker inbox.
     Resolve {
         /// Worker identity to resolve.
@@ -536,6 +555,16 @@ impl WorkerCommand {
             }
             | Self::Show { worker_id } => {
                 let result = services.orchestrator.get_worker(worker_id)?;
+                println!("{result:#?}");
+            }
+            | Self::Outbox { worker_id, after } => {
+                let result =
+                    services.orchestrator.read_outbox(worker_id, after.map(runtime::Sequence))?;
+                println!("{result:#?}");
+            }
+            | Self::Ack { worker_id, sequence } => {
+                let result =
+                    services.orchestrator.ack_outbox(worker_id, runtime::Sequence(sequence))?;
                 println!("{result:#?}");
             }
             | Self::Resolve { worker_id, payload, reply } => {

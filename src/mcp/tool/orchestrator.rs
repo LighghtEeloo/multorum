@@ -9,6 +9,36 @@ const GET_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
     required: true,
 }];
 
+const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
+    ToolInputDescriptor {
+        name: "worker_id",
+        description: "Runtime worker identity whose outbox should be read.",
+        kind: ToolInputType::String,
+        required: true,
+    },
+    ToolInputDescriptor {
+        name: "after",
+        description: "Optional sequence number; only outbox bundles after it are returned.",
+        kind: ToolInputType::Integer,
+        required: false,
+    },
+];
+
+const ACK_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
+    ToolInputDescriptor {
+        name: "worker_id",
+        description: "Runtime worker identity whose outbox owns the message.",
+        kind: ToolInputType::String,
+        required: true,
+    },
+    ToolInputDescriptor {
+        name: "sequence",
+        description: "Outbox sequence number to acknowledge.",
+        kind: ToolInputType::Integer,
+        required: true,
+    },
+];
+
 const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor {
         name: "perspective",
@@ -128,6 +158,16 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
             name: "get_worker",
             description: "Load one worker detail view by worker id.",
             inputs: GET_WORKER_INPUTS,
+        },
+        ToolDescriptor {
+            name: "read_worker_outbox",
+            description: "List one worker outbox after an optional sequence number.",
+            inputs: READ_OUTBOX_INPUTS,
+        },
+        ToolDescriptor {
+            name: "ack_worker_outbox_message",
+            description: "Acknowledge a consumed worker outbox bundle.",
+            inputs: ACK_OUTBOX_INPUTS,
         },
         ToolDescriptor {
             name: "create_worker",

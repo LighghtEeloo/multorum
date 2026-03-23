@@ -26,8 +26,14 @@ pub fn descriptors() -> Vec<ResourceDescriptor> {
 
 /// Return parameterized orchestrator MCP resource templates.
 pub fn templates() -> Vec<ResourceTemplateDescriptor> {
-    vec![ResourceTemplateDescriptor {
-        uri_template: "multorum://orchestrator/workers/{worker}",
-        description: "Detailed orchestrator-side view of one worker.",
-    }]
+    vec![
+        ResourceTemplateDescriptor {
+            uri_template: "multorum://orchestrator/workers/{worker}",
+            description: "Detailed orchestrator-side view of one worker.",
+        },
+        ResourceTemplateDescriptor {
+            uri_template: "multorum://orchestrator/workers/{worker}/outbox",
+            description: "Outbox mailbox listing for one worker from the orchestrator view.",
+        },
+    ]
 }

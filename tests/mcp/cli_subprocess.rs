@@ -113,7 +113,7 @@ async fn cli_orchestrator_list_tools() {
     let response = read_jsonrpc(&mut stdout).await;
     assert_eq!(response["id"], 2);
     let tools = response["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 14);
+    assert_eq!(tools.len(), 16);
 
     drop(child.stdin.take());
     let status = child.wait().await.unwrap();
