@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use multorum::cli::{Cli, Command, WorkerCommand};
+use multorum::cli::{Cli, Command, RuntimeCommand, WorkerCommand};
 use multorum::mcp::McpServer;
 
 #[test]
@@ -17,9 +17,9 @@ fn cli_create_accepts_optional_worker_id() {
     .unwrap();
 
     match cli.command {
-        | Command::Worker {
+        | Command::Runtime(RuntimeCommand::Worker {
             command: WorkerCommand::Create { perspective, worker_id, overwriting_worktree, .. },
-        } => {
+        }) => {
             assert_eq!(perspective.as_str(), "AuthImplementor");
             assert_eq!(worker_id.unwrap().as_str(), "custom_worker_7");
             assert!(overwriting_worktree);
@@ -76,7 +76,9 @@ fn cli_merge_accepts_worker_id_and_skip_checks() {
     .unwrap();
 
     match cli.command {
-        | Command::Worker { command: WorkerCommand::Merge { worker_id, skip_checks } } => {
+        | Command::Runtime(RuntimeCommand::Worker {
+            command: WorkerCommand::Merge { worker_id, skip_checks },
+        }) => {
             assert_eq!(worker_id.as_str(), "custom_worker_7");
             assert_eq!(skip_checks, vec!["unit"]);
         }

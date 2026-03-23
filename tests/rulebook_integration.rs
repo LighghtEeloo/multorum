@@ -30,19 +30,30 @@ fn setup_workspace(rulebook_toml: &str, file_paths: &[&str]) -> tempfile::TempDi
     dir
 }
 
-/// Extract the fenced TOML rulebook example from `DESIGN.md`.
+/// Combined rulebook assembled from the documented examples in `DESIGN.md`.
 ///
-/// The integration tests compile the exact documented example so the
-/// architecture reference stays aligned with the rulebook parser.
+/// The Named Definitions and Check Pipeline sections each show their own
+/// fragment. This function merges them into a single valid rulebook so the
+/// integration tests exercise the exact syntax documented in the design
+/// reference.
 fn design_doc_rulebook() -> String {
     let design_doc =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("DESIGN.md")).unwrap();
-    let (_, after_heading) =
-        design_doc.split_once("### Complete Example Rulebook").expect("DESIGN.md must contain the example");
-    let (_, after_fence) =
-        after_heading.split_once("```toml").expect("example rulebook must be fenced as TOML");
-    let (rulebook, _) = after_fence.split_once("```").expect("example rulebook fence must close");
-    rulebook.trim().to_owned()
+
+    let extract = |heading: &str| -> String {
+        let (_, after) = design_doc
+            .split_once(heading)
+            .unwrap_or_else(|| panic!("DESIGN.md must contain {heading}"));
+        let (_, after_fence) =
+            after.split_once("```toml").expect("section must contain a TOML fence");
+        let (block, _) = after_fence.split_once("```").expect("TOML fence must close");
+        block.trim().to_owned()
+    };
+
+    let filesets_and_perspectives = extract("### Named Definitions");
+    let checks = extract("### Check Pipeline");
+
+    format!("{filesets_and_perspectives}\n\n{checks}\n")
 }
 
 fn design_doc_files() -> &'static [&'static str] {

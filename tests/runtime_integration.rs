@@ -598,10 +598,13 @@ fn merge_rejects_skip_request_for_check_without_policy_override() {
     let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
     worker.send_commit(head_commit, BundlePayload::default()).unwrap();
-    let error =
-        orchestrator.merge_worker(provision.worker_id.clone(), vec!["test".to_owned()]).unwrap_err();
+    let error = orchestrator
+        .merge_worker(provision.worker_id.clone(), vec!["test".to_owned()])
+        .unwrap_err();
 
-    assert!(matches!(error, RuntimeError::CheckFailed(message) if message == "check `test` is not skippable"));
+    assert!(
+        matches!(error, RuntimeError::CheckFailed(message) if message == "check `test` is not skippable")
+    );
 }
 
 #[test]
@@ -636,7 +639,8 @@ fn merge_accepts_skip_request_for_explicit_skippable_check() {
     let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
     worker.send_commit(head_commit, BundlePayload::default()).unwrap();
-    let merge = orchestrator.merge_worker(provision.worker_id.clone(), vec!["test".to_owned()]).unwrap();
+    let merge =
+        orchestrator.merge_worker(provision.worker_id.clone(), vec!["test".to_owned()]).unwrap();
 
     assert_eq!(merge.state, WorkerState::Merged);
     assert!(merge.ran_checks.is_empty());
