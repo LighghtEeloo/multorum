@@ -73,16 +73,16 @@ pub struct RulebookUninstall {
     pub previous_commit: CanonicalCommitHash,
 }
 
-/// Summary of one active bidding group.
+/// Summary of one active perspective in the current runtime.
+///
+/// Note: Derived from live workers rather than persisted as a separate
+/// entity. Each perspective with at least one active worker produces
+/// one summary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct BiddingGroupSummary {
-    /// Perspective instantiated by workers in the active runtime boundary.
-    ///
-    /// Note: Runtime state does not persist a separate bidding-group
-    /// identifier because the current implementation derives the active
-    /// group directly from live workers for this perspective.
+pub struct ActivePerspectiveSummary {
+    /// Perspective identifier.
     pub perspective: PerspectiveName,
-    /// Live workers currently competing in the group.
+    /// Live workers currently instantiating this perspective.
     pub worker_ids: Vec<WorkerId>,
     /// Number of files in the materialized stable context.
     pub read_count: usize,
@@ -163,7 +163,7 @@ pub struct OrchestratorStatus {
     /// Active canonical rulebook commit hash.
     pub active_rulebook_commit: CanonicalCommitHash,
     /// Current active perspective summaries.
-    pub active_perspectives: Vec<BiddingGroupSummary>,
+    pub active_perspectives: Vec<ActivePerspectiveSummary>,
     /// Current worker summaries.
     pub workers: Vec<WorkerSummary>,
 }

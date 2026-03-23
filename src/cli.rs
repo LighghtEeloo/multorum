@@ -8,7 +8,6 @@
 //!
 //! - `rulebook` manages committed configuration.
 //! - `perspective` inspects declared roles from the active rulebook.
-//! - `bidding-group` inspects active competing groups.
 //! - `worker` addresses orchestrator-side operations on concrete workers.
 //! - `local` addresses worker-local operations from inside a worker
 //!   worktree.
@@ -156,12 +155,6 @@ pub enum RuntimeCommand {
         command: PerspectiveCommand,
     },
 
-    /// Inspect active bidding groups.
-    BiddingGroup {
-        #[command(subcommand)]
-        command: BiddingGroupCommand,
-    },
-
     /// Operate on orchestrator-visible workers.
     Worker {
         #[command(subcommand)]
@@ -195,13 +188,6 @@ pub enum UtilCommand {
 #[derive(Debug, Subcommand)]
 pub enum PerspectiveCommand {
     /// List compiled perspectives from the active rulebook.
-    List,
-}
-
-/// Active bidding-group inspection commands.
-#[derive(Debug, Subcommand)]
-pub enum BiddingGroupCommand {
-    /// List active bidding groups.
     List,
 }
 
@@ -418,7 +404,6 @@ impl RuntimeCommand {
         match self {
             | Self::Rulebook { command } => command.execute(services)?,
             | Self::Perspective { command } => command.execute(services)?,
-            | Self::BiddingGroup { command } => command.execute(services)?,
             | Self::Worker { command } => command.execute(services)?,
             | Self::Local { command } => command.execute(services)?,
             | Self::Status => {
@@ -436,19 +421,6 @@ impl PerspectiveCommand {
         match self {
             | Self::List => {
                 let result = services.orchestrator.list_perspectives()?;
-                println!("{result:#?}");
-            }
-        }
-        Ok(())
-    }
-}
-
-impl BiddingGroupCommand {
-    /// Execute one bidding-group inspection command.
-    pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
-        match self {
-            | Self::List => {
-                let result = services.orchestrator.list_bidding_groups()?;
                 println!("{result:#?}");
             }
         }

@@ -107,11 +107,6 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
             inputs: &[],
         },
         ToolDescriptor {
-            name: "list_bidding_groups",
-            description: "List active bidding groups and their worker membership.",
-            inputs: &[],
-        },
-        ToolDescriptor {
             name: "list_workers",
             description: "List active workers in the current runtime.",
             inputs: &[],

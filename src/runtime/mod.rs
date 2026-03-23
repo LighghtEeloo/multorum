@@ -26,7 +26,7 @@ pub use orchestrator::{CreateWorker, FsOrchestratorService, OrchestratorService}
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};
 pub use projection::TranscriptView;
 pub use state::{
-    BiddingGroupSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,
+    ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,
     MergeResult, OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookInstall,
     RulebookUninstall, RulebookValidation, WorkerContractView, WorkerDetail, WorkerState,
     WorkerStatus, WorkerSummary,

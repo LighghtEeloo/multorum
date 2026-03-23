@@ -16,7 +16,7 @@ use super::{
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference},
     error::{Result, RuntimeError},
     state::{
-        BiddingGroupSummary, CreateResult, DeleteResult, DiscardResult, MergeResult,
+        ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MergeResult,
         OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookInstall, RulebookUninstall,
         RulebookValidation, WorkerDetail, WorkerState, WorkerSummary,
     },
@@ -96,9 +96,6 @@ pub trait OrchestratorService {
 
     /// List compiled perspective summaries from the active rulebook.
     fn list_perspectives(&self) -> Result<Vec<PerspectiveSummary>>;
-
-    /// List active bidding groups.
-    fn list_bidding_groups(&self) -> Result<Vec<BiddingGroupSummary>>;
 
     /// List active workers.
     fn list_workers(&self) -> Result<Vec<WorkerSummary>>;
@@ -443,21 +440,6 @@ impl OrchestratorService for FsOrchestratorService {
         Ok(compiled.perspective_summaries())
     }
 
-    fn list_bidding_groups(&self) -> Result<Vec<BiddingGroupSummary>> {
-        let mut groups = self
-            .active_bidding_groups()?
-            .into_iter()
-            .map(|group| BiddingGroupSummary {
-                perspective: group.perspective,
-                worker_ids: group.worker_ids,
-                read_count: group.boundary.read().len(),
-                write_count: group.boundary.write().len(),
-            })
-            .collect::<Vec<_>>();
-        groups.sort_by(|left, right| left.perspective.cmp(&right.perspective));
-        Ok(groups)
-    }
-
     fn list_workers(&self) -> Result<Vec<WorkerSummary>> {
         let mut workers = self
             .active_workers()?
@@ -717,7 +699,17 @@ impl OrchestratorService for FsOrchestratorService {
 
     fn status(&self) -> Result<OrchestratorStatus> {
         let active_rulebook_commit = self.fs.load_active_rulebook()?.base_commit;
-        let active_perspectives = self.list_bidding_groups()?;
+        let mut active_perspectives = self
+            .active_bidding_groups()?
+            .into_iter()
+            .map(|group| ActivePerspectiveSummary {
+                perspective: group.perspective,
+                worker_ids: group.worker_ids,
+                read_count: group.boundary.read().len(),
+                write_count: group.boundary.write().len(),
+            })
+            .collect::<Vec<_>>();
+        active_perspectives.sort_by(|left, right| left.perspective.cmp(&right.perspective));
         let workers = self.list_workers()?;
 
         Ok(OrchestratorStatus { active_rulebook_commit, active_perspectives, workers })
