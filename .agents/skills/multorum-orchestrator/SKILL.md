@@ -43,6 +43,8 @@ multorum serve orchestrator
 - `list_perspectives`
 - `list_workers`
 - `get_worker`
+- `read_worker_outbox`
+- `ack_worker_outbox_message`
 - `create_worker`
 - `resolve_worker`
 - `revise_worker`
@@ -58,6 +60,7 @@ multorum serve orchestrator
 - `multorum://orchestrator/perspectives`
 - `multorum://orchestrator/workers`
 - `multorum://orchestrator/workers/{worker}`
+- `multorum://orchestrator/workers/{worker}/outbox`
 
 The transport reserves worker sub-resources such as `/contract`, `/transcript`, and `/checks`, but they are not implemented yet and should not be treated as available.
 
@@ -72,6 +75,8 @@ multorum perspective list
 multorum worker create <perspective> [--worker-id <worker>] [--overwriting-worktree] [--body task.md] [--artifact FILE ...]
 multorum worker list
 multorum worker show <worker-id>
+multorum worker outbox <worker-id> [--after <sequence>]
+multorum worker ack <worker-id> <sequence>
 multorum worker resolve <worker-id> [--reply-to <sequence>] [--body resolve.md] [--artifact FILE ...]
 multorum worker revise <worker-id> [--reply-to <sequence>] [--body revise.md] [--artifact FILE ...]
 multorum worker discard <worker-id>
@@ -87,7 +92,7 @@ multorum status
 3. Enumerate perspectives before assigning work so the task matches an existing ownership boundary.
 4. Create one worker per perspective by default. Create multiple workers from the same perspective only when you intentionally want a bidding group evaluating the same boundary from the same pinned snapshot.
 5. Attach an initial task bundle when the worker needs nontrivial instructions or evidence files.
-6. Review worker detail, mailbox evidence, and any attached artifacts before deciding whether to resolve, revise, discard, delete, or merge.
+6. Read worker outbox traffic, acknowledge each consumed bundle, and review the worker detail plus any attached artifacts before deciding whether to resolve, revise, discard, delete, or merge.
 7. Merge only from `COMMITTED`, and skip checks only when the rulebook marks them `skippable` and the worker submitted evidence you trust.
 
 ## Write Better Worker Tasks
@@ -104,6 +109,8 @@ When attaching a task body, evidence log, or other artifact by path, do not plan
 
 ## Resolve, Revise, Merge, And Delete Correctly
 
+- Use `read_worker_outbox` or `multorum worker outbox` to inspect worker-authored `report` and `commit` bundles before taking follow-up action.
+- Acknowledge each consumed worker bundle with `ack_worker_outbox_message` or `multorum worker ack`. This records orchestrator receipt only; it does not change the worker lifecycle state.
 - Use `resolve` only for a blocked worker. Answer the blocker directly and include `--reply-to` or the MCP reply reference when responding to a specific report.
 - Use `revise` only for a committed worker. State what changed in your evaluation, what must be corrected, and what evidence should accompany the next submission.
 - Use `discard` when the task should be abandoned rather than repaired.
@@ -116,6 +123,8 @@ When attaching a task body, evidence log, or other artifact by path, do not plan
 ```bash
 multorum rulebook validate
 multorum worker create AuthImplementor --body task.md --artifact spec.md
+multorum worker outbox auth-implementor-1 --after 6
+multorum worker ack auth-implementor-1 7
 multorum worker resolve auth-implementor-1 --reply-to 7 --body resolve.md
 multorum worker revise auth-implementor-1 --reply-to 12 --body revise.md --artifact failing-test.log
 multorum worker merge auth-implementor-1 --skip-check test
