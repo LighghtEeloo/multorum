@@ -1,10 +1,11 @@
 //! Orchestrator MCP tool surface.
 
-use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor};
+use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor, ToolInputType};
 
 const GET_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
     name: "worker_id",
     description: "Runtime worker identity to inspect.",
+    kind: ToolInputType::String,
     required: true,
 }];
 
@@ -12,26 +13,31 @@ const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor {
         name: "perspective",
         description: "Compiled perspective to instantiate.",
+        kind: ToolInputType::String,
         required: true,
     },
     ToolInputDescriptor {
         name: "worker_id",
         description: "Optional orchestrator-selected runtime worker identity. When omitted, Multorum allocates the default perspective-based worker id.",
+        kind: ToolInputType::String,
         required: false,
     },
     ToolInputDescriptor {
         name: "overwriting_worktree",
         description: "Optional flag to replace an existing finalized workspace for the same explicit worker id.",
+        kind: ToolInputType::Boolean,
         required: false,
     },
     ToolInputDescriptor {
         name: "body",
         description: "Optional Markdown file to move into the seeded task bundle body.",
+        kind: ToolInputType::String,
         required: false,
     },
     ToolInputDescriptor {
         name: "artifacts",
         description: "Optional files to move into the seeded task bundle artifacts directory.",
+        kind: ToolInputType::StringList,
         required: false,
     },
 ];
@@ -40,21 +46,25 @@ const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor {
         name: "worker_id",
         description: "Runtime worker identity that owns the inbox.",
+        kind: ToolInputType::String,
         required: true,
     },
     ToolInputDescriptor {
         name: "reply_to",
         description: "Optional mailbox sequence number answered by this bundle.",
+        kind: ToolInputType::Integer,
         required: false,
     },
     ToolInputDescriptor {
         name: "body",
         description: "Optional Markdown file to move into the bundle body.",
+        kind: ToolInputType::String,
         required: false,
     },
     ToolInputDescriptor {
         name: "artifacts",
         description: "Optional files to move into the bundle artifacts directory.",
+        kind: ToolInputType::StringList,
         required: false,
     },
 ];
@@ -62,6 +72,7 @@ const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
 const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
     name: "worker_id",
     description: "Runtime worker identity to act on.",
+    kind: ToolInputType::String,
     required: true,
 }];
 
@@ -69,11 +80,13 @@ const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor {
         name: "worker_id",
         description: "Runtime worker identity to merge.",
+        kind: ToolInputType::String,
         required: true,
     },
     ToolInputDescriptor {
         name: "skip_checks",
         description: "Optional project-defined checks to skip based on trusted worker evidence.",
+        kind: ToolInputType::StringList,
         required: false,
     },
 ];

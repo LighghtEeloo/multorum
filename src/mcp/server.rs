@@ -6,7 +6,7 @@
 use crate::runtime::WorkerId;
 
 use super::{
-    dto::{ResourceDescriptor, ToolDescriptor},
+    dto::{ResourceDescriptor, ResourceTemplateDescriptor, ToolDescriptor},
     mode::McpMode,
     resource, tool,
 };
@@ -20,6 +20,8 @@ pub struct McpServer {
     pub tools: Vec<ToolDescriptor>,
     /// Registered resources for the mode.
     pub resources: Vec<ResourceDescriptor>,
+    /// Registered parameterized resource templates for the mode.
+    pub resource_templates: Vec<ResourceTemplateDescriptor>,
 }
 
 impl McpServer {
@@ -29,6 +31,7 @@ impl McpServer {
             mode: McpMode::Orchestrator,
             tools: tool::orchestrator::descriptors(),
             resources: resource::orchestrator::descriptors(),
+            resource_templates: resource::orchestrator::templates(),
         }
     }
 
@@ -38,6 +41,7 @@ impl McpServer {
             mode: McpMode::Worker { worker_id },
             tools: tool::worker::descriptors(),
             resources: resource::worker::descriptors(),
+            resource_templates: resource::worker::templates(),
         }
     }
 }

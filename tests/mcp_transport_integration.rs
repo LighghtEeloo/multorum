@@ -2,9 +2,9 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use rmcp::model::{CallToolResult, RawContent, ReadResourceResult, ResourceContents};
 use rmcp::ServerHandler;
-use serde_json::{json, Value};
+use rmcp::model::{CallToolResult, RawContent, ReadResourceResult, ResourceContents};
+use serde_json::{Value, json};
 use tempfile::TempDir;
 
 use multorum::mcp::transport::orchestrator::OrchestratorHandler;
@@ -146,7 +146,12 @@ fn orchestrator_tool_descriptor_count() {
 
 #[test]
 fn orchestrator_resource_descriptor_count() {
-    assert_eq!(multorum::mcp::resource::orchestrator::descriptors().len(), 8);
+    assert_eq!(multorum::mcp::resource::orchestrator::descriptors().len(), 4);
+}
+
+#[test]
+fn orchestrator_resource_template_descriptor_count() {
+    assert_eq!(multorum::mcp::resource::orchestrator::templates().len(), 1);
 }
 
 // ===========================================================================
@@ -299,8 +304,7 @@ fn orchestrator_discard_worker() {
         )
         .unwrap();
 
-    let result =
-        handler.dispatch("discard_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
+    let result = handler.dispatch("discard_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
     assert_tool_success(&result);
 }
 
@@ -317,8 +321,7 @@ fn orchestrator_delete_worker_after_discard() {
         .unwrap();
     handler.dispatch("discard_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
 
-    let result =
-        handler.dispatch("delete_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
+    let result = handler.dispatch("delete_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
     assert_tool_success(&result);
     let json = tool_json(&result);
     assert!(json["deleted_workspace"].as_bool().unwrap());
@@ -381,8 +384,7 @@ fn orchestrator_revise_worker() {
 
     // Worker commits (via runtime) to enter Committed state.
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
-        .unwrap();
+    fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n").unwrap();
     git(Path::new(&worktree), &["add", "src/owned.rs"]);
     git(Path::new(&worktree), &["commit", "-m", "incr: update owned"]);
     let head = git(Path::new(&worktree), &["rev-parse", "HEAD"]);
@@ -419,8 +421,7 @@ fn orchestrator_merge_worker() {
 
     // Worker commits via runtime.
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n")
-        .unwrap();
+    fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n").unwrap();
     git(Path::new(&worktree), &["add", "src/owned.rs"]);
     git(Path::new(&worktree), &["commit", "-m", "incr: update owned"]);
     let head = git(Path::new(&worktree), &["rev-parse", "HEAD"]);
@@ -457,20 +458,19 @@ fn orchestrator_missing_required_arg_returns_protocol_error() {
 fn orchestrator_nonexistent_worker_returns_tool_error() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
-    let result = handler
-        .dispatch("get_worker", json_args(json!({"worker_id": "does-not-exist"})))
-        .unwrap();
+    let result =
+        handler.dispatch("get_worker", json_args(json!({"worker_id": "does-not-exist"}))).unwrap();
     assert_tool_error(&result);
     let err = tool_json(&result);
-    assert!(err["code"].as_str().unwrap().contains("UnknownWorker"));
+    assert_eq!(err["code"], "unknown_worker");
 }
 
 #[test]
 fn orchestrator_invalid_perspective_returns_protocol_error() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
-    let result = handler
-        .dispatch("create_worker", json_args(json!({"perspective": "lowercase_bad"})));
+    let result =
+        handler.dispatch("create_worker", json_args(json!({"perspective": "lowercase_bad"})));
     assert!(result.is_err(), "invalid perspective name should return protocol-level error");
 }
 
@@ -486,11 +486,10 @@ fn orchestrator_delete_active_worker_returns_tool_error() {
         )
         .unwrap();
 
-    let result =
-        handler.dispatch("delete_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
+    let result = handler.dispatch("delete_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
     assert_tool_error(&result);
     let err = tool_json(&result);
-    assert!(err["code"].as_str().unwrap().contains("InvalidState"));
+    assert_eq!(err["code"], "invalid_state");
 }
 
 // ===========================================================================
@@ -513,6 +512,7 @@ fn orchestrator_resource_rulebook_active() {
     let result = handler.read("multorum://orchestrator/rulebook/active").unwrap();
     let json = resource_json(&result);
     assert!(json["active_rulebook_commit"].is_string());
+    assert_eq!(json.as_object().unwrap().len(), 1);
 }
 
 #[test]
@@ -614,7 +614,12 @@ fn worker_tool_descriptor_count() {
 
 #[test]
 fn worker_resource_descriptor_count() {
-    assert_eq!(multorum::mcp::resource::worker::descriptors().len(), 7);
+    assert_eq!(multorum::mcp::resource::worker::descriptors().len(), 3);
+}
+
+#[test]
+fn worker_resource_template_descriptor_count() {
+    assert!(multorum::mcp::resource::worker::templates().is_empty());
 }
 
 // ===========================================================================
@@ -693,13 +698,10 @@ fn worker_ack_inbox_message() {
 
     // Read inbox to get the sequence number.
     let inbox_result = handler.dispatch("read_inbox", empty_args()).unwrap();
-    let sequence = tool_json(&inbox_result).as_array().unwrap()[0]["sequence"]
-        .as_u64()
-        .unwrap();
+    let sequence = tool_json(&inbox_result).as_array().unwrap()[0]["sequence"].as_u64().unwrap();
 
-    let result = handler
-        .dispatch("ack_inbox_message", json_args(json!({"sequence": sequence})))
-        .unwrap();
+    let result =
+        handler.dispatch("ack_inbox_message", json_args(json!({"sequence": sequence}))).unwrap();
     assert_tool_success(&result);
 }
 
@@ -719,10 +721,7 @@ fn worker_send_report() {
     let report_body = worktree.join("report.md");
     fs::write(&report_body, "Blocked on design question.\n").unwrap();
     let result = handler
-        .dispatch(
-            "send_report",
-            json_args(json!({"body": report_body.to_str().unwrap()})),
-        )
+        .dispatch("send_report", json_args(json!({"body": report_body.to_str().unwrap()})))
         .unwrap();
     assert_tool_success(&result);
     assert!(!report_body.exists(), "report body should be moved into .multorum storage");
@@ -740,9 +739,7 @@ fn worker_send_commit() {
     git(&worktree, &["commit", "-m", "incr: update owned"]);
     let head = git(&worktree, &["rev-parse", "HEAD"]);
 
-    let result = handler
-        .dispatch("send_commit", json_args(json!({"head_commit": head})))
-        .unwrap();
+    let result = handler.dispatch("send_commit", json_args(json!({"head_commit": head}))).unwrap();
     assert_tool_success(&result);
 }
 
@@ -799,9 +796,8 @@ fn worker_invalid_commit_returns_tool_error() {
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
     let handler = WorkerHandler::new(worker_svc);
-    let result = handler
-        .dispatch("send_commit", json_args(json!({"head_commit": "deadbeef"})))
-        .unwrap();
+    let result =
+        handler.dispatch("send_commit", json_args(json!({"head_commit": "deadbeef"}))).unwrap();
     assert_tool_error(&result);
 }
 
@@ -811,9 +807,8 @@ fn worker_ack_nonexistent_sequence_returns_tool_error() {
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
     let handler = WorkerHandler::new(worker_svc);
-    let result = handler
-        .dispatch("ack_inbox_message", json_args(json!({"sequence": 9999})))
-        .unwrap();
+    let result =
+        handler.dispatch("ack_inbox_message", json_args(json!({"sequence": 9999}))).unwrap();
     assert_tool_error(&result);
 }
 
@@ -917,8 +912,7 @@ fn full_workflow_create_commit_merge_via_mcp() {
     assert_eq!(tool_json(&status)["state"], "ACTIVE");
 
     // Step 3: Worker modifies files and commits via git, then submits via MCP.
-    fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 42 }\n")
-        .unwrap();
+    fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 42 }\n").unwrap();
     git(Path::new(&worktree), &["add", "src/owned.rs"]);
     git(Path::new(&worktree), &["commit", "-m", "incr: answer to everything"]);
     let head = git(Path::new(&worktree), &["rev-parse", "HEAD"]);
@@ -930,8 +924,7 @@ fn full_workflow_create_commit_merge_via_mcp() {
     assert_eq!(tool_json(&status)["state"], "COMMITTED");
 
     // Step 4: Orchestrator merges via MCP.
-    let merge =
-        orch.dispatch("merge_worker", json_args(json!({"worker_id": "mcp-w1"}))).unwrap();
+    let merge = orch.dispatch("merge_worker", json_args(json!({"worker_id": "mcp-w1"}))).unwrap();
     assert_tool_success(&merge);
     assert_eq!(tool_json(&merge)["state"], "MERGED");
 

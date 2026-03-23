@@ -33,6 +33,27 @@ pub enum McpErrorCode {
     Internal,
 }
 
+impl McpErrorCode {
+    /// Return the stable wire representation of the error code.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            | Self::UnknownPerspective => "unknown_perspective",
+            | Self::UnknownWorker => "unknown_worker",
+            | Self::WorkerIdExists => "worker_id_exists",
+            | Self::InvalidState => "invalid_state",
+            | Self::MessageNotFound => "message_not_found",
+            | Self::AlreadyAcknowledged => "already_acknowledged",
+            | Self::RulebookConflict => "rulebook_conflict",
+            | Self::CheckFailed => "check_failed",
+            | Self::WriteSetViolation => "write_set_violation",
+            | Self::MailboxConflict => "mailbox_conflict",
+            | Self::MissingWorkerRuntime => "missing_worker_runtime",
+            | Self::Unimplemented => "unimplemented",
+            | Self::Internal => "internal",
+        }
+    }
+}
+
 /// MCP-facing tool error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct McpToolError {

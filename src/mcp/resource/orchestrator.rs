@@ -1,8 +1,8 @@
 //! Orchestrator MCP resource surface.
 
-use crate::mcp::dto::ResourceDescriptor;
+use crate::mcp::dto::{ResourceDescriptor, ResourceTemplateDescriptor};
 
-/// Return the orchestrator MCP resource descriptors.
+/// Return concrete orchestrator MCP resource descriptors.
 pub fn descriptors() -> Vec<ResourceDescriptor> {
     vec![
         ResourceDescriptor {
@@ -21,21 +21,13 @@ pub fn descriptors() -> Vec<ResourceDescriptor> {
             uri: "multorum://orchestrator/workers",
             description: "Worker summary listing for the current runtime.",
         },
-        ResourceDescriptor {
-            uri: "multorum://orchestrator/workers/{worker}",
-            description: "Detailed orchestrator-side view of one worker.",
-        },
-        ResourceDescriptor {
-            uri: "multorum://orchestrator/workers/{worker}/contract",
-            description: "Worker contract projection for one worker.",
-        },
-        ResourceDescriptor {
-            uri: "multorum://orchestrator/workers/{worker}/transcript",
-            description: "Normalized transcript view for one worker.",
-        },
-        ResourceDescriptor {
-            uri: "multorum://orchestrator/workers/{worker}/checks",
-            description: "Integration and pre-merge check results for one worker.",
-        },
     ]
+}
+
+/// Return parameterized orchestrator MCP resource templates.
+pub fn templates() -> Vec<ResourceTemplateDescriptor> {
+    vec![ResourceTemplateDescriptor {
+        uri_template: "multorum://orchestrator/workers/{worker}",
+        description: "Detailed orchestrator-side view of one worker.",
+    }]
 }

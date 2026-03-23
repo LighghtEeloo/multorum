@@ -6,19 +6,19 @@
 use std::future::Future;
 
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ListResourcesResult, ListToolsResult,
-    PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResult, ServerInfo,
+    CallToolRequestParams, CallToolResult, ListResourceTemplatesResult, ListResourcesResult,
+    ListToolsResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResult,
+    ServerInfo,
 };
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler};
 
-use crate::mcp::error::McpToolError;
 use crate::runtime::{FsWorkerService, Sequence, WorkerService};
 
 use super::{
-    args_or_empty, dispatch_tool, extract_payload, extract_reply, list_resources_result,
-    list_tools_result, optional_str, optional_u64, required_str, resource_success,
-    server_info,
+    args_or_empty, dispatch_tool, extract_payload, extract_reply, list_resource_templates_result,
+    list_resources_result, list_tools_result, optional_str, optional_u64, required_str,
+    resource_success, runtime_to_resource_error, server_info,
 };
 
 /// MCP server handler for the worker surface.
@@ -26,22 +26,22 @@ pub struct WorkerHandler {
     service: FsWorkerService,
     tools: ListToolsResult,
     resources: ListResourcesResult,
+    resource_templates: ListResourceTemplatesResult,
 }
 
 impl WorkerHandler {
     /// Construct the handler from a runtime worker service.
     pub fn new(service: FsWorkerService) -> Self {
         let tools = list_tools_result(&crate::mcp::tool::worker::descriptors());
-        let resources =
-            list_resources_result(&crate::mcp::resource::worker::descriptors());
-        Self { service, tools, resources }
+        let resources = list_resources_result(&crate::mcp::resource::worker::descriptors());
+        let resource_templates =
+            list_resource_templates_result(&crate::mcp::resource::worker::templates());
+        Self { service, tools, resources, resource_templates }
     }
 
     /// Dispatch one tool call to the runtime by name and JSON arguments.
     pub fn dispatch(
-        &self,
-        name: &str,
-        args: serde_json::Map<String, serde_json::Value>,
+        &self, name: &str, args: serde_json::Map<String, serde_json::Value>,
     ) -> Result<CallToolResult, ErrorData> {
         match name {
             | "get_contract" => dispatch_tool(self.service.contract()),
@@ -63,16 +63,10 @@ impl WorkerHandler {
             }
             | "send_commit" => {
                 let head_commit = required_str(&args, "head_commit")?.to_string();
-                dispatch_tool(
-                    self.service
-                        .send_commit(head_commit, extract_payload(&args)),
-                )
+                dispatch_tool(self.service.send_commit(head_commit, extract_payload(&args)))
             }
             | "get_status" => dispatch_tool(self.service.status()),
-            | _ => Err(ErrorData::invalid_params(
-                format!("unknown tool: {name}"),
-                None,
-            )),
+            | _ => Err(ErrorData::invalid_params(format!("unknown tool: {name}"), None)),
         }
     }
 
@@ -80,30 +74,25 @@ impl WorkerHandler {
     pub fn read(&self, uri: &str) -> Result<ReadResourceResult, ErrorData> {
         match uri {
             | "multorum://worker/contract" => {
-                let contract = self.service.contract().map_err(runtime_to_error)?;
+                let contract = self.service.contract().map_err(runtime_to_resource_error)?;
                 resource_success(uri, &contract)
             }
             | "multorum://worker/inbox" => {
-                let messages = self.service.read_inbox(None).map_err(runtime_to_error)?;
+                let messages = self.service.read_inbox(None).map_err(runtime_to_resource_error)?;
                 resource_success(uri, &messages)
             }
             | "multorum://worker/status" => {
-                let status = self.service.status().map_err(runtime_to_error)?;
+                let status = self.service.status().map_err(runtime_to_resource_error)?;
                 resource_success(uri, &status)
             }
             | "multorum://worker/read-set"
             | "multorum://worker/write-set"
             | "multorum://worker/outbox"
-            | "multorum://worker/transcript" => Err(ErrorData::new(
-                rmcp::model::ErrorCode::RESOURCE_NOT_FOUND,
+            | "multorum://worker/transcript" => Err(ErrorData::resource_not_found(
                 format!("resource not yet implemented: {uri}"),
                 None,
             )),
-            | _ => Err(ErrorData::new(
-                rmcp::model::ErrorCode::RESOURCE_NOT_FOUND,
-                format!("unknown resource: {uri}"),
-                None,
-            )),
+            | _ => Err(ErrorData::resource_not_found(format!("unknown resource: {uri}"), None)),
         }
     }
 }
@@ -114,34 +103,32 @@ impl ServerHandler for WorkerHandler {
     }
 
     fn list_tools(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
+        &self, _request: Option<PaginatedRequestParams>, _context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + Send + '_ {
         std::future::ready(Ok(self.tools.clone()))
     }
 
     fn call_tool(
-        &self,
-        request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        &self, request: CallToolRequestParams, _context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<CallToolResult, ErrorData>> + Send + '_ {
         let args = args_or_empty(request.arguments);
         std::future::ready(self.dispatch(&request.name, args))
     }
 
     fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
+        &self, _request: Option<PaginatedRequestParams>, _context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListResourcesResult, ErrorData>> + Send + '_ {
         std::future::ready(Ok(self.resources.clone()))
     }
 
+    fn list_resource_templates(
+        &self, _request: Option<PaginatedRequestParams>, _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<ListResourceTemplatesResult, ErrorData>> + Send + '_ {
+        std::future::ready(Ok(self.resource_templates.clone()))
+    }
+
     fn read_resource(
-        &self,
-        request: ReadResourceRequestParams,
-        _context: RequestContext<RoleServer>,
+        &self, request: ReadResourceRequestParams, _context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ReadResourceResult, ErrorData>> + Send + '_ {
         std::future::ready(self.read(&request.uri))
     }
@@ -153,18 +140,9 @@ impl ServerHandler for WorkerHandler {
 
 /// Extract a required u64 argument.
 fn required_u64(
-    args: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
+    args: &serde_json::Map<String, serde_json::Value>, key: &str,
 ) -> Result<u64, ErrorData> {
     args.get(key)
         .and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| {
-            ErrorData::invalid_params(format!("missing required field: {key}"), None)
-        })
-}
-
-/// Convert a [`RuntimeError`] into an rmcp [`ErrorData`] for resource reads.
-fn runtime_to_error(e: crate::runtime::RuntimeError) -> ErrorData {
-    let mcp = McpToolError::from(e);
-    ErrorData::internal_error(mcp.message, None)
+        .ok_or_else(|| ErrorData::invalid_params(format!("missing required field: {key}"), None))
 }

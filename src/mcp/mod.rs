@@ -1,9 +1,9 @@
 //! Model Context Protocol scaffolding for Multorum.
 //!
-//! This module defines a dependency-free MCP facade that describes the
-//! tool and resource surface Multorum intends to expose. The real MCP
-//! transport can be added later without changing the runtime service
-//! layer or the CLI.
+//! This module defines the dependency-light MCP facade and the stdio
+//! transport used by Multorum. The runtime service layer remains
+//! protocol-agnostic, while this module owns the protocol-visible tool,
+//! resource, and error contracts.
 //!
 //! Path-backed bundle payloads follow the same ownership-transfer model
 //! as the CLI: once publication succeeds, Multorum moves those files
@@ -17,7 +17,10 @@ pub mod server;
 pub mod tool;
 pub mod transport;
 
-pub use dto::{ResourceDescriptor, ToolDescriptor, ToolInputDescriptor};
+pub use dto::{
+    ResourceDescriptor, ResourceTemplateDescriptor, ToolDescriptor, ToolInputDescriptor,
+    ToolInputType,
+};
 pub use error::{McpErrorCode, McpToolError};
 pub use mode::McpMode;
 pub use server::McpServer;
