@@ -116,3 +116,20 @@ test = "skippable"
 ```
 
 This gives one role ownership of production auth code, another ownership of auth tests, and a shared stable context in the auth specs. Because the write sets are disjoint, both roles may run concurrently.
+
+## Shell Completions
+
+Generate tab completions for your shell with `util completion`:
+
+```bash
+# bash
+source <(multorum util completion bash)
+
+# zsh
+autoload -U compinit
+compinit
+source <(multorum util completion zsh)
+
+# fish
+multorum util completion fish | source
+```

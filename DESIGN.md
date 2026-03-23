@@ -432,3 +432,7 @@ Workers may submit evidence with their reports or commits to support the case fo
 ### Query
 
 **`status`** — Active workers, bidding-group membership, active rulebook commit, blocked workers.
+
+### Utility
+
+**`util completion <shell>`** — Emit shell completions to stdout. Supported shells: `bash`, `zsh`, `fish`, `elvish`, `powershell`.
