@@ -2,6 +2,8 @@
 
 Multorum is a tool for managing multiple simultaneous, conflict-free perspectives on a single codebase, designed for AI agent orchestration workflows. A coordinating agent, the *orchestrator*, decomposes a development goal into discrete tasks and assigns each to an independent group of *workers* that operate in isolated environments with precisely scoped file access.
 
+> For a detailed design reference, see [DESIGN.md](DESIGN.md).
+
 ## Why It Exists
 
 Parallel development has a persistent tension:
