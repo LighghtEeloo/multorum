@@ -85,6 +85,7 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::Unimplemented(_) => McpErrorCode::Unimplemented,
             | RuntimeError::InvalidPayload(_)
             | RuntimeError::MissingSubmittedHeadCommit { .. }
+            | RuntimeError::NoNewCommit { .. }
             | RuntimeError::WorkerHeadMismatch { .. }
             | RuntimeError::CommitNotFound { .. }
             | RuntimeError::Vcs { .. }

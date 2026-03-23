@@ -658,6 +658,12 @@ impl OrchestratorService for FsOrchestratorService {
             "verify submitted worker commit",
         )?;
 
+        if head_commit == record.base_commit {
+            return Err(RuntimeError::NoNewCommit {
+                worker_id: worker_id.clone(),
+                head_commit: head_commit.clone(),
+            });
+        }
         let worker_head = self.fs.vcs().head_commit(&record.worktree_path)?;
         if worker_head != head_commit {
             return Err(RuntimeError::WorkerHeadMismatch {

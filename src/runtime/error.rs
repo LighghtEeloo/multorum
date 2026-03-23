@@ -170,6 +170,18 @@ pub enum RuntimeError {
         current_head_commit: CanonicalCommitHash,
     },
 
+    /// A worker submission head commit is the same as its base commit,
+    /// indicating no new work was done.
+    #[error(
+        "worker `{worker_id}` has no new commits to merge (head `{head_commit}` is the same as base)"
+    )]
+    NoNewCommit {
+        /// Worker with no new commits.
+        worker_id: WorkerId,
+        /// The commit that was supposed to be new but wasn't.
+        head_commit: CanonicalCommitHash,
+    },
+
     /// A referenced commit is not reachable from the repository view
     /// used for one operation.
     #[error(
