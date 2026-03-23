@@ -43,6 +43,7 @@ impl Cli {
         let cli = Self::parse();
         match cli.command {
             | Command::Util { command } => command.execute(),
+            | Command::Serve { command } => command.execute(),
             | Command::Runtime(command) => {
                 let services = match CliServices::from_current_dir() {
                     | Ok(services) => services,
@@ -133,11 +134,33 @@ pub enum Command {
     #[command(flatten)]
     Runtime(RuntimeCommand),
 
+    /// Start an MCP server on stdio.
+    Serve {
+        #[command(subcommand)]
+        command: ServeCommand,
+    },
+
     /// Shell utilities.
     Util {
         #[command(subcommand)]
         command: UtilCommand,
     },
+}
+
+/// MCP server mode selection.
+#[derive(Debug, Subcommand)]
+pub enum ServeCommand {
+    /// Start the orchestrator MCP server.
+    ///
+    /// Run from the workspace root. Exposes orchestrator tools and
+    /// resources over stdio using the Model Context Protocol.
+    Orchestrator,
+
+    /// Start a worker MCP server.
+    ///
+    /// Run from inside a worker worktree. Exposes worker tools and
+    /// resources over stdio using the Model Context Protocol.
+    Worker,
 }
 
 /// Commands that require a Multorum repository and runtime services.
@@ -381,6 +404,65 @@ impl RulebookCommand {
             }
         }
         Ok(())
+    }
+}
+
+impl ServeCommand {
+    /// Start an MCP server on stdio in the selected mode.
+    pub fn execute(self) {
+        use crate::mcp::transport::{orchestrator::OrchestratorHandler, worker::WorkerHandler};
+
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap_or_else(
+            |e| {
+                eprintln!("error: failed to start async runtime: {e}");
+                std::process::exit(1);
+            },
+        );
+
+        rt.block_on(async {
+            match self {
+                | Self::Orchestrator => {
+                    let service = match runtime::FsOrchestratorService::from_current_dir() {
+                        | Ok(s) => s,
+                        | Err(e) => {
+                            eprintln!("error: {e}");
+                            std::process::exit(1);
+                        }
+                    };
+                    let handler = OrchestratorHandler::new(service);
+                    let transport = rmcp::transport::io::stdio();
+                    match rmcp::serve_server(handler, transport).await {
+                        | Ok(running) => {
+                            let _ = running.waiting().await;
+                        }
+                        | Err(e) => {
+                            eprintln!("error: MCP server failed to initialize: {e}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                | Self::Worker => {
+                    let service = match runtime::FsWorkerService::from_current_dir() {
+                        | Ok(s) => s,
+                        | Err(e) => {
+                            eprintln!("error: {e}");
+                            std::process::exit(1);
+                        }
+                    };
+                    let handler = WorkerHandler::new(service);
+                    let transport = rmcp::transport::io::stdio();
+                    match rmcp::serve_server(handler, transport).await {
+                        | Ok(running) => {
+                            let _ = running.waiting().await;
+                        }
+                        | Err(e) => {
+                            eprintln!("error: MCP server failed to initialize: {e}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+        });
     }
 }
 
