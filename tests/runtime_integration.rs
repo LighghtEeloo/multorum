@@ -55,6 +55,7 @@ fn setup_repo_with_rulebook(rulebook_toml: &str) -> (TempDir, FsOrchestratorServ
     git(dir.path(), &["init"]);
     git(dir.path(), &["config", "user.name", "Multorum Test"]);
     git(dir.path(), &["config", "user.email", "multorum@test.invalid"]);
+    git(dir.path(), &["config", "commit.gpgsign", "false"]);
     git(dir.path(), &["add", "."]);
     git(dir.path(), &["commit", "-m", "feat: initialize runtime fixture"]);
 
