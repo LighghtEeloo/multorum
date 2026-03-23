@@ -1,134 +1,25 @@
+//! Handler-level dispatch and resource read tests.
+
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use rmcp::ServerHandler;
-use rmcp::model::{CallToolResult, RawContent, ReadResourceResult, ResourceContents};
-use serde_json::{Value, json};
-use tempfile::TempDir;
+use serde_json::json;
 
 use multorum::mcp::transport::orchestrator::OrchestratorHandler;
 use multorum::mcp::transport::worker::WorkerHandler;
-use multorum::perspective::PerspectiveName;
 use multorum::runtime::{
-    BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService,
-    WorkerService,
+    BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, WorkerService,
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn perspective() -> PerspectiveName {
-    PerspectiveName::new("AuthImplementor").unwrap()
-}
-
-fn rulebook_toml() -> &'static str {
-    r#"
-        [fileset]
-        Owned.path = "src/owned.rs"
-        Other.path = "src/other.rs"
-
-        [perspective.AuthImplementor]
-        read = "Other"
-        write = "Owned"
-
-        [check]
-        pipeline = []
-    "#
-}
-
-fn git(root: &Path, args: &[&str]) -> String {
-    let output = Command::new("git").args(args).current_dir(root).output().unwrap();
-    if !output.status.success() {
-        panic!("git {:?} failed: {}", args, String::from_utf8_lossy(&output.stderr));
-    }
-    String::from_utf8_lossy(&output.stdout).trim().to_owned()
-}
-
-fn setup_repo() -> (TempDir, FsOrchestratorService) {
-    let dir = tempfile::tempdir().unwrap();
-    fs::create_dir_all(dir.path().join("src")).unwrap();
-    fs::create_dir_all(dir.path().join(".multorum")).unwrap();
-    fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
-    fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
-    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\nworktrees/\n").unwrap();
-    fs::write(dir.path().join(".multorum/rulebook.toml"), rulebook_toml()).unwrap();
-
-    git(dir.path(), &["init"]);
-    git(dir.path(), &["config", "user.name", "Multorum Test"]);
-    git(dir.path(), &["config", "user.email", "multorum@test.invalid"]);
-    git(dir.path(), &["add", "."]);
-    git(dir.path(), &["commit", "-m", "feat: initialize runtime fixture"]);
-
-    let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
-    orchestrator.rulebook_install().unwrap();
-    (dir, orchestrator)
-}
-
-/// Create a worker via the runtime (not MCP) and return the worktree path.
-fn create_worker_runtime(
-    orchestrator: &FsOrchestratorService,
-) -> (multorum::runtime::WorkerId, std::path::PathBuf) {
-    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
-    (result.worker_id, result.worktree_path)
-}
-
-fn empty_args() -> serde_json::Map<String, Value> {
-    serde_json::Map::new()
-}
-
-fn json_args(value: Value) -> serde_json::Map<String, Value> {
-    value.as_object().unwrap().clone()
-}
-
-/// Extract the text payload from a successful tool call result.
-fn tool_text(result: &CallToolResult) -> &str {
-    assert!(!result.content.is_empty(), "tool result has no content");
-    match &result.content[0].raw {
-        | RawContent::Text(text) => &text.text,
-        | _ => panic!("expected text content in tool result"),
-    }
-}
-
-/// Parse the text payload of a tool result as JSON.
-fn tool_json(result: &CallToolResult) -> Value {
-    serde_json::from_str(tool_text(result)).expect("tool result text is not valid JSON")
-}
-
-/// Extract the text payload from a resource read result.
-fn resource_text(result: &ReadResourceResult) -> &str {
-    assert!(!result.contents.is_empty(), "resource result has no contents");
-    match &result.contents[0] {
-        | ResourceContents::TextResourceContents { text, .. } => text.as_str(),
-        | _ => panic!("expected text resource contents"),
-    }
-}
-
-/// Parse the text payload of a resource result as JSON.
-fn resource_json(result: &ReadResourceResult) -> Value {
-    serde_json::from_str(resource_text(result)).expect("resource result text is not valid JSON")
-}
-
-fn assert_tool_success(result: &CallToolResult) {
-    assert!(
-        result.is_error.is_none() || result.is_error == Some(false),
-        "expected tool success, got error: {}",
-        tool_text(result),
-    );
-}
-
-fn assert_tool_error(result: &CallToolResult) {
-    assert_eq!(
-        result.is_error,
-        Some(true),
-        "expected tool error, got success: {}",
-        tool_text(result),
-    );
-}
+use crate::support::repo::{git, setup_repo};
+use crate::support::result::{
+    assert_tool_error, assert_tool_success, empty_args, json_args, resource_json, tool_json,
+};
+use crate::support::worker::{create_worker_runtime, perspective};
 
 // ===========================================================================
-// Orchestrator handler — server info and descriptor counts
+// Orchestrator handler -- server info and descriptor counts
 // ===========================================================================
 
 #[test]
@@ -155,7 +46,7 @@ fn orchestrator_resource_template_descriptor_count() {
 }
 
 // ===========================================================================
-// Orchestrator handler — no-argument tool dispatch
+// Orchestrator handler -- no-argument tool dispatch
 // ===========================================================================
 
 #[test]
@@ -225,7 +116,7 @@ fn orchestrator_rulebook_init_on_bare_directory() {
 }
 
 // ===========================================================================
-// Orchestrator handler — worker lifecycle tools
+// Orchestrator handler -- worker lifecycle tools
 // ===========================================================================
 
 #[test]
@@ -332,7 +223,6 @@ fn orchestrator_resolve_worker() {
     let (dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
 
-    // Create worker via MCP.
     let create = handler
         .dispatch(
             "create_worker",
@@ -341,7 +231,6 @@ fn orchestrator_resolve_worker() {
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
-    // Worker sends a report (via runtime, not MCP) to enter Blocked state.
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
     let report_body = Path::new(&worktree).join("report.md");
     fs::write(&report_body, "Need clarification.\n").unwrap();
@@ -353,7 +242,6 @@ fn orchestrator_resolve_worker() {
         )
         .unwrap();
 
-    // Resolve via MCP.
     let resolve_body = dir.path().join("resolve.md");
     fs::write(&resolve_body, "Use the existing API.\n").unwrap();
     let result = handler
@@ -382,7 +270,6 @@ fn orchestrator_revise_worker() {
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
-    // Worker commits (via runtime) to enter Committed state.
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
     fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n").unwrap();
     git(Path::new(&worktree), &["add", "src/owned.rs"]);
@@ -390,7 +277,6 @@ fn orchestrator_revise_worker() {
     let head = git(Path::new(&worktree), &["rev-parse", "HEAD"]);
     worker_svc.send_commit(head, BundlePayload::default()).unwrap();
 
-    // Revise via MCP.
     let revise_body = dir.path().join("revise.md");
     fs::write(&revise_body, "Please adjust the return value.\n").unwrap();
     let result = handler
@@ -419,7 +305,6 @@ fn orchestrator_merge_worker() {
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
-    // Worker commits via runtime.
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
     fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n").unwrap();
     git(Path::new(&worktree), &["add", "src/owned.rs"]);
@@ -427,7 +312,6 @@ fn orchestrator_merge_worker() {
     let head = git(Path::new(&worktree), &["rev-parse", "HEAD"]);
     worker_svc.send_commit(head, BundlePayload::default()).unwrap();
 
-    // Merge via MCP.
     let result = handler.dispatch("merge_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
     assert_tool_success(&result);
     let merge = tool_json(&result);
@@ -435,7 +319,7 @@ fn orchestrator_merge_worker() {
 }
 
 // ===========================================================================
-// Orchestrator handler — error cases
+// Orchestrator handler -- error cases
 // ===========================================================================
 
 #[test]
@@ -493,7 +377,7 @@ fn orchestrator_delete_active_worker_returns_tool_error() {
 }
 
 // ===========================================================================
-// Orchestrator handler — resource reads
+// Orchestrator handler -- resource reads
 // ===========================================================================
 
 #[test]
@@ -594,7 +478,7 @@ fn orchestrator_resource_unknown_worker_sub_resource_returns_error() {
 }
 
 // ===========================================================================
-// Worker handler — server info and descriptor counts
+// Worker handler -- server info and descriptor counts
 // ===========================================================================
 
 #[test]
@@ -623,7 +507,7 @@ fn worker_resource_template_descriptor_count() {
 }
 
 // ===========================================================================
-// Worker handler — tool dispatch
+// Worker handler -- tool dispatch
 // ===========================================================================
 
 #[test]
@@ -644,7 +528,6 @@ fn worker_get_contract() {
 fn worker_read_inbox() {
     let (_dir, svc) = setup_repo();
 
-    // Create worker with a task body so the inbox is non-empty.
     use multorum::runtime::OrchestratorService;
     let task_body = tempfile::NamedTempFile::new().unwrap();
     fs::write(task_body.path(), "# initial task\n").unwrap();
@@ -673,7 +556,6 @@ fn worker_read_inbox_with_after() {
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
     let handler = WorkerHandler::new(worker_svc);
 
-    // Read with after=999 to get no messages.
     let result = handler.dispatch("read_inbox", json_args(json!({"after": 999}))).unwrap();
     assert_tool_success(&result);
     assert!(tool_json(&result).as_array().unwrap().is_empty());
@@ -696,7 +578,6 @@ fn worker_ack_inbox_message() {
     let worker_svc = FsWorkerService::new(&provision.worktree_path).unwrap();
     let handler = WorkerHandler::new(worker_svc);
 
-    // Read inbox to get the sequence number.
     let inbox_result = handler.dispatch("read_inbox", empty_args()).unwrap();
     let sequence = tool_json(&inbox_result).as_array().unwrap()[0]["sequence"].as_u64().unwrap();
 
@@ -711,7 +592,6 @@ fn worker_send_report() {
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
 
-    // Ack the initial empty inbox first (worker needs to be Active).
     let inbox = worker_svc.read_inbox(None).unwrap();
     for msg in &inbox {
         worker_svc.ack_inbox(msg.sequence).unwrap();
@@ -757,7 +637,7 @@ fn worker_get_status() {
 }
 
 // ===========================================================================
-// Worker handler — error cases
+// Worker handler -- error cases
 // ===========================================================================
 
 #[test]
@@ -813,7 +693,7 @@ fn worker_ack_nonexistent_sequence_returns_tool_error() {
 }
 
 // ===========================================================================
-// Worker handler — resource reads
+// Worker handler -- resource reads
 // ===========================================================================
 
 #[test]
@@ -890,7 +770,6 @@ fn full_workflow_create_commit_merge_via_mcp() {
     let (repo, svc) = setup_repo();
     let orch = OrchestratorHandler::new(svc);
 
-    // Step 1: Create worker via orchestrator MCP.
     let create = orch
         .dispatch(
             "create_worker",
@@ -900,7 +779,6 @@ fn full_workflow_create_commit_merge_via_mcp() {
     assert_tool_success(&create);
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
-    // Step 2: Worker reads contract and inbox via worker MCP.
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
     let worker = WorkerHandler::new(worker_svc);
 
@@ -911,7 +789,6 @@ fn full_workflow_create_commit_merge_via_mcp() {
     let status = worker.dispatch("get_status", empty_args()).unwrap();
     assert_eq!(tool_json(&status)["state"], "ACTIVE");
 
-    // Step 3: Worker modifies files and commits via git, then submits via MCP.
     fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 42 }\n").unwrap();
     git(Path::new(&worktree), &["add", "src/owned.rs"]);
     git(Path::new(&worktree), &["commit", "-m", "incr: answer to everything"]);
@@ -923,18 +800,15 @@ fn full_workflow_create_commit_merge_via_mcp() {
     let status = worker.dispatch("get_status", empty_args()).unwrap();
     assert_eq!(tool_json(&status)["state"], "COMMITTED");
 
-    // Step 4: Orchestrator merges via MCP.
     let merge = orch.dispatch("merge_worker", json_args(json!({"worker_id": "mcp-w1"}))).unwrap();
     assert_tool_success(&merge);
     assert_eq!(tool_json(&merge)["state"], "MERGED");
 
-    // Step 5: Verify the merged file landed in the main repo.
     assert_eq!(
         fs::read_to_string(repo.path().join("src/owned.rs")).unwrap(),
         "pub fn owned() -> i32 { 42 }\n"
     );
 
-    // Step 6: Workers list should now be empty (group closed on merge).
     let workers = orch.dispatch("list_workers", empty_args()).unwrap();
     assert!(tool_json(&workers).as_array().unwrap().is_empty());
 }
