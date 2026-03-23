@@ -304,10 +304,14 @@ mod tests {
 
         let templates =
             list_resource_templates_result(&crate::mcp::resource::orchestrator::templates());
-        assert_eq!(templates.resource_templates.len(), 1);
+        assert_eq!(templates.resource_templates.len(), 2);
         assert_eq!(
             templates.resource_templates[0].raw.uri_template,
             "multorum://orchestrator/workers/{worker}"
+        );
+        assert_eq!(
+            templates.resource_templates[1].raw.uri_template,
+            "multorum://orchestrator/workers/{worker}/outbox"
         );
     }
 }
