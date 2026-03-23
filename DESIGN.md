@@ -442,44 +442,50 @@ MCP-visible error codes are stable protocol values, independent of Rust enum var
 
 ## Instruction Reference
 
+This section lists the instructions that the orchestrator and workers may issue, in the form of CLI commands. MCP tools mirror the same runtime operations with typed arguments.
+
 ### Rulebook
 
-**`rulebook init`** — Initialize `.multorum/`, write the default template if absent, prepare `.gitignore`, create orchestrator runtime directories.
+- `multorum rulebook init` — Initialize `.multorum/`, write the default committed artifacts if absent, prepare `.multorum/.gitignore`, and create orchestrator runtime directories.
+- `multorum rulebook install` — Validate and activate the rulebook at `HEAD`. Rejected if any candidate perspective boundary conflicts with an active bidding group.
+- `multorum rulebook uninstall` — Deactivate the active rulebook. Rejected if any live bidding group still depends on it.
+- `multorum rulebook validate` — Perform the same validation as `install` without activating the rulebook.
 
-**`rulebook install`** — Validate and activate the rulebook at `HEAD`. Rejected if the target conflicts with any active bidding group.
+### Perspective
 
-**`rulebook uninstall`** — Deactivate the active rulebook. Rejected if any live bidding group still depends on it.
+- `multorum perspective list` — List the compiled perspectives from the active rulebook.
 
-**`rulebook validate`** — Same validation as `install`, without activating.
+### Orchestrator Worker Commands
 
-### Worker Lifecycle
+- `multorum worker create <perspective>` — Compile the selected perspective boundary, check it against active bidding groups, create the worker worktree, and materialize the runtime surface. Transition: new worker enters `ACTIVE`.
+- `multorum worker list` — List active workers.
+- `multorum worker show <worker-id>` — Return one worker in detail.
+- `multorum worker outbox <worker-id> [--after <sequence>]` — List worker-authored bundles from that worker's outbox. No lifecycle transition.
+- `multorum worker ack <worker-id> <sequence>` — Record orchestrator receipt for one worker outbox bundle. No lifecycle transition.
+- `multorum worker resolve <worker-id>` — Publish a `resolve` bundle to a blocked worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
+- `multorum worker revise <worker-id>` — Publish a `revise` bundle to a committed worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
+- `multorum worker merge <worker-id> [--skip-check <check>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. Transition: `COMMITTED` to `MERGED`.
+- `multorum worker discard <worker-id>` — Finalize a worker without integration. Allowed from `ACTIVE` or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
+- `multorum worker delete <worker-id>` — Delete the worktree of a finalized worker. Allowed only from `MERGED` or `DISCARDED`.
 
-**`create <perspective>`** — Compile boundaries, check against active groups, create worktree, materialize runtime surface. Transition: `ACTIVE`.
+### Worker-Local Commands
 
-**`resolve <worker-id>`** — Publish `resolve` to inbox. Transition: `BLOCKED` to `ACTIVE`.
-
-**`revise <worker-id>`** — Publish `revise` to inbox. Transition: `COMMITTED` to `ACTIVE`.
-
-**`outbox <worker-id> [--after <sequence>]`** — List worker-authored bundles from that worker's outbox. No lifecycle transition.
-
-**`ack <worker-id> <sequence>`** — Record orchestrator receipt for one worker outbox bundle. No lifecycle transition.
-
-**`merge <worker-id>`** — Run merge pipeline. Transition: `COMMITTED` to `MERGED` if checks pass.
-
-**`discard <worker-id>`** — Finalize without merge. Workspace preserved until deleted.
-
-**`delete <worker-id>`** — Remove worktree of a finalized worker.
-
-### Worker-Originated
-
-**`commit`** — Submitted via outbox. Transition: `ACTIVE` to `COMMITTED`.
-
-**`report`** — Submitted via outbox. Transition: `ACTIVE` to `BLOCKED`.
+- `multorum local contract` — Load the immutable worker contract for the current worktree.
+- `multorum local status` — Return the projected status for the current worktree.
+- `multorum local inbox [--after <sequence>]` — List inbox messages for the current worker. No lifecycle transition.
+- `multorum local ack <sequence>` — Acknowledge one inbox message. Acknowledging `task`, `resolve`, or `revise` transitions the worker into `ACTIVE`.
+- `multorum local report [--head-commit <commit>]` — Publish a blocker report from the current worktree. Transition: `ACTIVE` to `BLOCKED`.
+- `multorum local commit --head-commit <commit>` — Publish a completed worker submission from the current worktree. Transition: `ACTIVE` to `COMMITTED`.
 
 ### Query
 
-**`status`** — Active workers, bidding-group membership, active rulebook commit, blocked workers.
+- `multorum status` — Return the full orchestrator status snapshot, including active workers, bidding-group membership, and the active rulebook commit.
 
 ### Utility
 
-**`util completion <shell>`** — Emit shell completions to stdout. Supported shells: `bash`, `zsh`, `fish`, `elvish`, `powershell`.
+- `multorum util completion <shell>` — Emit shell completions to stdout. Supported shells: `bash`, `zsh`, `fish`, `elvish`, `powershell`.
+
+### Transport
+
+- `multorum serve orchestrator` — Start the orchestrator MCP server on stdio from the workspace root.
+- `multorum serve worker` — Start the worker MCP server on stdio from inside a worker worktree.
