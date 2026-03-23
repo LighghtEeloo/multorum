@@ -138,7 +138,7 @@ pub struct DeleteResult {
     pub state: WorkerState,
     /// Absolute path to the worker workspace.
     pub worktree_path: PathBuf,
-    /// Whether a workspace directory existed and was removed.
+    /// Whether the repository backend removed a managed worktree.
     pub deleted_workspace: bool,
 }
 

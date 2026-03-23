@@ -39,6 +39,10 @@ fn git(root: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
+fn git_worktree_list(root: &Path) -> String {
+    git(root, &["worktree", "list", "--porcelain"])
+}
+
 fn setup_repo() -> (TempDir, FsOrchestratorService, String) {
     setup_repo_with_rulebook(rulebook_toml())
 }
@@ -368,11 +372,14 @@ fn create_worker_reuses_explicit_worker_id_after_merge_when_overwriting() {
 
 #[test]
 fn delete_worker_removes_workspace_after_discard() {
-    let (_repo, orchestrator, _) = setup_repo();
+    let (repo, orchestrator, _) = setup_repo();
     let created = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
 
     orchestrator.discard_worker(created.worker_id.clone()).unwrap();
     assert!(created.worktree_path.exists());
+    assert!(
+        git_worktree_list(repo.path()).contains(created.worktree_path.to_string_lossy().as_ref())
+    );
 
     let deleted = orchestrator.delete_worker(created.worker_id.clone()).unwrap();
 
@@ -381,12 +388,35 @@ fn delete_worker_removes_workspace_after_discard() {
     assert_eq!(deleted.worktree_path, created.worktree_path);
     assert!(deleted.deleted_workspace);
     assert!(!created.worktree_path.exists());
+    assert!(
+        !git_worktree_list(repo.path()).contains(created.worktree_path.to_string_lossy().as_ref())
+    );
 
     let recreated = orchestrator
         .create_worker(CreateWorker::new(perspective()).with_worker_id(created.worker_id.clone()))
         .unwrap();
     assert_eq!(recreated.worker_id, created.worker_id);
     assert!(recreated.worktree_path.exists());
+}
+
+#[test]
+fn delete_worker_clears_git_worktree_registration_after_manual_directory_removal() {
+    let (repo, orchestrator, _) = setup_repo();
+    let created = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    orchestrator.discard_worker(created.worker_id.clone()).unwrap();
+    fs::remove_dir_all(&created.worktree_path).unwrap();
+    assert!(!created.worktree_path.exists());
+    assert!(
+        git_worktree_list(repo.path()).contains(created.worktree_path.to_string_lossy().as_ref())
+    );
+
+    let deleted = orchestrator.delete_worker(created.worker_id.clone()).unwrap();
+
+    assert!(deleted.deleted_workspace);
+    assert!(
+        !git_worktree_list(repo.path()).contains(created.worktree_path.to_string_lossy().as_ref())
+    );
 }
 
 #[test]

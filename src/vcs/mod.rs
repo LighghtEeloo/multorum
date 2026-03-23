@@ -54,9 +54,14 @@ pub trait VersionControl: std::fmt::Debug + Send + Sync {
     ) -> Result<(), RuntimeError>;
 
     /// Remove a previously-managed worker worktree.
+    ///
+    /// Returns `true` when the backend had an attached worktree entry
+    /// to remove, even if the directory was already missing on disk.
+    /// `multorum worker delete` relies on the backend instead of raw
+    /// filesystem deletion so repository metadata stays consistent.
     fn remove_worktree(
         &self, workspace_root: &Path, worktree_root: &Path,
-    ) -> Result<(), RuntimeError>;
+    ) -> Result<bool, RuntimeError>;
 
     /// Refuse integration when the canonical workspace already carries
     /// unrelated tracked modifications.

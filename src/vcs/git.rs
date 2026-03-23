@@ -52,6 +52,24 @@ impl GitVcs {
         })
     }
 
+    /// Return whether Git still tracks `worktree_root` as one of the
+    /// repository's attached worktrees.
+    ///
+    /// Note: `multorum worker delete` must clear Git's administrative
+    /// worktree entry even when the directory vanished on disk.
+    fn is_registered_worktree(
+        &self, workspace_root: &Path, worktree_root: &Path,
+    ) -> Result<bool, RuntimeError> {
+        let mut command = self.git_command(workspace_root);
+        command.arg("worktree").arg("list").arg("--porcelain");
+        let output = self.run_command(command, "list worktrees")?;
+        let expected = normalize_worktree_path(workspace_root, worktree_root);
+        Ok(output
+            .lines()
+            .filter_map(|line| line.strip_prefix("worktree "))
+            .any(|entry| normalize_worktree_path(workspace_root, Path::new(entry)) == expected))
+    }
+
     fn install_worker_exclude(&self, worktree_root: &Path) -> Result<(), RuntimeError> {
         let mut command = self.git_command(worktree_root);
         command.arg("rev-parse").arg("--git-path").arg("info/exclude");
@@ -202,14 +220,21 @@ impl VersionControl for GitVcs {
 
     fn remove_worktree(
         &self, workspace_root: &Path, worktree_root: &Path,
-    ) -> Result<(), RuntimeError> {
-        if !worktree_root.exists() {
-            return Ok(());
+    ) -> Result<bool, RuntimeError> {
+        if !self.is_registered_worktree(workspace_root, worktree_root)? {
+            tracing::debug!(
+                backend = self.backend_name(),
+                root = %workspace_root.display(),
+                worktree_root = %worktree_root.display(),
+                "skipping worktree removal because git has no matching registration"
+            );
+            return Ok(false);
         }
 
         let mut command = self.git_command(workspace_root);
         command.arg("worktree").arg("remove").arg("--force").arg(worktree_root);
-        self.run_command(command, "remove worktree").map(|_| ())
+        self.run_command(command, "remove worktree")?;
+        Ok(true)
     }
 
     fn ensure_clean_workspace(&self, workspace_root: &Path) -> Result<(), RuntimeError> {
@@ -266,6 +291,14 @@ impl VersionControl for GitVcs {
 fn absolutize_git_path(worktree_root: &Path, path: &str) -> PathBuf {
     let candidate = PathBuf::from(path);
     if candidate.is_absolute() { candidate } else { worktree_root.join(candidate) }
+}
+
+fn normalize_worktree_path(workspace_root: &Path, worktree_root: &Path) -> PathBuf {
+    if worktree_root.is_absolute() {
+        worktree_root.to_path_buf()
+    } else {
+        workspace_root.join(worktree_root)
+    }
 }
 
 fn command_failure_details(stdout: &[u8], stderr: &[u8]) -> String {

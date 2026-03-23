@@ -314,9 +314,7 @@ impl FsOrchestratorService {
     }
 
     fn cleanup_workspace_before_create(&self, record: &WorkerRecord) -> Result<()> {
-        if record.worktree_path.exists() {
-            self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
-        }
+        self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
         Ok(())
     }
 
@@ -336,11 +334,10 @@ impl FsOrchestratorService {
     }
 
     fn delete_worker_workspace(&self, record: &WorkerRecord) -> Result<bool> {
-        if !record.worktree_path.exists() {
-            return Ok(false);
-        }
-        self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?;
-        Ok(true)
+        // Note: finalized worktrees must be deleted through the VCS
+        // backend so Git drops the administrative entry even when the
+        // worktree directory has already been removed manually.
+        self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)
     }
 
     fn publish_worker_inbox(
