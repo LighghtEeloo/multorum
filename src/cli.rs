@@ -15,7 +15,8 @@
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 
 use crate::{
     perspective::PerspectiveName,
@@ -41,16 +42,21 @@ impl Cli {
     /// Parse command-line arguments and execute the instruction.
     pub fn run() {
         let cli = Self::parse();
-        let services = match CliServices::from_current_dir() {
-            | Ok(services) => services,
-            | Err(error) => {
-                eprintln!("error: {error}");
-                std::process::exit(1);
+        match cli.command {
+            | Command::Util { command } => command.execute(),
+            | Command::Runtime(command) => {
+                let services = match CliServices::from_current_dir() {
+                    | Ok(services) => services,
+                    | Err(error) => {
+                        eprintln!("error: {error}");
+                        std::process::exit(1);
+                    }
+                };
+                if let Err(error) = command.execute(&services) {
+                    eprintln!("error: {error}");
+                    std::process::exit(1);
+                }
             }
-        };
-        if let Err(error) = cli.command.execute(&services) {
-            eprintln!("error: {error}");
-            std::process::exit(1);
         }
     }
 }
@@ -118,8 +124,26 @@ impl ReplyReferenceArgs {
 }
 
 /// Top-level CLI commands.
+///
+/// Runtime commands (rulebook, perspective, worker, etc.) require a
+/// Multorum repository and are flattened into the top-level namespace.
+/// Utility commands are self-contained and never need runtime services.
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Runtime commands that operate on a Multorum repository.
+    #[command(flatten)]
+    Runtime(RuntimeCommand),
+
+    /// Shell utilities.
+    Util {
+        #[command(subcommand)]
+        command: UtilCommand,
+    },
+}
+
+/// Commands that require a Multorum repository and runtime services.
+#[derive(Debug, Subcommand)]
+pub enum RuntimeCommand {
     /// Manage the active rulebook.
     Rulebook {
         #[command(subcommand)]
@@ -152,6 +176,19 @@ pub enum Command {
 
     /// Return the full orchestrator status snapshot.
     Status,
+}
+
+/// Shell utility commands.
+#[derive(Debug, Subcommand)]
+pub enum UtilCommand {
+    /// Emit shell completions to stdout.
+    ///
+    /// Source the output in your shell profile to enable tab completion.
+    /// For example: `source <(multorum util completion bash)`.
+    Completion {
+        /// Target shell.
+        shell: Shell,
+    },
 }
 
 /// Perspective inspection commands.
@@ -361,8 +398,22 @@ impl RulebookCommand {
     }
 }
 
-impl Command {
-    /// Execute the orchestrator instruction.
+impl UtilCommand {
+    /// Execute one utility command.
+    ///
+    /// Utility commands are self-contained and never need runtime services.
+    pub fn execute(self) {
+        match self {
+            | Self::Completion { shell } => {
+                let mut cmd = Cli::command();
+                clap_complete::generate(shell, &mut cmd, "multorum", &mut std::io::stdout());
+            }
+        }
+    }
+}
+
+impl RuntimeCommand {
+    /// Execute one runtime command against the given services.
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
             | Self::Rulebook { command } => command.execute(services)?,
