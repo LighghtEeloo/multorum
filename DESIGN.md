@@ -9,7 +9,8 @@
 5. [Worker Lifecycle](#worker-lifecycle)
 6. [Mailbox Protocol](#mailbox-protocol)
 7. [Merge Pipeline](#merge-pipeline)
-8. [Instruction Reference](#instruction-reference)
+8. [MCP Surface](#mcp-surface)
+9. [Instruction Reference](#instruction-reference)
 
 ---
 
@@ -394,6 +395,48 @@ After scope enforcement passes, Multorum runs the checks declared in `[check.pip
 ### Evidence
 
 Workers may submit evidence with their reports or commits to support the case for merging or to ask the orchestrator to skip `skippable` checks. Evidence should include actual output or analysis, not just a claim — failed evidence is still valid when the worker wants the orchestrator to make a judgment call. Multorum carries evidence but does not judge it; the orchestrator decides whether to trust it or not.
+
+---
+
+## MCP Surface
+
+Multorum exposes the runtime model over the Model Context Protocol as a transport projection, not as a separate source of truth. The filesystem-backed runtime remains canonical.
+
+### Server Modes
+
+The MCP surface is split into two stdio servers:
+
+- orchestrator mode, started from the workspace root
+- worker mode, started from inside one managed worker worktree
+
+Each mode exposes only the tools and resources that make sense for that runtime role.
+
+### Tools
+
+MCP tools mirror the explicit runtime instructions. Their arguments are typed in the protocol schema so hosts can validate and render them correctly:
+
+- strings for identifiers, paths, and commit references
+- integers for mailbox sequence numbers
+- booleans for explicit flags
+- arrays of strings for repeated path or check arguments
+
+Tool results are JSON payloads. Runtime failures remain tool-level failures rather than protocol transport failures.
+
+### Resources
+
+MCP resources expose read-only projections of runtime state and are returned as JSON.
+
+Concrete resources should list only currently implemented projections. Parameterized URIs belong in resource templates rather than in the concrete resource list.
+
+Current discovery rules:
+
+- concrete resources cover fixed snapshots such as orchestrator status, the active rulebook commit, worker inbox contents, and worker status
+- parameterized templates cover projections that require a runtime identity, such as orchestrator-side worker detail
+- projections that are not implemented yet must not be advertised as concrete resources
+
+### Error Contract
+
+MCP-visible error codes are stable protocol values, independent of Rust enum variant names. Tool-level failures and resource-read failures should preserve the underlying domain category where possible, for example distinguishing invalid parameters from missing runtime objects.
 
 ---
 
