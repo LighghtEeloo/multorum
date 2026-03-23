@@ -1,4 +1,4 @@
 interface:
   display_name: "Multorum Orchestrator"
-  short_description: "Run Multorum as the central coordinator agent"
-  default_prompt: "Use $multorum-orchestrator to coordinate workers through the Multorum CLI and MCP surfaces."
+  short_description: "Coordinate Multorum from the canonical workspace"
+  default_prompt: "Use $multorum-orchestrator to manage rulebooks and workers through `multorum rulebook ...`, `multorum perspective list`, `multorum worker ...`, and the orchestrator MCP surface."

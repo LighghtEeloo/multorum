@@ -1,4 +1,4 @@
 interface:
   display_name: "Multorum Worker"
-  short_description: "Operate inside one Multorum worker perspective safely"
-  default_prompt: "Use $multorum-worker to execute a task inside a Multorum worker perspective with the CLI or MCP surface."
+  short_description: "Operate inside one Multorum worker worktree safely"
+  default_prompt: "Use $multorum-worker to execute a task inside one Multorum worker worktree through `multorum local ...` or the worker MCP surface."
