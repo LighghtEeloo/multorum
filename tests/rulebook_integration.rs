@@ -38,7 +38,7 @@ fn design_doc_rulebook() -> String {
     let design_doc =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("DESIGN.md")).unwrap();
     let (_, after_heading) =
-        design_doc.split_once("### Example Rulebook").expect("DESIGN.md must contain the example");
+        design_doc.split_once("### Complete Example Rulebook").expect("DESIGN.md must contain the example");
     let (_, after_fence) =
         after_heading.split_once("```toml").expect("example rulebook must be fenced as TOML");
     let (rulebook, _) = after_fence.split_once("```").expect("example rulebook fence must close");
