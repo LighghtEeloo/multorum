@@ -321,12 +321,18 @@ pub enum RulebookCommand {
     /// Compiles the rulebook at HEAD and checks that no active
     /// bidding-group boundary conflicts with any candidate boundary in
     /// the new rulebook. If valid, the new rulebook becomes active.
-    Switch,
+    Install,
+
+    /// Deactivate the active rulebook.
+    ///
+    /// Removes the active rulebook projection. Rejected if any live
+    /// bidding group still depends on the active rulebook.
+    Uninstall,
 
     /// Dry-run rulebook validation without making changes.
     ///
-    /// Performs the same validation as `rulebook switch` but does not
-    /// activate. Useful to test whether a switch is currently possible.
+    /// Performs the same validation as `rulebook install` but does not
+    /// activate. Useful to test whether an install is currently possible.
     Validate,
 }
 
@@ -338,8 +344,12 @@ impl RulebookCommand {
                 let result = services.orchestrator.rulebook_init()?;
                 println!("{result:#?}");
             }
-            | Self::Switch => {
-                let result = services.orchestrator.rulebook_switch()?;
+            | Self::Install => {
+                let result = services.orchestrator.rulebook_install()?;
+                println!("{result:#?}");
+            }
+            | Self::Uninstall => {
+                let result = services.orchestrator.rulebook_uninstall()?;
                 println!("{result:#?}");
             }
             | Self::Validate => {

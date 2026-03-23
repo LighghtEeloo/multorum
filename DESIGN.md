@@ -197,20 +197,22 @@ pipeline = []
 
 ### Activation and Immutability
 
-Because the rulebook is version-controlled, every historical state is addressable by commit hash. When Multorum activates a rulebook, it pins that exact commit. Active workers are governed by an immutable snapshot — editing the file on disk does nothing until the orchestrator explicitly switches rulebooks.
+Because the rulebook is version-controlled, every historical state is addressable by commit hash. When Multorum activates a rulebook, it pins that exact commit. Active workers are governed by an immutable snapshot — editing the file on disk does nothing until the orchestrator explicitly installs a new rulebook.
 
-### Rulebook Switching
+### Rulebook Install and Uninstall
 
-The orchestrator evolves the rulebook through normal commits. Multorum never follows new commits automatically. To advance policy, the orchestrator issues `rulebook switch`, which validates the rulebook at `HEAD` against currently active workers.
+The orchestrator evolves the rulebook through normal commits. Multorum never follows new commits automatically. To advance policy, the orchestrator issues `rulebook install`, which validates the rulebook at `HEAD` against currently active workers.
 
-Switching is file-based, not name-based. Multorum:
+Install is file-based, not name-based. Multorum:
 
 1. collects the materialized read and write sets of all active bidding groups
 2. compiles the target rulebook at `HEAD`
 3. treats each target perspective as a candidate future bidding group
 4. checks each candidate against each active group using the conflict-free invariant
 
-If every candidate is compatible, the switch succeeds. Perspectives may be renamed, split, merged, or replaced, as long as active file boundaries remain conflict-free. On failure, Multorum rejects the switch and reports the blocking groups.
+If every candidate is compatible, the install succeeds. Perspectives may be renamed, split, merged, or replaced, as long as active file boundaries remain conflict-free. On failure, Multorum rejects the install and reports the blocking groups.
+
+`rulebook uninstall` deactivates the active rulebook. It is rejected when any live bidding group still depends on the active rulebook.
 
 ---
 
@@ -401,9 +403,11 @@ Workers may submit evidence with their reports or commits to support the case fo
 
 **`rulebook init`** — Initialize `.multorum/`, write the default template if absent, prepare `.gitignore`, create orchestrator runtime directories.
 
-**`rulebook switch`** — Validate and activate the rulebook at `HEAD`. Rejected if the target conflicts with any active bidding group.
+**`rulebook install`** — Validate and activate the rulebook at `HEAD`. Rejected if the target conflicts with any active bidding group.
 
-**`rulebook validate`** — Same validation as `switch`, without activating.
+**`rulebook uninstall`** — Deactivate the active rulebook. Rejected if any live bidding group still depends on it.
+
+**`rulebook validate`** — Same validation as `install`, without activating.
 
 ### Worker Lifecycle
 

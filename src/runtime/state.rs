@@ -50,20 +50,27 @@ pub struct PerspectiveSummary {
     pub write_count: usize,
 }
 
-/// Result of validating a rulebook switch.
+/// Result of validating a rulebook install.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RulebookValidation {
     /// `true` if the target rulebook may be activated.
     pub ok: bool,
-    /// Perspectives with live runtime boundaries that still block the switch.
+    /// Perspectives with live runtime boundaries that still block the install.
     pub blocking_perspectives: Vec<PerspectiveName>,
 }
 
-/// Result of activating a rulebook switch.
+/// Result of activating a rulebook install.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct RulebookSwitch {
+pub struct RulebookInstall {
     /// Activated canonical rulebook commit hash.
     pub active_commit: CanonicalCommitHash,
+}
+
+/// Result of deactivating the active rulebook.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RulebookUninstall {
+    /// Previously active canonical rulebook commit hash.
+    pub previous_commit: CanonicalCommitHash,
 }
 
 /// Summary of one active bidding group.

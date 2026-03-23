@@ -17,7 +17,7 @@ pub type Result<T> = std::result::Result<T, RuntimeError>;
 #[derive(Debug, Error)]
 pub enum RuntimeError {
     /// The runtime has not activated a rulebook yet.
-    #[error("no active rulebook; run `multorum rulebook switch <commit>` first")]
+    #[error("no active rulebook; run `multorum rulebook install` first")]
     MissingActiveRulebook,
 
     /// The workspace already has a committed rulebook.
@@ -75,7 +75,7 @@ pub enum RuntimeError {
     #[error("message already acknowledged")]
     AlreadyAcknowledged,
 
-    /// The requested rulebook switch conflicts with active workers.
+    /// The requested rulebook install or uninstall conflicts with active workers.
     #[error(
         "cannot activate rulebook commit `{commit}` while active perspectives are still live: {blocking_perspectives}",
         blocking_perspectives = format_perspectives(blocking_perspectives)

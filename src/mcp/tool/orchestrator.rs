@@ -92,8 +92,13 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
             inputs: &[],
         },
         ToolDescriptor {
-            name: "rulebook_switch",
+            name: "rulebook_install",
             description: "Activate the HEAD rulebook after validation.",
+            inputs: &[],
+        },
+        ToolDescriptor {
+            name: "rulebook_uninstall",
+            description: "Deactivate the active rulebook. Rejected if any live bidding group still depends on it.",
             inputs: &[],
         },
         ToolDescriptor {

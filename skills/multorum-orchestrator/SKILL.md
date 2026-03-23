@@ -1,6 +1,6 @@
 ---
 name: "multorum-orchestrator"
-description: "Coordinate a Multorum session from the canonical workspace. Use when Codex is acting as the central orchestrator and must decompose work, select or switch rulebooks, provision perspectives, review worker transcripts and check results, resolve blockers, request revisions, discard work, or integrate submissions through the Multorum CLI or the orchestrator MCP surface."
+description: "Coordinate a Multorum session from the canonical workspace. Use when Codex is acting as the central orchestrator and must decompose work, install or uninstall rulebooks, provision perspectives, review worker transcripts and check results, resolve blockers, request revisions, discard work, or integrate submissions through the Multorum CLI or the orchestrator MCP surface."
 ---
 
 # Multorum Orchestrator
@@ -13,7 +13,7 @@ Coordinate the system from the main workspace. Treat Multorum as reactive infras
 - Decompose tasks so active workers do not depend on each other's unpublished output.
 - Respect the safety property: a file may be written by exactly one perspective or read by many, never both.
 - Treat the read set as a stability contract and the write set as an absolute ownership boundary.
-- Treat new files, missing permissions, and cross-perspective edits as orchestrator work. Update the rulebook, switch rulebooks, and reprovision instead of telling a worker to proceed anyway.
+- Treat new files, missing permissions, and cross-perspective edits as orchestrator work. Update the rulebook, install a new rulebook, and reprovision instead of telling a worker to proceed anyway.
 
 ## Check The Runtime First
 
@@ -32,7 +32,8 @@ When you publish a bundle with a body path or artifact path, treat those paths a
 ### Orchestrator MCP tools
 
 - `rulebook_validate`
-- `rulebook_switch`
+- `rulebook_install`
+- `rulebook_uninstall`
 - `list_perspectives`
 - `provision_worker`
 - `resolve_worker`
@@ -55,7 +56,8 @@ When you publish a bundle with a body path or artifact path, treat those paths a
 
 ```bash
 multorum rulebook validate <commit>
-multorum rulebook switch <commit>
+multorum rulebook install
+multorum rulebook uninstall
 multorum provision <perspective> [--body task.md] [--artifact FILE ...]
 multorum resolve <perspective> [--reply-to <sequence>] [--body resolve.md] [--artifact FILE ...]
 multorum revise <perspective> [--reply-to <sequence>] [--body revise.md] [--artifact FILE ...]
@@ -67,7 +69,7 @@ multorum status
 ## Run The Session Deliberately
 
 1. Inspect current state with `get_status` or `multorum status`.
-2. Validate a rulebook commit before switching whenever worker activity makes conflicts possible.
+2. Validate a rulebook commit before installing whenever worker activity makes conflicts possible.
 3. Enumerate perspectives before assigning work so the task matches an existing ownership boundary.
 4. Provision exactly one worker per perspective and attach an initial task body when the worker needs nontrivial instructions.
 5. Review worker contract, transcript, and check results before deciding whether to resolve, revise, discard, or integrate.

@@ -63,6 +63,15 @@ impl RuntimeFs {
         Self::write_toml(&orchestrator.active_rulebook(), record)
     }
 
+    /// Remove the active rulebook projection.
+    pub(crate) fn remove_active_rulebook(&self) -> Result<(), RuntimeError> {
+        let path = self.paths.orchestrator().active_rulebook();
+        if path.exists() {
+            fs::remove_file(&path)?;
+        }
+        Ok(())
+    }
+
     /// Load and compile a rulebook at one pinned commit.
     pub(crate) fn load_compiled_rulebook(
         &self, commit: &CanonicalCommitHash,

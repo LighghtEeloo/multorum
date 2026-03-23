@@ -17,8 +17,8 @@ use super::{
     error::{Result, RuntimeError},
     state::{
         BiddingGroupSummary, CreateResult, DeleteResult, DiscardResult, MergeResult,
-        OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookSwitch, RulebookValidation,
-        WorkerDetail, WorkerState, WorkerSummary,
+        OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookInstall, RulebookUninstall,
+        RulebookValidation, WorkerDetail, WorkerState, WorkerSummary,
     },
     storage::{
         ActiveRulebookRecord, RuntimeFs, WorkerRecord, is_live_worker_state, timestamp_now,
@@ -82,11 +82,17 @@ pub trait OrchestratorService {
     /// Initialize `.multorum/` with the default committed artifacts.
     fn rulebook_init(&self) -> Result<RulebookInit>;
 
-    /// Dry-run validation of a rulebook switch against HEAD.
+    /// Dry-run validation of a rulebook install against HEAD.
     fn rulebook_validate(&self) -> Result<RulebookValidation>;
 
     /// Activate the HEAD rulebook after validation succeeds.
-    fn rulebook_switch(&self) -> Result<RulebookSwitch>;
+    fn rulebook_install(&self) -> Result<RulebookInstall>;
+
+    /// Deactivate the active rulebook.
+    ///
+    /// Refused when any live bidding group still depends on the active
+    /// rulebook.
+    fn rulebook_uninstall(&self) -> Result<RulebookUninstall>;
 
     /// List compiled perspective summaries from the active rulebook.
     fn list_perspectives(&self) -> Result<Vec<PerspectiveSummary>>;
@@ -394,7 +400,7 @@ impl OrchestratorService for FsOrchestratorService {
         self.validate_rulebook_commit(&commit)
     }
 
-    fn rulebook_switch(&self) -> Result<RulebookSwitch> {
+    fn rulebook_install(&self) -> Result<RulebookInstall> {
         let commit = self.fs.vcs().head_commit(self.fs.workspace_root())?;
         let validation = self.validate_rulebook_commit(&commit)?;
         if !validation.ok {
@@ -407,8 +413,29 @@ impl OrchestratorService for FsOrchestratorService {
         let record =
             ActiveRulebookRecord { base_commit: commit.clone(), activated_at: timestamp_now() };
         self.fs.store_active_rulebook(&record)?;
-        tracing::info!(base_commit = %record.base_commit, "activated rulebook");
-        Ok(RulebookSwitch { active_commit: record.base_commit })
+        tracing::info!(base_commit = %record.base_commit, "installed rulebook");
+        Ok(RulebookInstall { active_commit: record.base_commit })
+    }
+
+    fn rulebook_uninstall(&self) -> Result<RulebookUninstall> {
+        let active = self.fs.load_active_rulebook()?;
+        let active_workers = self.active_workers()?;
+        if !active_workers.is_empty() {
+            let blocking_perspectives = active_workers
+                .iter()
+                .map(|record| record.perspective.clone())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            return Err(RuntimeError::RulebookConflict {
+                commit: active.base_commit,
+                blocking_perspectives,
+            });
+        }
+
+        self.fs.remove_active_rulebook()?;
+        tracing::info!(base_commit = %active.base_commit, "uninstalled rulebook");
+        Ok(RulebookUninstall { previous_commit: active.base_commit })
     }
 
     fn list_perspectives(&self) -> Result<Vec<PerspectiveSummary>> {

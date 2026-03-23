@@ -17,7 +17,7 @@ pub enum McpErrorCode {
     MessageNotFound,
     /// Message bundle already acknowledged.
     AlreadyAcknowledged,
-    /// Rulebook switch conflicts with active workers.
+    /// Rulebook install or uninstall conflicts with active workers.
     RulebookConflict,
     /// Requested check failed.
     CheckFailed,

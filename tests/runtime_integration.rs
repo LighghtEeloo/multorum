@@ -60,7 +60,7 @@ fn setup_repo_with_rulebook(rulebook_toml: &str) -> (TempDir, FsOrchestratorServ
 
     let head = git(dir.path(), &["rev-parse", "HEAD"]);
     let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
-    orchestrator.rulebook_switch().unwrap();
+    orchestrator.rulebook_install().unwrap();
     (dir, orchestrator, head)
 }
 
@@ -406,11 +406,11 @@ fn delete_worker_rejects_live_worker() {
 }
 
 #[test]
-fn rulebook_switch_persists_canonical_head_commit() {
+fn rulebook_install_persists_canonical_head_commit() {
     let (repo, orchestrator, head) = setup_repo();
 
-    let switch = orchestrator.rulebook_switch().unwrap();
-    assert_eq!(switch.active_commit.as_str(), head);
+    let install = orchestrator.rulebook_install().unwrap();
+    assert_eq!(install.active_commit.as_str(), head);
 
     let status = orchestrator.status().unwrap();
     assert_eq!(status.active_rulebook_commit.as_str(), head);

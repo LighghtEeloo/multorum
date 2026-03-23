@@ -27,7 +27,7 @@ When the orchestrator creates a worker from a perspective, Multorum creates a gi
 
 If the orchestrator wants multiple attempts at the same role, it can create multiple workers from the same perspective. Those workers form a *bidding group*: they share the same base snapshot and scope, and at most one of them may ultimately merge.
 
-The active rulebook is immutable by commit hash. Changing `rulebook.toml` on disk does nothing until the orchestrator explicitly switches Multorum to a new committed version.
+The active rulebook is immutable by commit hash. Changing `rulebook.toml` on disk does nothing until the orchestrator explicitly installs a new committed version.
 
 ## Conflict-Free Model
 
