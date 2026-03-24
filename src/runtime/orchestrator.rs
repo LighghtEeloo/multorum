@@ -26,7 +26,7 @@ use super::{
         ActiveRulebookRecord, RuntimeFs, WorkerRecord, is_live_worker_state, timestamp_now,
         validate_skip_request,
     },
-    worker_id::WorkerId,
+    worker::WorkerId,
 };
 
 /// Request to create one worker from a compiled perspective.

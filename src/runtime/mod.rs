@@ -15,7 +15,6 @@ pub(crate) mod project;
 pub mod projection;
 pub mod state;
 pub mod worker;
-pub mod worker_id;
 
 pub use bundle::{
     BundleEnvelope, BundlePayload, MessageKind, MessageRef, PublishedBundle, ReplyReference,
@@ -32,5 +31,4 @@ pub use state::{
     RulebookInstall, RulebookUninstall, RulebookValidation, WorkerContractView, WorkerDetail,
     WorkerState, WorkerStatus, WorkerSummary,
 };
-pub use worker::{FsWorkerService, WorkerService};
-pub use worker_id::{WorkerId, WorkerIdError};
+pub use worker::{FsWorkerService, WorkerId, WorkerIdError, WorkerService};

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
-use super::worker_id::WorkerId;
+use super::worker::WorkerId;
 
 /// Monotonic per-mailbox sequence number.
 ///
