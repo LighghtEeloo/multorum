@@ -13,6 +13,12 @@ Do not keep transitional layers, compatibility shims, or legacy interfaces unles
 explicitly required by the task. If compatibility or migration concerns conflict with a
 clearer design, prefer the clearer design.
 
+Before and after any edit to DESIGN.md, evaluate the document as a reader.
+- Is the structure clear and logically ordered?
+- Does the prose read like it was written by a knowledgeable practitioner, not like generated text?
+- Are there redundant or overlapping sections that should be merged or reordered?
+Apply these standards to every edit.
+
 ## Documentation and Language
 
 Actively write documentation for the program. Make sure *all* public APIs are documented.
