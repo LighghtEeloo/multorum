@@ -78,7 +78,8 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::InvalidState { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,
             | RuntimeError::AlreadyAcknowledged => McpErrorCode::AlreadyAcknowledged,
-            | RuntimeError::RulebookConflict { .. } => McpErrorCode::RulebookConflict,
+            | RuntimeError::RulebookConflict { .. }
+            | RuntimeError::ActivePerspectiveIncompatible { .. } => McpErrorCode::RulebookConflict,
             | RuntimeError::ConflictWithActiveBiddingGroup { .. }
             | RuntimeError::BiddingGroupBoundaryMismatch { .. }
             | RuntimeError::CheckFailed(_) => McpErrorCode::CheckFailed,

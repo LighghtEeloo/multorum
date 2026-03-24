@@ -198,18 +198,62 @@ impl FsOrchestratorService {
         Self::new(project.orchestrator_workspace_root()?.to_path_buf())
     }
 
+    /// Validate that a target rulebook commit is safe to activate.
+    ///
+    /// Enforces two conditions:
+    ///
+    /// **Continuity** — every active bidding group's perspective must
+    /// exist in the target with a boundary that is a superset of (or
+    /// equal to) the group's materialized boundary.
+    ///
+    /// **Conflict-freedom** — every candidate perspective must satisfy
+    /// the conflict-free invariant against every active group whose
+    /// name differs from the candidate.
     fn validate_rulebook_commit(&self, commit: &CanonicalCommitHash) -> Result<RulebookValidation> {
         let compiled = self.fs.load_compiled_rulebook(commit)?;
         let active_groups = self.active_bidding_groups()?;
 
+        // Continuity: each active group's perspective must still exist
+        // with a boundary that is a superset of the materialized one.
+        for active_group in &active_groups {
+            let Some(target) = compiled.perspectives().get(&active_group.perspective) else {
+                return Err(RuntimeError::ActivePerspectiveIncompatible {
+                    commit: commit.clone(),
+                    perspective: active_group.perspective.clone(),
+                    reason: "does not exist in the target rulebook",
+                });
+            };
+
+            if !target.write().is_superset(active_group.boundary.write()) {
+                return Err(RuntimeError::ActivePerspectiveIncompatible {
+                    commit: commit.clone(),
+                    perspective: active_group.perspective.clone(),
+                    reason: "has a reduced write set in the target rulebook",
+                });
+            }
+
+            if !target.read().is_superset(active_group.boundary.read()) {
+                return Err(RuntimeError::ActivePerspectiveIncompatible {
+                    commit: commit.clone(),
+                    perspective: active_group.perspective.clone(),
+                    reason: "has a reduced read set in the target rulebook",
+                });
+            }
+        }
+
+        // Conflict-freedom: each candidate must not conflict with any
+        // active group of a different name.
         let mut blocking_perspectives = BTreeSet::new();
         for active_group in &active_groups {
             for (candidate_name, candidate) in compiled.perspectives().perspectives() {
+                if *candidate_name == active_group.perspective {
+                    continue;
+                }
                 if boundary_conflict(
-                    &active_group.perspective,
-                    &active_group.boundary,
                     candidate_name,
                     candidate,
+                    &active_group.perspective,
+                    &active_group.boundary,
                 )
                 .is_some()
                 {

@@ -705,3 +705,253 @@ fn send_commit_reports_missing_commit_with_worktree_context() {
             && commit == "deadbeef"
     ));
 }
+
+// --- Rulebook install continuity and conflict-freedom ---
+
+/// Commit a new rulebook.toml and return the new HEAD.
+fn commit_new_rulebook(repo: &Path, rulebook_toml: &str) -> String {
+    fs::write(repo.join(".multorum/rulebook.toml"), rulebook_toml).unwrap();
+    git(repo, &["add", ".multorum/rulebook.toml"]);
+    git(repo, &["commit", "-m", "docs: update rulebook"]);
+    git(repo, &["rev-parse", "HEAD"])
+}
+
+#[test]
+fn reinstall_same_rulebook_succeeds_with_active_workers() {
+    let (repo, orchestrator, _) = setup_repo();
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    // Commit an unrelated file so HEAD advances, but rulebook stays the same.
+    fs::write(repo.path().join("README.md"), "hello").unwrap();
+    git(repo.path(), &["add", "README.md"]);
+    git(repo.path(), &["commit", "-m", "docs: add readme"]);
+
+    let result = orchestrator.rulebook_install();
+    assert!(result.is_ok());
+}
+
+#[test]
+fn install_rejects_removed_active_perspective() {
+    let (repo, orchestrator, _) = setup_repo();
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    // New rulebook removes AuthImplementor entirely.
+    commit_new_rulebook(
+        repo.path(),
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+
+            [perspective.DifferentRole]
+            read = "Owned"
+            write = "Other"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+
+    let error = orchestrator.rulebook_install().unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::ActivePerspectiveIncompatible {
+            perspective: p,
+            reason,
+            ..
+        } if p == perspective() && reason.contains("does not exist")
+    ));
+}
+
+#[test]
+fn install_rejects_reduced_write_set() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::create_dir_all(dir.path().join(".multorum")).unwrap();
+    fs::write(dir.path().join("src/owned.rs"), "pub fn owned() {}").unwrap();
+    fs::write(dir.path().join("src/extra.rs"), "pub fn extra() {}").unwrap();
+    fs::write(dir.path().join("src/other.rs"), "pub fn other() {}").unwrap();
+    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\nworktrees/\n").unwrap();
+    fs::write(
+        dir.path().join(".multorum/rulebook.toml"),
+        r#"
+            [fileset]
+            Other.path = "src/other.rs"
+            All.path = "src/**"
+
+            [perspective.AuthImplementor]
+            read = "Other"
+            write = "All - Other"
+
+            [check]
+            pipeline = []
+        "#,
+    )
+    .unwrap();
+
+    git(dir.path(), &["init"]);
+    git(dir.path(), &["config", "user.name", "Multorum Test"]);
+    git(dir.path(), &["config", "user.email", "multorum@test.invalid"]);
+    git(dir.path(), &["config", "commit.gpgsign", "false"]);
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-m", "feat: init"]);
+
+    let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
+    orchestrator.rulebook_install().unwrap();
+    // Write set is {src/owned.rs, src/extra.rs} (All - Other).
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    // Shrink write set to just "Owned" = {src/owned.rs}, dropping src/extra.rs.
+    commit_new_rulebook(
+        dir.path(),
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other"
+            write = "Owned"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+
+    let error = orchestrator.rulebook_install().unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::ActivePerspectiveIncompatible {
+            perspective: p,
+            reason,
+            ..
+        } if p == perspective() && reason.contains("write set")
+    ));
+}
+
+#[test]
+fn install_rejects_reduced_read_set() {
+    let (repo, orchestrator, _) = setup_repo_with_rulebook(
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+            All.path = "src/**"
+
+            [perspective.AuthImplementor]
+            read = "All - Owned"
+            write = "Owned"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    // Shrink read set by removing a file from the glob.
+    // We can't easily shrink the glob itself, so remove the file from the repo.
+    fs::remove_file(repo.path().join("src/other.rs")).unwrap();
+    git(repo.path(), &["add", "src/other.rs"]);
+    git(repo.path(), &["commit", "-m", "repo: remove other.rs"]);
+
+    let error = orchestrator.rulebook_install().unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::ActivePerspectiveIncompatible {
+            perspective: p,
+            reason,
+            ..
+        } if p == perspective() && reason.contains("read set")
+    ));
+}
+
+#[test]
+fn install_allows_expanded_write_set() {
+    let (repo, orchestrator, _) = setup_repo();
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    // Add a new file and expand the write set to include it.
+    fs::write(repo.path().join("src/extra.rs"), "pub fn extra() {}").unwrap();
+    commit_new_rulebook(
+        repo.path(),
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Extra.path = "src/extra.rs"
+            Other.path = "src/other.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other"
+            write = "Owned | Extra"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+    // Need to commit extra.rs too so it's in the file tree.
+    git(repo.path(), &["add", "src/extra.rs"]);
+    git(repo.path(), &["commit", "-m", "feat: add extra.rs"]);
+
+    let result = orchestrator.rulebook_install();
+    assert!(result.is_ok());
+}
+
+#[test]
+fn install_allows_expanded_read_set() {
+    let (repo, orchestrator, _) = setup_repo();
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    // Add a new file and expand the read set to include it.
+    fs::write(repo.path().join("src/extra.rs"), "pub fn extra() {}").unwrap();
+    commit_new_rulebook(
+        repo.path(),
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Extra.path = "src/extra.rs"
+            Other.path = "src/other.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other | Extra"
+            write = "Owned"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+    git(repo.path(), &["add", "src/extra.rs"]);
+    git(repo.path(), &["commit", "-m", "feat: add extra.rs"]);
+
+    let result = orchestrator.rulebook_install();
+    assert!(result.is_ok());
+}
+
+#[test]
+fn install_rejects_new_perspective_conflicting_with_active_group() {
+    let (repo, orchestrator, _) = setup_repo();
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    // Add a new perspective that writes to the same file as the active group.
+    commit_new_rulebook(
+        repo.path(),
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other"
+            write = "Owned"
+
+            [perspective.Conflicting]
+            read = "Other"
+            write = "Owned"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+
+    let error = orchestrator.rulebook_install().unwrap_err();
+    assert!(matches!(error, RuntimeError::RulebookConflict { .. }));
+}

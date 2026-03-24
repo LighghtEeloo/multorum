@@ -115,6 +115,20 @@ pub enum RuntimeError {
         blocking_perspectives: Vec<PerspectiveName>,
     },
 
+    /// An active bidding group's perspective is missing or reduced in
+    /// the target rulebook.
+    #[error(
+        "cannot activate rulebook commit `{commit}`: active perspective `{perspective}` {reason}"
+    )]
+    ActivePerspectiveIncompatible {
+        /// Canonical rulebook commit the caller attempted to activate.
+        commit: CanonicalCommitHash,
+        /// Active perspective that is incompatible with the target.
+        perspective: PerspectiveName,
+        /// Human-readable explanation of the incompatibility.
+        reason: &'static str,
+    },
+
     /// A candidate bidding group conflicts with active runtime state.
     #[error(
         "cannot create worker for perspective `{perspective}` because active perspective `{blocking_perspective}` has a {relation}: {files}",
