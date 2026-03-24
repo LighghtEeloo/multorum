@@ -18,7 +18,7 @@ use super::{RuntimeError, WorkerPaths};
 pub(crate) enum RuntimeRole {
     /// Canonical workspace that owns `.multorum/orchestrator/`.
     Orchestrator,
-    /// Managed worker worktree under `.multorum/worktrees/<worker-id>/`.
+    /// Managed worker worktree under `.multorum/tr/<worker-id>/`.
     Worker,
 }
 
@@ -87,7 +87,7 @@ impl CurrentProject {
             }),
             | (None, true, false) => Err(RuntimeError::AmbiguousRuntimeRole {
                 repo_root,
-                details: "found a worker contract outside `.multorum/worktrees/<worker-id>`",
+                details: "found a worker contract outside `.multorum/tr/<worker-id>`",
             }),
             | (None, false, false) => Err(RuntimeError::UnmanagedProject(repo_root)),
         }
@@ -181,7 +181,7 @@ mod tests {
         fs::create_dir_all(dir.path().join(".multorum")).unwrap();
         fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
         fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
-        fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\nworktrees/\n").unwrap();
+        fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
         fs::write(dir.path().join(".multorum/rulebook.toml"), rulebook_toml()).unwrap();
 
         git(dir.path(), &["init"]);

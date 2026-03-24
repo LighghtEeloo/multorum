@@ -52,7 +52,7 @@ pub trait WorkerService {
 ///
 /// The service is bound to one active worker worktree and derives the
 /// canonical orchestrator control plane from the managed
-/// `.multorum/worktrees/<worker-id>` location created during worker
+/// `.multorum/tr/<worker-id>` location created during worker
 /// creation. Repository-specific discovery is delegated to the
 /// configured version-control backend.
 #[derive(Debug, Clone)]

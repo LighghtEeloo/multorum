@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 
 use super::{MailboxDirection, RuntimeError, WorkerId};
 
+/// Canonical gitignored directory name for managed worker worktrees.
+const WORKTREE_DIRECTORY_NAME: &str = "tr";
+
 /// Root path helper for a Multorum workspace.
 #[derive(Debug, Clone)]
 pub struct MultorumPaths {
@@ -50,8 +53,14 @@ impl MultorumPaths {
     }
 
     /// Path helper for the managed worker worktree.
+    ///
+    /// Note: The on-disk directory is abbreviated to `tr/` because the
+    /// runtime creates these paths frequently and the shorter name
+    /// keeps managed worktree paths compact.
     pub fn worker(&self, worker_id: &WorkerId) -> WorkerPaths {
-        WorkerPaths::new(self.multorum_root().join("worktrees").join(worker_id.as_str()))
+        WorkerPaths::new(
+            self.multorum_root().join(WORKTREE_DIRECTORY_NAME).join(worker_id.as_str()),
+        )
     }
 }
 
@@ -81,18 +90,17 @@ impl OrchestratorPaths {
     }
 
     /// Worker state projection directory.
-    pub fn workers(&self) -> PathBuf {
+    pub fn workers_dir(&self) -> PathBuf {
         self.root.join("workers")
     }
 
-    /// Worker-specific projection directory.
-    pub fn worker(&self, worker_id: &WorkerId) -> PathBuf {
-        self.workers().join(worker_id.as_str())
-    }
-
     /// Worker state projection file.
+    ///
+    /// Note: Each worker projection is one TOML file named after the
+    /// worker id so the orchestrator control plane stays shallow and
+    /// easy to inspect from disk.
     pub fn worker_state(&self, worker_id: &WorkerId) -> PathBuf {
-        self.worker(worker_id).join("state.toml")
+        self.workers_dir().join(format!("{}.toml", worker_id.as_str()))
     }
 
     /// Audit log directory.
@@ -133,17 +141,17 @@ impl WorkerPaths {
     /// Derive the canonical workspace root from a managed worker
     /// worktree path.
     pub(crate) fn workspace_root(&self) -> Result<PathBuf, RuntimeError> {
-        let worktrees_root = self.worktree_root.parent().ok_or_else(|| {
+        let worktree_root = self.worktree_root.parent().ok_or_else(|| {
             RuntimeError::MissingWorkerRuntime(self.worktree_root.display().to_string())
         })?;
-        let multorum_root = worktrees_root.parent().ok_or_else(|| {
+        let multorum_root = worktree_root.parent().ok_or_else(|| {
             RuntimeError::MissingWorkerRuntime(self.worktree_root.display().to_string())
         })?;
         let workspace_root = multorum_root.parent().ok_or_else(|| {
             RuntimeError::MissingWorkerRuntime(self.worktree_root.display().to_string())
         })?;
 
-        if worktrees_root.file_name() != Some(OsStr::new("worktrees"))
+        if worktree_root.file_name() != Some(OsStr::new(WORKTREE_DIRECTORY_NAME))
             || multorum_root.file_name() != Some(OsStr::new(".multorum"))
         {
             return Err(RuntimeError::MissingWorkerRuntime(

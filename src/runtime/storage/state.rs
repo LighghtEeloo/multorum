@@ -15,9 +15,9 @@ use crate::runtime::{
 };
 use crate::vcs::CanonicalCommitHash;
 
-use super::{ActiveRulebookRecord, RuntimeFs, STATE_FILE_NAME, WorkerRecord};
+use super::{ActiveRulebookRecord, RuntimeFs, WorkerRecord};
 
-const MULTORUM_GITIGNORE_ENTRIES: [&str; 2] = ["orchestrator/", "worktrees/"];
+const MULTORUM_GITIGNORE_ENTRIES: [&str; 2] = ["orchestrator/", "tr/"];
 
 impl RuntimeFs {
     /// Initialize the committed `.multorum/` project surface.
@@ -32,7 +32,7 @@ impl RuntimeFs {
 
         fs::create_dir_all(&multorum_root)?;
         fs::create_dir_all(self.paths.orchestrator().root())?;
-        fs::create_dir_all(multorum_root.join("worktrees"))?;
+        fs::create_dir_all(multorum_root.join("tr"))?;
 
         self.ensure_multorum_gitignore()?;
         fs::write(&rulebook_path, Rulebook::default_template())?;
@@ -61,7 +61,7 @@ impl RuntimeFs {
     ) -> Result<(), RuntimeError> {
         let orchestrator = self.paths.orchestrator();
         let orchestrator_root = orchestrator.root();
-        fs::create_dir_all(orchestrator_root.join("workers"))?;
+        fs::create_dir_all(orchestrator.workers_dir())?;
         fs::create_dir_all(orchestrator_root.join("audit"))?;
         Self::write_toml(&orchestrator.active_rulebook(), record)
     }
@@ -111,14 +111,13 @@ impl RuntimeFs {
 
     /// Persist one worker projection.
     pub(crate) fn store_worker_record(&self, record: &WorkerRecord) -> Result<(), RuntimeError> {
-        let dir = self.paths.orchestrator().worker(&record.worker_id);
-        fs::create_dir_all(&dir)?;
-        Self::write_toml(&dir.join(STATE_FILE_NAME), record)
+        let path = self.paths.orchestrator().worker_state(&record.worker_id);
+        Self::write_toml(&path, record)
     }
 
     /// Return all known worker projections.
     pub(crate) fn list_worker_records(&self) -> Result<Vec<WorkerRecord>, RuntimeError> {
-        let workers_root = self.paths.orchestrator().workers();
+        let workers_root = self.paths.orchestrator().workers_dir();
         if !workers_root.exists() {
             return Ok(Vec::new());
         }
@@ -126,12 +125,15 @@ impl RuntimeFs {
         let mut workers = Vec::new();
         for entry in fs::read_dir(&workers_root)? {
             let entry = entry?;
-            if !entry.file_type()?.is_dir() {
+            if !entry.file_type()?.is_file() {
                 continue;
             }
-            let state_path = entry.path().join(STATE_FILE_NAME);
-            if state_path.exists() {
-                workers.push(Self::read_toml(&state_path)?);
+            let path = entry.path();
+            let Some(extension) = path.extension() else {
+                continue;
+            };
+            if extension == "toml" {
+                workers.push(Self::read_toml(&path)?);
             }
         }
         workers.sort_by(|left: &WorkerRecord, right: &WorkerRecord| {
@@ -269,11 +271,12 @@ impl RuntimeFs {
             let artifacts_dir = entry_dir.join("artifacts");
             fs::create_dir_all(&artifacts_dir)?;
             for source in &payload.artifacts {
-                let name = source
-                    .file_name()
-                    .ok_or_else(|| RuntimeError::CheckFailed(
-                        format!("artifact path has no file name: {}", source.display()),
-                    ))?;
+                let name = source.file_name().ok_or_else(|| {
+                    RuntimeError::CheckFailed(format!(
+                        "artifact path has no file name: {}",
+                        source.display()
+                    ))
+                })?;
                 let dest = artifacts_dir.join(name);
                 fs::rename(source, &dest)?;
                 rationale_artifacts.push(dest);

@@ -60,7 +60,7 @@ fn setup_repo_with_rulebook(rulebook_toml: &str) -> (TempDir, FsOrchestratorServ
     fs::create_dir_all(dir.path().join(".multorum")).unwrap();
     fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
     fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
-    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\nworktrees/\n").unwrap();
+    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
     fs::write(dir.path().join(".multorum/rulebook.toml"), rulebook_toml).unwrap();
 
     git(dir.path(), &["init"]);
@@ -92,9 +92,9 @@ fn rulebook_init_creates_default_committed_files() {
     assert_eq!(init.rulebook_path, canonical_root.join(".multorum/rulebook.toml"));
     assert_eq!(init.gitignore_path, canonical_root.join(".multorum/.gitignore"));
     assert_eq!(fs::read_to_string(&init.rulebook_path).unwrap(), Rulebook::default_template());
-    assert_eq!(fs::read_to_string(&init.gitignore_path).unwrap(), "orchestrator/\nworktrees/\n");
+    assert_eq!(fs::read_to_string(&init.gitignore_path).unwrap(), "orchestrator/\ntr/\n");
     assert!(init.multorum_root.join("orchestrator").is_dir());
-    assert!(init.multorum_root.join("worktrees").is_dir());
+    assert!(init.multorum_root.join("tr").is_dir());
 
     let rulebook = Rulebook::from_workspace_root(dir.path()).unwrap();
     assert!(rulebook.fileset().definitions().is_empty());
@@ -206,7 +206,9 @@ fn merge_worker_cherry_picks_allowed_changes() {
     worker.send_commit(head_commit.clone(), BundlePayload::default()).unwrap();
     assert_eq!(worker.status().unwrap().state, WorkerState::Committed);
 
-    let merge = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default()).unwrap();
+    let merge = orchestrator
+        .merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default())
+        .unwrap();
     assert_eq!(merge.state, WorkerState::Merged);
     assert!(merge.ran_checks.is_empty());
     assert!(provision.worktree_path.exists(), "merged worktree should be preserved");
@@ -241,7 +243,9 @@ fn same_perspective_can_spawn_multiple_workers_and_close_the_group_on_integratio
     let head_commit = git(&first.worktree_path, &["rev-parse", "HEAD"]);
 
     worker.send_commit(head_commit, BundlePayload::default()).unwrap();
-    orchestrator.merge_worker(first.worker_id.clone(), Vec::new(), BundlePayload::default()).unwrap();
+    orchestrator
+        .merge_worker(first.worker_id.clone(), Vec::new(), BundlePayload::default())
+        .unwrap();
 
     assert!(first.worktree_path.exists(), "merged worktree should be preserved");
     assert!(second.worktree_path.exists(), "discarded sibling worktree should be preserved");
@@ -490,14 +494,15 @@ fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() 
             .parent()
             .unwrap()
             .join("orchestrator/workers")
-            .join(provision.worker_id.as_str())
-            .join("state.toml"),
+            .join(format!("{}.toml", provision.worker_id.as_str())),
     )
     .unwrap();
     let worker_state: Value = toml::from_str(&worker_state).unwrap();
     assert_eq!(worker_state["submitted_head_commit"].as_str(), Some(head_commit.as_str()));
 
-    let integration = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default()).unwrap();
+    let integration = orchestrator
+        .merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default())
+        .unwrap();
     assert_eq!(integration.state, WorkerState::Merged);
 }
 
@@ -522,7 +527,9 @@ fn send_commit_canonicalizes_short_hash_before_storage_and_integration() {
     let outbox_envelope: Value = toml::from_str(&outbox_envelope).unwrap();
     assert_eq!(outbox_envelope["head_commit"].as_str(), Some(head_commit.as_str()));
 
-    let integration = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default()).unwrap();
+    let integration = orchestrator
+        .merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default())
+        .unwrap();
     assert_eq!(integration.state, WorkerState::Merged);
 }
 
@@ -568,7 +575,9 @@ fn merge_rejects_paths_outside_the_compiled_write_set() {
     let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
     worker.send_commit(head_commit.clone(), BundlePayload::default()).unwrap();
-    let error = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default()).unwrap_err();
+    let error = orchestrator
+        .merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default())
+        .unwrap_err();
     assert!(matches!(
         error,
         RuntimeError::WriteSetViolation {
@@ -603,7 +612,9 @@ fn merge_rejects_when_worker_head_moves_after_submission() {
     git(&provision.worktree_path, &["commit", "-m", "incr: move worker head after submission"]);
     let current_head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
-    let error = orchestrator.merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default()).unwrap_err();
+    let error = orchestrator
+        .merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default())
+        .unwrap_err();
     assert!(matches!(
         error,
         RuntimeError::WorkerHeadMismatch {
@@ -645,7 +656,11 @@ fn merge_rejects_skip_request_for_check_without_policy_override() {
 
     worker.send_commit(head_commit, BundlePayload::default()).unwrap();
     let error = orchestrator
-        .merge_worker(provision.worker_id.clone(), vec!["test".to_owned()], BundlePayload::default())
+        .merge_worker(
+            provision.worker_id.clone(),
+            vec!["test".to_owned()],
+            BundlePayload::default(),
+        )
         .unwrap_err();
 
     assert!(
@@ -685,8 +700,13 @@ fn merge_accepts_skip_request_for_explicit_skippable_check() {
     let head_commit = git(&provision.worktree_path, &["rev-parse", "HEAD"]);
 
     worker.send_commit(head_commit, BundlePayload::default()).unwrap();
-    let merge =
-        orchestrator.merge_worker(provision.worker_id.clone(), vec!["test".to_owned()], BundlePayload::default()).unwrap();
+    let merge = orchestrator
+        .merge_worker(
+            provision.worker_id.clone(),
+            vec!["test".to_owned()],
+            BundlePayload::default(),
+        )
+        .unwrap();
 
     assert_eq!(merge.state, WorkerState::Merged);
     assert!(merge.ran_checks.is_empty());
@@ -778,7 +798,7 @@ fn install_rejects_reduced_write_set() {
     fs::write(dir.path().join("src/owned.rs"), "pub fn owned() {}").unwrap();
     fs::write(dir.path().join("src/extra.rs"), "pub fn extra() {}").unwrap();
     fs::write(dir.path().join("src/other.rs"), "pub fn other() {}").unwrap();
-    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\nworktrees/\n").unwrap();
+    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
     fs::write(
         dir.path().join(".multorum/rulebook.toml"),
         r#"
@@ -859,7 +879,10 @@ fn install_rejects_reduced_read_set() {
     // We can't easily shrink the glob itself, so remove the file from the repo.
     fs::remove_file(repo.path().join("src/other.rs")).unwrap();
     git(repo.path(), &["add", "src/other.rs"]);
-    git(repo.path(), &["commit", "-m", "repo: remove other.rs"]);
+    // This commit intentionally mutates a file currently protected by
+    // the exclusion set so the continuity check can validate the new
+    // HEAD snapshot. Bypass the pre-commit hook to exercise that path.
+    git(repo.path(), &["commit", "--no-verify", "-m", "repo: remove other.rs"]);
 
     let error = orchestrator.rulebook_install().unwrap_err();
     assert!(matches!(
@@ -984,8 +1007,7 @@ fn exclusion_set_tracks_active_worker_boundaries() {
     assert!(read_exclusion_set(dir.path()).is_empty());
 
     // Creating a worker adds its read and write sets to the exclusion set.
-    let result =
-        orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let exclusion = read_exclusion_set(dir.path());
     assert!(exclusion.contains(&PathBuf::from("src/owned.rs")), "write set file missing");
     assert!(exclusion.contains(&PathBuf::from("src/other.rs")), "read set file missing");
@@ -999,14 +1021,12 @@ fn exclusion_set_tracks_active_worker_boundaries() {
 fn exclusion_set_clears_after_merge() {
     let (dir, orchestrator, _head) = setup_repo();
 
-    let result =
-        orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     assert!(!read_exclusion_set(dir.path()).is_empty());
 
     // Commit a change in the worker worktree so we can merge.
     let worker = FsWorkerService::new(&result.worktree_path).unwrap();
-    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 42 }\n")
-        .unwrap();
+    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 42 }\n").unwrap();
     git(&result.worktree_path, &["add", "src/owned.rs"]);
     git(&result.worktree_path, &["commit", "-m", "feat: update owned"]);
     let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
@@ -1019,12 +1039,10 @@ fn exclusion_set_clears_after_merge() {
 #[test]
 fn merge_writes_audit_entry() {
     let (dir, orchestrator, _head) = setup_repo();
-    let result =
-        orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
 
     let worker = FsWorkerService::new(&result.worktree_path).unwrap();
-    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 99 }\n")
-        .unwrap();
+    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 99 }\n").unwrap();
     git(&result.worktree_path, &["add", "src/owned.rs"]);
     git(&result.worktree_path, &["commit", "-m", "feat: update owned"]);
     let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
@@ -1035,9 +1053,7 @@ fn merge_writes_audit_entry() {
         body_path: None,
         artifacts: vec![],
     };
-    orchestrator
-        .merge_worker(result.worker_id.clone(), vec![], rationale)
-        .unwrap();
+    orchestrator.merge_worker(result.worker_id.clone(), vec![], rationale).unwrap();
 
     // Verify the audit TOML entry exists and contains expected fields.
     let audit_toml_path = dir
@@ -1046,7 +1062,8 @@ fn merge_writes_audit_entry() {
         .unwrap()
         .join(format!(".multorum/orchestrator/audit/{}.toml", result.worker_id.as_str()));
     assert!(audit_toml_path.exists(), "audit entry TOML missing");
-    let entry: toml::Value = toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
+    let entry: toml::Value =
+        toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
     assert_eq!(entry["worker_id"].as_str().unwrap(), result.worker_id.as_str());
     assert_eq!(entry["perspective"].as_str().unwrap(), "AuthImplementor");
     let changed = entry["changed_files"].as_array().unwrap();
@@ -1066,20 +1083,16 @@ fn merge_writes_audit_entry() {
 #[test]
 fn merge_writes_audit_entry_without_rationale() {
     let (dir, orchestrator, _head) = setup_repo();
-    let result =
-        orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
 
     let worker = FsWorkerService::new(&result.worktree_path).unwrap();
-    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 7 }\n")
-        .unwrap();
+    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 7 }\n").unwrap();
     git(&result.worktree_path, &["add", "src/owned.rs"]);
     git(&result.worktree_path, &["commit", "-m", "feat: update owned"]);
     let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
     worker.send_commit(head, BundlePayload::default()).unwrap();
 
-    orchestrator
-        .merge_worker(result.worker_id.clone(), vec![], BundlePayload::default())
-        .unwrap();
+    orchestrator.merge_worker(result.worker_id.clone(), vec![], BundlePayload::default()).unwrap();
 
     // Audit entry exists even without rationale.
     let audit_toml_path = dir
@@ -1088,9 +1101,12 @@ fn merge_writes_audit_entry_without_rationale() {
         .unwrap()
         .join(format!(".multorum/orchestrator/audit/{}.toml", result.worker_id.as_str()));
     assert!(audit_toml_path.exists(), "audit entry TOML missing");
-    let entry: toml::Value = toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
-    assert!(entry.get("rationale_body").is_none(),
-        "rationale_body should be absent when no payload is supplied");
+    let entry: toml::Value =
+        toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
+    assert!(
+        entry.get("rationale_body").is_none(),
+        "rationale_body should be absent when no payload is supplied"
+    );
 }
 
 #[test]

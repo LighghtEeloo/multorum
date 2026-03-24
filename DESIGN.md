@@ -230,7 +230,7 @@ A Multorum project adds a `.multorum/` directory at the repository root:
     .gitignore          # committed - ignores runtime directories
     rulebook.toml       # committed - file sets, perspectives, check pipeline
     orchestrator/       # gitignored - orchestrator-local control plane
-    worktrees/          # gitignored - managed worker worktrees
+    tr/                 # gitignored - managed worker worktrees
   src/
   tests/
   ...
@@ -242,10 +242,12 @@ The project commits only `.multorum/rulebook.toml` and `.multorum/.gitignore`. E
 
 ```text
 orchestrator/
-worktrees/
+tr/
 ```
 
 Multorum verifies these entries during `rulebook init` and warns if they are missing.
+
+The runtime directory names are intentionally short. `tr/` keeps managed worktree paths compact, and worker state projections are stored as single files under `orchestrator/workers/` so the control plane stays shallow without changing the broader orchestrator layout.
 
 ### Orchestrator Runtime Surface
 
@@ -256,8 +258,7 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
   active-rulebook.toml   # pinned commit hash and compiled rulebook snapshot
   exclusion-set.txt      # materialized orchestrator exclusion set
   workers/               # per-worker state projections
-    <worker-id>/
-      state.toml         # lifecycle state, base commit, submitted head commit
+    <worker-id>.toml     # lifecycle state, base commit, submitted head commit
   audit/                 # merge audit trail
     <worker-id>.toml     # one entry per merged worker
 ```
@@ -273,7 +274,7 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
 Each worker workspace is a git worktree created from the pinned base commit:
 
 ```text
-git worktree add .multorum/worktrees/<worker-id> <pinned-base-commit>
+git worktree add .multorum/tr/<worker-id> <pinned-base-commit>
 ```
 
 Every worker created under the same active rulebook starts from the same immutable snapshot, even if the orchestrator merges other work into `HEAD` later. This keeps workers comparable and prevents in-flight tasks from silently shifting underneath them.

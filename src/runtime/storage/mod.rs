@@ -28,8 +28,6 @@ pub(crate) use records::{AckRecord, ActiveRulebookRecord, WorkerRecord};
 /// Protocol version written into persisted mailbox envelopes.
 pub(crate) const PROTOCOL_VERSION: u32 = 1;
 
-/// Canonical worker state file name under orchestrator projections.
-pub(crate) const STATE_FILE_NAME: &str = "state.toml";
 /// Canonical mailbox envelope file name within one bundle directory.
 pub(crate) const ENVELOPE_FILE_NAME: &str = "envelope.toml";
 /// Canonical mailbox body file name within one bundle directory.
