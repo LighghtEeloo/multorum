@@ -172,7 +172,7 @@ impl CheckTable {
             }
         }
 
-        tracing::debug!(check_count = self.declarations.len(), "validated rulebook checks");
+        tracing::trace!(check_count = self.declarations.len(), "validated rulebook checks");
 
         Ok(CompiledChecks {
             pipeline: self.pipeline.clone(),

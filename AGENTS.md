@@ -39,6 +39,11 @@ Fail fast. If some edge case is not specified by design,
 just log the error and stop the current operation.
 Never attempt to recover from error path if it's not absolutely correct.
 
+When a delete operation removes a resource, delete all of its associated artifacts and state
+files. Partial cleanup leaves stale entries that confuse subsequent operations and corrupt
+runtime invariants (e.g., `multorum worker delete` removes both the Git worktree and the
+worker state TOML file).
+
 Prefer declaration instead of manual implementation. For example,
 - Utilize `thiserror` crate for error messages instead of manual implementations.
 - Encode invariants into Rust's type system, so that they are enforced by the compiler.

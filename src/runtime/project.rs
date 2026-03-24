@@ -60,7 +60,7 @@ impl CurrentProject {
         let worker_workspace_root = worker_paths.workspace_root().ok();
         let has_worker_contract = worker_paths.contract().exists();
 
-        tracing::debug!(
+        tracing::trace!(
             input_path = %path.display(),
             repo_root = %repo_root.display(),
             has_rulebook,

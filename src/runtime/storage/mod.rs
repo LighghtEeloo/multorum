@@ -77,7 +77,7 @@ impl RuntimeFs {
     pub(crate) fn run_check(
         &self, worktree_root: &Path, name: &CheckName, command_text: &str,
     ) -> Result<(), RuntimeError> {
-        tracing::debug!(
+        tracing::trace!(
             check = %name,
             command = command_text,
             root = %worktree_root.display(),

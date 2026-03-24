@@ -388,7 +388,7 @@ impl FsOrchestratorService {
         // Note: Discard finalizes worker lifecycle state but preserves the
         // workspace so the orchestrator can inspect or delete it explicitly later.
         if record.worktree_path.exists() {
-            tracing::debug!(
+            tracing::trace!(
                 worker_id = %record.worker_id,
                 root = %record.worktree_path.display(),
                 "preserving discarded worker workspace"
@@ -545,6 +545,7 @@ impl OrchestratorService for FsOrchestratorService {
     }
 
     fn ack_outbox(&self, worker_id: WorkerId, sequence: Sequence) -> Result<AckRef> {
+        tracing::trace!(worker_id = %worker_id, sequence = sequence.0, "acknowledging worker outbox message");
         let record = self.fs.load_worker_record(&worker_id)?;
         let ack = self.fs.acknowledge_message(
             &record.worktree_path,
@@ -617,31 +618,42 @@ impl OrchestratorService for FsOrchestratorService {
 
         self.fs.rewrite_exclusion_set()?;
 
-        tracing::info!(
+        tracing::trace!(
             worker_id = %worker_id,
             perspective = %perspective,
             root = %worktree_path.display(),
+            "creating worker worktree"
+        );
+
+        let result = CreateResult {
+            worker_id,
+            perspective,
+            worktree_path: worktree_path.clone(),
+            state: WorkerState::Active,
+            seeded_task_path,
+        };
+
+        tracing::info!(
+            worker_id = %result.worker_id,
+            perspective = %result.perspective,
+            root = %result.worktree_path.display(),
             "created active worker"
         );
 
-        Ok(CreateResult {
-            worker_id,
-            perspective,
-            worktree_path,
-            state: WorkerState::Active,
-            seeded_task_path,
-        })
+        Ok(result)
     }
 
     fn resolve_worker(
         &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle> {
+        tracing::trace!(worker_id = %worker_id, "publishing resolve bundle to worker inbox");
         self.publish_worker_inbox(&worker_id, MessageKind::Resolve, reply, payload)
     }
 
     fn revise_worker(
         &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle> {
+        tracing::trace!(worker_id = %worker_id, "publishing revise bundle to worker inbox");
         self.publish_worker_inbox(&worker_id, MessageKind::Revise, reply, payload)
     }
 
@@ -698,6 +710,7 @@ impl OrchestratorService for FsOrchestratorService {
     fn merge_worker(
         &self, worker_id: WorkerId, skip_checks: Vec<String>, audit_payload: BundlePayload,
     ) -> Result<MergeResult> {
+        tracing::trace!(worker_id = %worker_id, "starting worker merge");
         let mut record = self.fs.load_worker_record(&worker_id)?;
         if record.state != WorkerState::Committed {
             return Err(RuntimeError::InvalidState {
@@ -734,6 +747,8 @@ impl OrchestratorService for FsOrchestratorService {
             });
         }
 
+        tracing::trace!(worker_id = %worker_id, head_commit = %head_commit, "verified submitted commit");
+
         let worker_rulebook = self.fs.load_compiled_rulebook(&record.base_commit)?;
         let allowed_skips = validate_skip_request(&worker_rulebook, &skip_checks)?;
         let changed_files = self.fs.vcs().changed_files(
@@ -764,14 +779,18 @@ impl OrchestratorService for FsOrchestratorService {
                 .expect("compiled checks contain every pipeline entry");
             if allowed_skips.contains(check_name) {
                 skipped_checks.push(check_name.to_string());
+                tracing::trace!(worker_id = %worker_id, check = %check_name, "skipping check");
                 continue;
             }
 
+            tracing::trace!(worker_id = %worker_id, check = %check_name, "running pre-merge check");
             self.fs.run_check(&record.worktree_path, check_name, decl.command())?;
             ran_checks.push(check_name.to_string());
         }
 
+        tracing::trace!(worker_id = %worker_id, "ensuring clean workspace before merge");
         self.fs.vcs().ensure_clean_workspace(self.fs.workspace_root())?;
+        tracing::trace!(worker_id = %worker_id, head_commit = %head_commit, "integrating commit");
         self.fs.vcs().integrate_commit(self.fs.workspace_root(), &head_commit)?;
 
         // Note: Merge finalizes worker lifecycle state but preserves the
@@ -782,6 +801,11 @@ impl OrchestratorService for FsOrchestratorService {
         for mut sibling in self.active_workers()?.into_iter().filter(|sibling| {
             sibling.worker_id != record.worker_id && sibling.perspective == record.perspective
         }) {
+            tracing::trace!(
+                worker_id = %sibling.worker_id,
+                perspective = %sibling.perspective,
+                "finalizing sibling worker"
+            );
             self.finalize_discarded_worker(&mut sibling)?;
         }
         self.fs.rewrite_exclusion_set()?;

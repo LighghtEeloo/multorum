@@ -49,7 +49,7 @@ impl Rulebook {
 
     /// Parse a rulebook from a TOML string.
     pub fn from_toml_str(input: &str) -> Result<Self, RulebookError> {
-        tracing::debug!(bytes = input.len(), "decoding rulebook from string");
+        tracing::trace!(bytes = input.len(), "decoding rulebook from string");
         Ok(toml::from_str(input)?)
     }
 
@@ -61,7 +61,7 @@ impl Rulebook {
 
     /// Read and parse a rulebook from a filesystem path.
     pub fn from_path(path: &Path) -> Result<Self, RulebookError> {
-        tracing::debug!(path = %path.display(), "loading rulebook from path");
+        tracing::trace!(path = %path.display(), "loading rulebook from path");
         let contents = fs::read(path)?;
         Self::from_bytes(&contents)
     }

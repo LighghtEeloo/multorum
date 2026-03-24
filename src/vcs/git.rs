@@ -193,7 +193,7 @@ impl VersionControl for GitVcs {
         let output = command.output()?;
         if output.status.success() {
             let resolved = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-            tracing::debug!(
+            tracing::trace!(
                 backend = self.backend_name(),
                 root = %repo_root.display(),
                 revision,
@@ -249,7 +249,7 @@ impl VersionControl for GitVcs {
         &self, workspace_root: &Path, worktree_root: &Path,
     ) -> Result<bool, RuntimeError> {
         if !self.is_registered_worktree(workspace_root, worktree_root)? {
-            tracing::debug!(
+            tracing::trace!(
                 backend = self.backend_name(),
                 root = %workspace_root.display(),
                 worktree_root = %worktree_root.display(),

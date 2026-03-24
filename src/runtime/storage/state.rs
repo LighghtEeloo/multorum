@@ -120,7 +120,7 @@ impl RuntimeFs {
         let path = self.paths.orchestrator().worker_state(worker_id);
         if path.exists() {
             fs::remove_file(&path)?;
-            tracing::debug!(path = %path.display(), "deleted worker state file");
+            tracing::trace!(path = %path.display(), "deleted worker state file");
             Ok(true)
         } else {
             Ok(false)
@@ -248,7 +248,7 @@ impl RuntimeFs {
         }
         let path = self.paths.orchestrator().exclusion_set();
         Self::write_path_list(&path, &exclusion)?;
-        tracing::debug!(count = exclusion.len(), "rewrote orchestrator exclusion set");
+        tracing::trace!(count = exclusion.len(), "rewrote orchestrator exclusion set");
         Ok(())
     }
 

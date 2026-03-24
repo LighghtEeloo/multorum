@@ -88,6 +88,7 @@ impl FsWorkerService {
     }
 
     fn contract_view(&self) -> Result<WorkerContractView> {
+        tracing::trace!(worktree_root = %self.worktree_root.display(), "loading worker contract");
         self.fs.load_worker_contract(&self.worktree_root)
     }
 
@@ -135,6 +136,12 @@ impl WorkerService for FsWorkerService {
 
     fn read_inbox(&self, after: Option<Sequence>) -> Result<Vec<MailboxMessageView>> {
         let contract = self.contract_view()?;
+        tracing::trace!(
+            worktree_root = %self.worktree_root.display(),
+            worker_id = %contract.worker_id,
+            after_sequence = ?after.map(|s| s.0),
+            "reading worker inbox"
+        );
         self.fs.list_mailbox_messages(
             &self.worktree_root,
             &contract.worker_id,
@@ -147,6 +154,11 @@ impl WorkerService for FsWorkerService {
         let ack =
             self.fs.acknowledge_message(&self.worktree_root, MailboxDirection::Inbox, sequence)?;
         self.update_state_after_ack(&ack)?;
+        tracing::trace!(
+            worktree_root = %self.worktree_root.display(),
+            sequence = sequence.0,
+            "acknowledged inbox message"
+        );
         Ok(ack)
     }
 
@@ -175,6 +187,11 @@ impl WorkerService for FsWorkerService {
             payload,
         )?;
         self.update_submission_state(WorkerState::Blocked, None)?;
+        tracing::info!(
+            worktree_root = %self.worktree_root.display(),
+            kind = ?MessageKind::Report,
+            "published worker report"
+        );
         Ok(message)
     }
 
@@ -195,7 +212,12 @@ impl WorkerService for FsWorkerService {
             Some(head_commit.clone()),
             payload,
         )?;
-        self.update_submission_state(WorkerState::Committed, Some(head_commit))?;
+        self.update_submission_state(WorkerState::Committed, Some(head_commit.clone()))?;
+        tracing::info!(
+            worktree_root = %self.worktree_root.display(),
+            head_commit = %head_commit,
+            "published worker commit"
+        );
         Ok(message)
     }
 

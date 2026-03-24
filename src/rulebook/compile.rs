@@ -58,13 +58,13 @@ impl CompiledRulebook {
 impl Rulebook {
     /// Compile this rulebook against an explicit project file list.
     pub fn compile(&self, files: &[PathBuf]) -> Result<CompiledRulebook, RulebookError> {
-        tracing::debug!(file_count = files.len(), "compiling rulebook");
+        tracing::trace!(file_count = files.len(), "compiling rulebook");
 
         let check = self.check().compile()?;
         let filesets = self.fileset().compile(files)?;
         let perspectives = self.perspective().compile(&filesets)?;
 
-        tracing::debug!(
+        tracing::trace!(
             fileset_count = filesets.len(),
             perspective_count = perspectives.len(),
             check_count = check.len(),
@@ -76,7 +76,7 @@ impl Rulebook {
 
     /// Compile this rulebook by enumerating files under a project root.
     pub fn compile_for_root(&self, root: &Path) -> Result<CompiledRulebook, RulebookError> {
-        tracing::debug!(root = %root.display(), "enumerating files for rulebook compilation");
+        tracing::trace!(root = %root.display(), "enumerating files for rulebook compilation");
         let files = enumerate_files(root).map_err(fileset::FileSetError::from)?;
         self.compile(&files)
     }
