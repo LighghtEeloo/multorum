@@ -87,6 +87,8 @@ For any two distinct active bidding groups `G` and `H`:
 
 Inside one bidding group, every worker has the same boundary. Conflict detection belongs at the bidding-group level, not at the level of perspective names: perspectives describe policy, bidding groups are the concurrent runtime entities that must not interfere.
 
+The invariant extends to the canonical branch. While any bidding group is active, the union of every active group's read and write sets forms the *orchestrator exclusion set* — files the orchestrator must not commit to until the owning workers are merged or discarded. The orchestrator may commit freely only to files outside the exclusion set.
+
 ---
 
 ## Rulebook
@@ -245,6 +247,27 @@ worktrees/
 
 Multorum verifies these entries during `rulebook init` and warns if they are missing.
 
+### Orchestrator Runtime Surface
+
+The orchestrator's control plane lives under `.multorum/orchestrator/`, created during `rulebook install`:
+
+```text
+.multorum/orchestrator/
+  active-rulebook.toml   # pinned commit hash and compiled rulebook snapshot
+  exclusion-set.txt      # materialized orchestrator exclusion set
+  workers/               # per-worker state projections
+    <worker-id>/
+      state.toml         # lifecycle state, base commit, submitted head commit
+  audit/                 # merge audit trail
+    <worker-id>.toml     # one entry per merged worker
+```
+
+`active-rulebook.toml` records the commit at which the rulebook was installed and caches the compiled result. Worker state files track each worker's lifecycle independently of the worktree contents.
+
+`audit/` records the decision trail for merged workers. Each entry is written atomically when `merge` succeeds and contains the worker id, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The rationale is an audit payload — a body and optional artifacts — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. Audit entries are append-only; Multorum never modifies or deletes them.
+
+`exclusion-set.txt` is the materialized orchestrator exclusion set: the union of all active bidding groups' read and write sets. Multorum rewrites this file on every lifecycle transition that changes the set of active groups (create, merge, discard). A pre-commit hook in the canonical workspace reads it and rejects commits that touch any listed file. When no workers are active the file is empty.
+
 ### Git Worktrees
 
 Each worker workspace is a git worktree created from the pinned base commit:
@@ -395,6 +418,10 @@ After scope enforcement passes, Multorum runs the checks declared in `[check.pip
 
 Workers may submit evidence with their reports or commits to support the case for merging or to ask the orchestrator to skip `skippable` checks. Evidence should include actual output or analysis, not just a claim — failed evidence is still valid when the worker wants the orchestrator to make a judgment call. Multorum carries evidence but does not judge it; the orchestrator decides whether to trust it or not.
 
+### Audit
+
+After a successful merge, Multorum writes an audit entry to `.multorum/orchestrator/audit/<worker-id>.toml`. The entry records the worker id, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The orchestrator supplies the rationale as a payload at merge time — a body describing what the worker accomplished and why the merge was accepted, with optional supporting artifacts. If no rationale is supplied, the entry is still written with an empty payload.
+
 ---
 
 ## MCP Surface
@@ -463,7 +490,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 - `multorum worker ack <worker-id> <sequence>` — Record orchestrator receipt for one worker outbox bundle. No lifecycle transition.
 - `multorum worker resolve <worker-id>` — Publish a `resolve` bundle to a blocked worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
 - `multorum worker revise <worker-id>` — Publish a `revise` bundle to a committed worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
-- `multorum worker merge <worker-id> [--skip-check <check>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. Transition: `COMMITTED` to `MERGED`.
+- `multorum worker merge <worker-id> [--skip-check <check>]... [--body <text>] [--body-path <file>] [--artifact <file>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. The optional payload arguments attach an audit rationale. Transition: `COMMITTED` to `MERGED`.
 - `multorum worker discard <worker-id>` — Finalize a worker without integration. Allowed from `ACTIVE` or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
 - `multorum worker delete <worker-id>` — Delete the worktree of a finalized worker. Allowed only from `MERGED` or `DISCARDED`.
 
