@@ -108,7 +108,8 @@ impl OrchestratorHandler {
             | "merge_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
                 let skip_checks = optional_string_list(&args, "skip_checks");
-                dispatch_tool(self.service.merge_worker(worker_id, skip_checks))
+                let audit_payload = extract_payload(&args);
+                dispatch_tool(self.service.merge_worker(worker_id, skip_checks, audit_payload))
             }
             | "get_status" => dispatch_tool(self.service.status()),
             | _ => Err(ErrorData::invalid_params(format!("unknown tool: {name}"), None)),

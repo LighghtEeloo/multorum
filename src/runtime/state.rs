@@ -157,6 +157,34 @@ pub struct MergeResult {
     pub skipped_checks: Vec<String>,
 }
 
+/// Persisted audit entry written after a successful merge.
+///
+/// Each entry records the full merge context and the orchestrator's
+/// rationale. Stored under `.multorum/orchestrator/audit/<worker-id>.toml`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditEntry {
+    /// Merged worker identity.
+    pub worker_id: WorkerId,
+    /// Perspective held by the merged worker.
+    pub perspective: PerspectiveName,
+    /// Commit the worker was pinned to at creation.
+    pub base_commit: CanonicalCommitHash,
+    /// Integrated head commit from the worker submission.
+    pub head_commit: CanonicalCommitHash,
+    /// Files changed by the worker relative to the base commit.
+    pub changed_files: Vec<PathBuf>,
+    /// Checks that executed during integration.
+    pub ran_checks: Vec<String>,
+    /// Checks skipped due to trusted evidence.
+    pub skipped_checks: Vec<String>,
+    /// Timestamp when the merge was recorded.
+    pub merged_at: String,
+    /// Orchestrator-supplied rationale body, if any.
+    pub rationale_body: Option<PathBuf>,
+    /// Orchestrator-supplied rationale artifacts, if any.
+    pub rationale_artifacts: Vec<PathBuf>,
+}
+
 /// Projected orchestrator view of all active workers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OrchestratorStatus {

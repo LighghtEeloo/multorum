@@ -77,7 +77,7 @@ fn cli_merge_accepts_worker_id_and_skip_checks() {
 
     match cli.command {
         | Command::Runtime(RuntimeCommand::Worker {
-            command: WorkerCommand::Merge { worker_id, skip_checks },
+            command: WorkerCommand::Merge { worker_id, skip_checks, .. },
         }) => {
             assert_eq!(worker_id.as_str(), "custom_worker_7");
             assert_eq!(skip_checks, vec!["unit"]);

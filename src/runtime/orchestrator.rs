@@ -149,7 +149,12 @@ pub trait OrchestratorService {
     fn delete_worker(&self, worker_id: WorkerId) -> Result<DeleteResult>;
 
     /// Run the pre-merge pipeline and merge the worker submission.
-    fn merge_worker(&self, worker_id: WorkerId, skip_checks: Vec<String>) -> Result<MergeResult>;
+    ///
+    /// The optional `audit_payload` attaches an orchestrator rationale
+    /// to the audit entry written on success.
+    fn merge_worker(
+        &self, worker_id: WorkerId, skip_checks: Vec<String>, audit_payload: BundlePayload,
+    ) -> Result<MergeResult>;
 
     /// Return the current orchestrator status projection.
     fn status(&self) -> Result<OrchestratorStatus>;
@@ -686,7 +691,9 @@ impl OrchestratorService for FsOrchestratorService {
         })
     }
 
-    fn merge_worker(&self, worker_id: WorkerId, skip_checks: Vec<String>) -> Result<MergeResult> {
+    fn merge_worker(
+        &self, worker_id: WorkerId, skip_checks: Vec<String>, audit_payload: BundlePayload,
+    ) -> Result<MergeResult> {
         let mut record = self.fs.load_worker_record(&worker_id)?;
         if record.state != WorkerState::Committed {
             return Err(RuntimeError::InvalidState {
@@ -774,6 +781,9 @@ impl OrchestratorService for FsOrchestratorService {
             self.finalize_discarded_worker(&mut sibling)?;
         }
         self.fs.rewrite_exclusion_set()?;
+        self.fs.write_audit_entry(
+            &record, &head_commit, &changed_files, &ran_checks, &skipped_checks, audit_payload,
+        )?;
 
         tracing::info!(
             worker_id = %record.worker_id,

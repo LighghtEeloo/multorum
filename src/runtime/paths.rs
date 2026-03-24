@@ -100,6 +100,11 @@ impl OrchestratorPaths {
         self.root.join("audit")
     }
 
+    /// Audit entry for one merged worker.
+    pub fn audit_entry(&self, worker_id: &WorkerId) -> PathBuf {
+        self.audit().join(format!("{}.toml", worker_id.as_str()))
+    }
+
     /// Materialized orchestrator exclusion set.
     ///
     /// Contains the union of all active bidding groups' read and write

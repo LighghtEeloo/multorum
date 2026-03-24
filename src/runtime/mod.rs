@@ -27,10 +27,10 @@ pub use orchestrator::{CreateWorker, FsOrchestratorService, OrchestratorService}
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};
 pub use projection::TranscriptView;
 pub use state::{
-    ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,
-    MergeResult, OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookInstall,
-    RulebookUninstall, RulebookValidation, WorkerContractView, WorkerDetail, WorkerState,
-    WorkerStatus, WorkerSummary,
+    ActivePerspectiveSummary, AuditEntry, CreateResult, DeleteResult, DiscardResult,
+    MailboxMessageView, MergeResult, OrchestratorStatus, PerspectiveSummary, RulebookInit,
+    RulebookInstall, RulebookUninstall, RulebookValidation, WorkerContractView, WorkerDetail,
+    WorkerState, WorkerStatus, WorkerSummary,
 };
 pub use worker::{FsWorkerService, WorkerService};
 pub use worker_id::{WorkerId, WorkerIdError};

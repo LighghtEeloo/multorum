@@ -122,6 +122,8 @@ fn orchestrator_tool_input_schemas_stable() {
         &[
             ("worker_id", ToolInputType::String, true),
             ("skip_checks", ToolInputType::StringList, false),
+            ("body", ToolInputType::String, false),
+            ("artifacts", ToolInputType::StringList, false),
         ]
     );
 }

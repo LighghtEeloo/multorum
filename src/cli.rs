@@ -356,6 +356,10 @@ pub enum WorkerCommand {
         /// Checks to skip based on trusted worker evidence.
         #[arg(long = "skip-check", value_name = "CHECK")]
         skip_checks: Vec<String>,
+
+        /// Optional audit rationale payload.
+        #[command(flatten)]
+        payload: BundlePayloadArgs,
     },
 }
 
@@ -633,8 +637,9 @@ impl WorkerCommand {
                 let result = services.orchestrator()?.delete_worker(worker_id)?;
                 println!("{result:#?}");
             }
-            | Self::Merge { worker_id, skip_checks } => {
-                let result = services.orchestrator()?.merge_worker(worker_id, skip_checks)?;
+            | Self::Merge { worker_id, skip_checks, payload } => {
+                let result =
+                    services.orchestrator()?.merge_worker(worker_id, skip_checks, payload.into_runtime())?;
                 println!("{result:#?}");
             }
         }

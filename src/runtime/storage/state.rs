@@ -9,7 +9,10 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::perspective::CompiledPerspective;
 use crate::rulebook::{CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook};
-use crate::runtime::{RulebookInit, RuntimeError, WorkerContractView, WorkerId, WorkerPaths};
+use crate::runtime::{
+    AuditEntry, BundlePayload, RulebookInit, RuntimeError, WorkerContractView, WorkerId,
+    WorkerPaths,
+};
 use crate::vcs::CanonicalCommitHash;
 
 use super::{ActiveRulebookRecord, RuntimeFs, STATE_FILE_NAME, WorkerRecord};
@@ -232,6 +235,65 @@ impl RuntimeFs {
         let path = self.paths.orchestrator().exclusion_set();
         Self::write_path_list(&path, &exclusion)?;
         tracing::debug!(count = exclusion.len(), "rewrote orchestrator exclusion set");
+        Ok(())
+    }
+
+    /// Write an audit entry for a successfully merged worker.
+    ///
+    /// The rationale payload body and artifacts are moved into the audit
+    /// directory alongside the TOML entry, following the same consume
+    /// semantics as mailbox bundles.
+    pub(crate) fn write_audit_entry(
+        &self, record: &WorkerRecord, head_commit: &CanonicalCommitHash,
+        changed_files: &BTreeSet<PathBuf>, ran_checks: &[String], skipped_checks: &[String],
+        payload: BundlePayload,
+    ) -> Result<(), RuntimeError> {
+        let audit_dir = self.paths.orchestrator().audit();
+        let entry_dir = audit_dir.join(record.worker_id.as_str());
+        fs::create_dir_all(&entry_dir)?;
+
+        let rationale_body = if let Some(source) = payload.body_path {
+            let dest = entry_dir.join("body.md");
+            fs::rename(&source, &dest)?;
+            Some(dest)
+        } else if let Some(text) = payload.body_text {
+            let dest = entry_dir.join("body.md");
+            fs::write(&dest, text)?;
+            Some(dest)
+        } else {
+            None
+        };
+
+        let mut rationale_artifacts = Vec::new();
+        if !payload.artifacts.is_empty() {
+            let artifacts_dir = entry_dir.join("artifacts");
+            fs::create_dir_all(&artifacts_dir)?;
+            for source in &payload.artifacts {
+                let name = source
+                    .file_name()
+                    .ok_or_else(|| RuntimeError::CheckFailed(
+                        format!("artifact path has no file name: {}", source.display()),
+                    ))?;
+                let dest = artifacts_dir.join(name);
+                fs::rename(source, &dest)?;
+                rationale_artifacts.push(dest);
+            }
+        }
+
+        let entry = AuditEntry {
+            worker_id: record.worker_id.clone(),
+            perspective: record.perspective.clone(),
+            base_commit: record.base_commit.clone(),
+            head_commit: head_commit.clone(),
+            changed_files: changed_files.iter().cloned().collect(),
+            ran_checks: ran_checks.to_vec(),
+            skipped_checks: skipped_checks.to_vec(),
+            merged_at: super::timestamp_now(),
+            rationale_body,
+            rationale_artifacts,
+        };
+        Self::write_toml(&self.paths.orchestrator().audit_entry(&record.worker_id), &entry)?;
+        tracing::info!(worker_id = %record.worker_id, "wrote audit entry");
         Ok(())
     }
 

@@ -119,6 +119,18 @@ const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
         kind: ToolInputType::StringList,
         required: false,
     },
+    ToolInputDescriptor {
+        name: "body",
+        description: "Optional Markdown file to move into the audit rationale body.",
+        kind: ToolInputType::String,
+        required: false,
+    },
+    ToolInputDescriptor {
+        name: "artifacts",
+        description: "Optional files to move into the audit rationale artifacts directory.",
+        kind: ToolInputType::StringList,
+        required: false,
+    },
 ];
 
 /// Return the orchestrator MCP tool descriptors.
