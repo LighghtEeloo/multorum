@@ -406,6 +406,7 @@ fn delete_worker_removes_workspace_after_discard() {
     assert_eq!(deleted.state, WorkerState::Discarded);
     assert_eq!(deleted.worktree_path, created.worktree_path);
     assert!(deleted.deleted_workspace);
+    assert!(deleted.deleted_state_file);
     assert!(!created.worktree_path.exists());
     assert!(
         !git_worktree_list(repo.path()).contains(created.worktree_path.to_string_lossy().as_ref())
@@ -433,6 +434,7 @@ fn delete_worker_clears_git_worktree_registration_after_manual_directory_removal
     let deleted = orchestrator.delete_worker(created.worker_id.clone()).unwrap();
 
     assert!(deleted.deleted_workspace);
+    assert!(deleted.deleted_state_file);
     assert!(
         !git_worktree_list(repo.path()).contains(created.worktree_path.to_string_lossy().as_ref())
     );

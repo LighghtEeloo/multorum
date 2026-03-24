@@ -677,10 +677,12 @@ impl OrchestratorService for FsOrchestratorService {
         }
 
         let deleted_workspace = self.delete_worker_workspace(&record)?;
+        let deleted_state_file = self.fs.delete_worker_record(&record.worker_id)?;
         tracing::info!(
             worker_id = %record.worker_id,
             perspective = %record.perspective,
             deleted_workspace,
+            deleted_state_file,
             "deleted worker workspace"
         );
         Ok(DeleteResult {
@@ -689,6 +691,7 @@ impl OrchestratorService for FsOrchestratorService {
             state: record.state,
             worktree_path: record.worktree_path,
             deleted_workspace,
+            deleted_state_file,
         })
     }
 

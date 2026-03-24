@@ -115,6 +115,18 @@ impl RuntimeFs {
         Self::write_toml(&path, record)
     }
 
+    /// Delete one worker projection file.
+    pub(crate) fn delete_worker_record(&self, worker_id: &WorkerId) -> Result<bool, RuntimeError> {
+        let path = self.paths.orchestrator().worker_state(worker_id);
+        if path.exists() {
+            fs::remove_file(&path)?;
+            tracing::debug!(path = %path.display(), "deleted worker state file");
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     /// Return all known worker projections.
     pub(crate) fn list_worker_records(&self) -> Result<Vec<WorkerRecord>, RuntimeError> {
         let workers_root = self.paths.orchestrator().workers_dir();

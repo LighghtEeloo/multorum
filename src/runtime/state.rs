@@ -140,6 +140,8 @@ pub struct DeleteResult {
     pub worktree_path: PathBuf,
     /// Whether the repository backend removed a managed worktree.
     pub deleted_workspace: bool,
+    /// Whether the worker state file was deleted.
+    pub deleted_state_file: bool,
 }
 
 /// Result of merging a worker submission.
