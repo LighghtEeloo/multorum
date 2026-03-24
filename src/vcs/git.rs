@@ -95,11 +95,17 @@ impl GitVcs {
         Ok(())
     }
 
-    fn install_pre_commit_hook(&self, worktree_root: &Path) -> Result<(), RuntimeError> {
-        let mut command = self.git_command(worktree_root);
+    /// Install the shared pre-commit hook.
+    ///
+    /// Since Git worktrees share the main repository's hooks directory,
+    /// a single script handles both the worker write-set check and the
+    /// orchestrator exclusion-set check. The hook detects which context
+    /// it runs in by probing the files present in the working directory.
+    fn install_pre_commit_hook(&self, repo_root: &Path) -> Result<(), RuntimeError> {
+        let mut command = self.git_command(repo_root);
         command.arg("rev-parse").arg("--git-path").arg("hooks/pre-commit");
         let output = self.run_command(command, "resolve pre-commit hook path")?;
-        let hook_path = absolutize_git_path(worktree_root, output.trim());
+        let hook_path = absolutize_git_path(repo_root, output.trim());
         if let Some(parent) = hook_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -107,26 +113,47 @@ impl GitVcs {
         let script = r#"#!/bin/sh
 set -eu
 
+# --- Worker write-set guard ---
+# In a worker worktree, every staged path must be inside the write set.
 write_set=".multorum/write-set.txt"
-if [ ! -f "$write_set" ]; then
-    exit 0
+if [ -f "$write_set" ]; then
+    allowed=''
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        allowed="$allowed
+$path"
+    done < "$write_set"
+
+    git diff --cached --name-only --diff-filter=ACDMRTUXB | while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        if ! printf '%s\n' "$allowed" | grep -Fxq "$path"; then
+            printf 'multorum: staged path outside write set: %s\n' "$path" >&2
+            exit 1
+        fi
+    done
 fi
 
-allowed=''
-
-while IFS= read -r path; do
-    [ -n "$path" ] || continue
-    allowed="$allowed
+# --- Orchestrator exclusion-set guard ---
+# In the canonical workspace, no staged path may appear in the exclusion set.
+exclusion_set=".multorum/orchestrator/exclusion-set.txt"
+if [ -f "$exclusion_set" ]; then
+    blocked=''
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        blocked="$blocked
 $path"
-done < "$write_set"
+    done < "$exclusion_set"
 
-git diff --cached --name-only --diff-filter=ACDMRTUXB | while IFS= read -r path; do
-    [ -n "$path" ] || continue
-    if ! printf '%s\n' "$allowed" | grep -Fxq "$path"; then
-        printf 'multorum: staged path outside write set: %s\n' "$path" >&2
-        exit 1
+    if [ -n "$blocked" ]; then
+        git diff --cached --name-only --diff-filter=ACDMRTUXB | while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            if printf '%s\n' "$blocked" | grep -Fxq "$path"; then
+                printf 'multorum: staged path in orchestrator exclusion set: %s\n' "$path" >&2
+                exit 1
+            fi
+        done
     fi
-done
+fi
 "#;
 
         fs::write(&hook_path, script)?;
@@ -267,6 +294,10 @@ impl VersionControl for GitVcs {
     fn install_worker_runtime_support(&self, worktree_root: &Path) -> Result<(), RuntimeError> {
         self.install_worker_exclude(worktree_root)?;
         self.install_pre_commit_hook(worktree_root)
+    }
+
+    fn install_orchestrator_hook(&self, workspace_root: &Path) -> Result<(), RuntimeError> {
+        self.install_pre_commit_hook(workspace_root)
     }
 
     fn show_file_at_commit(

@@ -77,6 +77,13 @@ pub trait VersionControl: std::fmt::Debug + Send + Sync {
     /// worker worktree created during worker creation.
     fn install_worker_runtime_support(&self, worktree_root: &Path) -> Result<(), RuntimeError>;
 
+    /// Install or update the orchestrator pre-commit hook in the
+    /// canonical workspace.
+    ///
+    /// The hook reads the materialized exclusion set and rejects commits
+    /// that touch any listed file.
+    fn install_orchestrator_hook(&self, workspace_root: &Path) -> Result<(), RuntimeError>;
+
     /// Read one repository-relative file from a specific commit.
     fn show_file_at_commit(
         &self, workspace_root: &Path, commit: &CanonicalCommitHash, path: &Path,

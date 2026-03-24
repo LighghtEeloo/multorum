@@ -44,6 +44,12 @@ fn git_worktree_list(root: &Path) -> String {
     git(root, &["worktree", "list", "--porcelain"])
 }
 
+fn git_path(root: &Path, path: &str) -> PathBuf {
+    let resolved = git(root, &["rev-parse", "--git-path", path]);
+    let path = PathBuf::from(resolved);
+    if path.is_absolute() { path } else { root.join(path) }
+}
+
 fn setup_repo() -> (TempDir, FsOrchestratorService, String) {
     setup_repo_with_rulebook(rulebook_toml())
 }
@@ -1085,4 +1091,111 @@ fn merge_writes_audit_entry_without_rationale() {
     let entry: toml::Value = toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
     assert!(entry.get("rationale_body").is_none(),
         "rationale_body should be absent when no payload is supplied");
+}
+
+#[test]
+fn orchestrator_hook_rejects_commit_touching_excluded_file() {
+    let (dir, orchestrator, _head) = setup_repo();
+    let root = dir.path().canonicalize().unwrap();
+
+    // Create a worker so its boundary populates the exclusion set.
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    assert!(!read_exclusion_set(dir.path()).is_empty());
+
+    let hook_path = root.join(".git/hooks/pre-commit");
+    assert!(hook_path.exists(), "expected orchestrator pre-commit hook to be installed");
+    let excl_path = root.join(".multorum/orchestrator/exclusion-set.txt");
+    assert!(excl_path.exists(), "expected exclusion-set file to be materialized");
+
+    // The hook should now be installed. Stage a change to an excluded file
+    // in the orchestrator workspace and try to commit.
+    fs::write(root.join("src/owned.rs"), "// orchestrator edit\n").unwrap();
+    git(&root, &["add", "src/owned.rs"]);
+    let output = Command::new("git")
+        .args(["commit", "-m", "should be rejected"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "commit touching excluded file should have been rejected by hook"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("exclusion set"),
+        "hook error should mention exclusion set, got: {stderr}"
+    );
+}
+
+#[test]
+fn orchestrator_hook_allows_commit_outside_exclusion_set() {
+    let (dir, orchestrator, _head) = setup_repo();
+    let root = dir.path().canonicalize().unwrap();
+
+    // Create a worker — exclusion set covers src/owned.rs and src/other.rs.
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    // Create and commit a file outside the exclusion set.
+    fs::write(root.join("README.md"), "# hello\n").unwrap();
+    git(&root, &["add", "README.md"]);
+    let output = Command::new("git")
+        .args(["commit", "-m", "add readme"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "commit outside exclusion set should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn worker_and_orchestrator_share_one_pre_commit_hook() {
+    let (dir, orchestrator, _head) = setup_repo();
+    let root = dir.path().canonicalize().unwrap();
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    let orchestrator_hook = git_path(&root, "hooks/pre-commit");
+    let worker_hook = git_path(&provision.worktree_path, "hooks/pre-commit");
+    assert_eq!(
+        orchestrator_hook.canonicalize().unwrap(),
+        worker_hook.canonicalize().unwrap(),
+        "worker and orchestrator must resolve the same pre-commit hook path"
+    );
+
+    fs::write(provision.worktree_path.join("src/other.rs"), "// worker edit outside write set\n")
+        .unwrap();
+    git(&provision.worktree_path, &["add", "src/other.rs"]);
+    let worker_commit = Command::new("git")
+        .args(["commit", "-m", "should be rejected"])
+        .current_dir(&provision.worktree_path)
+        .output()
+        .unwrap();
+    assert!(
+        !worker_commit.status.success(),
+        "worker commit outside write set should have been rejected by hook"
+    );
+    let worker_stderr = String::from_utf8_lossy(&worker_commit.stderr);
+    assert!(
+        worker_stderr.contains("outside write set"),
+        "worker hook error should mention write set, got: {worker_stderr}"
+    );
+
+    fs::write(root.join("src/owned.rs"), "// orchestrator edit in exclusion set\n").unwrap();
+    git(&root, &["add", "src/owned.rs"]);
+    let orchestrator_commit = Command::new("git")
+        .args(["commit", "-m", "should be rejected"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(
+        !orchestrator_commit.status.success(),
+        "orchestrator commit in exclusion set should have been rejected by hook"
+    );
+    let orchestrator_stderr = String::from_utf8_lossy(&orchestrator_commit.stderr);
+    assert!(
+        orchestrator_stderr.contains("exclusion set"),
+        "orchestrator hook error should mention exclusion set, got: {orchestrator_stderr}"
+    );
 }

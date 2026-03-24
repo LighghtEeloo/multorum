@@ -474,6 +474,7 @@ impl OrchestratorService for FsOrchestratorService {
             ActiveRulebookRecord { base_commit: commit.clone(), activated_at: timestamp_now() };
         self.fs.store_active_rulebook(&record)?;
         self.fs.rewrite_exclusion_set()?;
+        self.fs.vcs().install_orchestrator_hook(self.fs.workspace_root())?;
         tracing::info!(base_commit = %record.base_commit, "installed rulebook");
         Ok(RulebookInstall { active_commit: record.base_commit })
     }
