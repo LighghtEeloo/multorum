@@ -8,8 +8,8 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-use multorum::perspective::PerspectiveError;
-use multorum::rulebook::{CheckName, CheckPolicy, Rulebook, RulebookError};
+use multorum::schema::perspective::PerspectiveError;
+use multorum::schema::rulebook::{CheckName, CheckPolicy, Rulebook, RulebookError};
 
 /// Create a temporary workspace containing a canonical
 /// `.multorum/rulebook.toml` and a small project tree.

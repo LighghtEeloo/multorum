@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::perspective::{CompiledPerspective, PerspectiveName};
+use crate::schema::perspective::{CompiledPerspective, PerspectiveName};
 use crate::vcs::{CanonicalCommitHash, VersionControl};
 
 use super::{

@@ -91,6 +91,8 @@ Ensure that documentation is clear, concise, and accurate. No emojis unless stri
 
 When adding new features, record and observe details with the `tracing` crate.
 
+Avoid using nested `super::` imports. Use absolute paths in that case.
+
 ## Version Control
 
 This project uses git. Use git to operate.

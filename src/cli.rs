@@ -18,7 +18,7 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 
 use crate::{
-    perspective::PerspectiveName,
+    schema::perspective::PerspectiveName,
     runtime::{
         self, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerId,
         WorkerService,

@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-use crate::fileset;
+use crate::schema::fileset;
 
 use super::name::PerspectiveName;
 
@@ -27,7 +27,7 @@ pub enum PerspectiveNameError {
 pub enum PerspectiveError {
     /// A file set expression failed to parse.
     #[error("in perspective `{perspective}`: {source}")]
-    Parse { perspective: PerspectiveName, source: crate::fileset::ParseError },
+    Parse { perspective: PerspectiveName, source: crate::schema::fileset::ParseError },
 
     /// A perspective references a file set name that is not defined in
     /// the compiled rulebook.

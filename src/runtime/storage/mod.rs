@@ -17,7 +17,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::rulebook::{CheckName, CheckPolicy, CompiledRulebook};
+use crate::schema::rulebook::{CheckName, CheckPolicy, CompiledRulebook};
 use crate::runtime::{
     MessageKind, MultorumPaths, RuntimeError, WorkerId, WorkerPaths, WorkerState,
 };

@@ -1,6 +1,6 @@
 //! Worker creation helpers for integration tests.
 
-use multorum::perspective::PerspectiveName;
+use multorum::schema::perspective::PerspectiveName;
 use multorum::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService};
 
 pub fn perspective() -> PerspectiveName {

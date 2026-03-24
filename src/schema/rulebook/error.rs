@@ -57,11 +57,11 @@ pub enum RulebookError {
 
     /// File set compilation failed.
     #[error(transparent)]
-    FileSet(#[from] crate::fileset::FileSetError),
+    FileSet(#[from] crate::schema::fileset::FileSetError),
 
     /// Perspective compilation failed.
     #[error(transparent)]
-    Perspective(#[from] crate::perspective::PerspectiveError),
+    Perspective(#[from] crate::schema::perspective::PerspectiveError),
 
     /// Check pipeline validation failed.
     #[error(transparent)]

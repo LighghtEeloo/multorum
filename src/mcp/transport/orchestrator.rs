@@ -229,7 +229,7 @@ fn parse_worker_id(s: &str) -> Result<WorkerId, ErrorData> {
     s.parse().map_err(|e| ErrorData::invalid_params(format!("invalid worker id: {e}"), None))
 }
 
-fn parse_perspective(s: &str) -> Result<crate::perspective::PerspectiveName, ErrorData> {
+fn parse_perspective(s: &str) -> Result<crate::schema::perspective::PerspectiveName, ErrorData> {
     s.parse().map_err(|e| ErrorData::invalid_params(format!("invalid perspective name: {e}"), None))
 }
 

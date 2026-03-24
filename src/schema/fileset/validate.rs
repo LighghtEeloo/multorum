@@ -146,7 +146,7 @@ impl<'a> Validator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fileset::{ExprParser, GlobPattern};
+    use crate::schema::fileset::{ExprParser, GlobPattern};
 
     fn n(s: &str) -> Name {
         Name::new(s).unwrap()

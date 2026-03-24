@@ -8,8 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use crate::fileset;
-use crate::fileset::Expr;
+use crate::schema::fileset::{self, Expr};
 
 use super::decl::PerspectiveTable;
 use super::error::PerspectiveError;
@@ -74,7 +73,7 @@ impl PerspectiveTable {
     /// sets.
     ///
     /// `compiled_filesets` is the output of
-    /// [`FileSetTable::compile`](crate::fileset::FileSetTable::compile).
+    /// [`FileSetTable::compile`](crate::schema::fileset::FileSetTable::compile).
     ///
     /// Returns [`CompiledPerspectives`] on success.
     pub fn compile(
@@ -141,7 +140,7 @@ impl PerspectiveTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fileset;
+    use crate::schema::fileset;
 
     /// Build compiled file sets from the design doc example.
     fn design_doc_filesets() -> BTreeMap<fileset::Name, BTreeSet<PathBuf>> {

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::perspective::PerspectiveName;
+use crate::schema::perspective::PerspectiveName;
 use crate::runtime::{Sequence, WorkerId, WorkerState};
 use crate::vcs::CanonicalCommitHash;
 

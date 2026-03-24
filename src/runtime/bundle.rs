@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::perspective::PerspectiveName;
+use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
 use super::worker_id::WorkerId;

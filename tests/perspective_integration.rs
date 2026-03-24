@@ -8,8 +8,8 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 
-use multorum::fileset::{FileSetTable, enumerate_files};
-use multorum::perspective::{CompiledPerspectives, PerspectiveName, PerspectiveTable};
+use multorum::schema::fileset::{FileSetTable, enumerate_files};
+use multorum::schema::perspective::{CompiledPerspectives, PerspectiveName, PerspectiveTable};
 
 fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
     strs.iter().map(PathBuf::from).collect()
@@ -18,7 +18,7 @@ fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
 /// Create the design-doc file tree in a temporary directory and
 /// return compiled file sets ready for perspective compilation.
 fn setup_design_doc_filesets()
--> (tempfile::TempDir, std::collections::BTreeMap<multorum::fileset::Name, BTreeSet<PathBuf>>) {
+-> (tempfile::TempDir, std::collections::BTreeMap<multorum::schema::fileset::Name, BTreeSet<PathBuf>>) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 

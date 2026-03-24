@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use crate::perspective::PerspectiveName;
+use crate::schema::perspective::PerspectiveName;
 use crate::runtime::WorkerId;
 use crate::vcs::CanonicalCommitHash;
 
@@ -268,7 +268,7 @@ pub enum RuntimeError {
 
     /// Rulebook loading or compilation failed.
     #[error(transparent)]
-    Rulebook(#[from] crate::rulebook::RulebookError),
+    Rulebook(#[from] crate::schema::rulebook::RulebookError),
 
     /// Filesystem I/O failure.
     #[error(transparent)]

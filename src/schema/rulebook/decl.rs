@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::fileset::FileSetTable;
-use crate::perspective::PerspectiveTable;
+use crate::schema::fileset::FileSetTable;
+use crate::schema::perspective::PerspectiveTable;
 
 use super::check::CheckTable;
 use super::error::RulebookError;
@@ -18,7 +18,7 @@ pub const RULEBOOK_RELATIVE_PATH: &str = ".multorum/rulebook.toml";
 ///
 /// Note: This template stays in `src/rulebook.default.toml` so design
 /// edits do not require touching Rust string literals.
-pub const DEFAULT_RULEBOOK_TEMPLATE: &str = include_str!("../rulebook.default.toml");
+pub const DEFAULT_RULEBOOK_TEMPLATE: &str = include_str!("../../rulebook.default.toml");
 
 /// The raw `.multorum/rulebook.toml` artifact.
 ///
@@ -99,7 +99,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::rulebook::CheckPolicy;
+    use crate::schema::rulebook::CheckPolicy;
 
     #[test]
     fn full_rulebook_deserializes() {
@@ -137,7 +137,7 @@ mod tests {
         assert_eq!(rulebook.perspective().declarations().len(), 2);
         assert_eq!(rulebook.check().pipeline().len(), 2);
         assert_eq!(
-            rulebook.check().declarations()[&crate::rulebook::CheckName::new("test").unwrap()]
+            rulebook.check().declarations()[&crate::schema::rulebook::CheckName::new("test").unwrap()]
                 .policy(),
             CheckPolicy::Skippable
         );

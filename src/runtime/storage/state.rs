@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::perspective::CompiledPerspective;
-use crate::rulebook::{CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook};
+use crate::schema::perspective::CompiledPerspective;
+use crate::schema::rulebook::{CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook};
 use crate::runtime::{
     AuditEntry, BundlePayload, RulebookInit, RuntimeError, WorkerContractView, WorkerId,
     WorkerPaths,

@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::rulebook::Rulebook;
+use crate::schema::rulebook::Rulebook;
 use crate::vcs::{GitVcs, VersionControl};
 
 use super::{RuntimeError, WorkerPaths};
@@ -142,7 +142,7 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use crate::perspective::PerspectiveName;
+    use crate::schema::perspective::PerspectiveName;
     use crate::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService};
     use crate::vcs::GitVcs;
 

@@ -14,7 +14,7 @@ use super::error::PerspectiveNameError;
 /// - Starts with an uppercase ASCII letter (`A`–`Z`).
 /// - Contains only ASCII alphanumeric characters (`A`–`Z`, `a`–`z`, `0`–`9`).
 ///
-/// Note: These are the same lexical rules as [`fileset::Name`](crate::fileset::Name),
+/// Note: These are the same lexical rules as [`fileset::Name`](crate::schema::fileset::Name),
 /// but a distinct type to prevent mixing file set names with perspective names.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize)]
 pub struct PerspectiveName(String);
@@ -102,7 +102,7 @@ mod tests {
     #[test]
     fn distinct_from_fileset_name() {
         // Both types accept the same string but are not interchangeable.
-        let fs_name = crate::fileset::Name::new("AuthFiles").unwrap();
+        let fs_name = crate::schema::fileset::Name::new("AuthFiles").unwrap();
         let ps_name = PerspectiveName::new("AuthFiles").unwrap();
         // They share the same string representation but different types.
         assert_eq!(fs_name.as_str(), ps_name.as_str());

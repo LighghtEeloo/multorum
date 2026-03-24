@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use serde::de;
 
-use crate::fileset::{Expr, ExprParser};
+use crate::schema::fileset::{Expr, ExprParser};
 
 use super::error::PerspectiveError;
 use super::name::PerspectiveName;
@@ -100,8 +100,8 @@ impl<'de> de::Deserialize<'de> for PerspectiveTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fileset::ParseError;
-    use crate::perspective::PerspectiveNameError;
+    use crate::schema::fileset::ParseError;
+    use crate::schema::perspective::PerspectiveNameError;
 
     #[test]
     fn deserialize_design_doc_example() {

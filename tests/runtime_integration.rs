@@ -6,8 +6,8 @@ use std::process::Command;
 use tempfile::TempDir;
 use toml::Value;
 
-use multorum::perspective::PerspectiveName;
-use multorum::rulebook::Rulebook;
+use multorum::schema::perspective::PerspectiveName;
+use multorum::schema::rulebook::Rulebook;
 use multorum::runtime::{
     BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, MessageKind,
     OrchestratorService, ReplyReference, RuntimeError, WorkerService, WorkerState,

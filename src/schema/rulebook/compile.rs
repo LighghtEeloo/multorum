@@ -3,8 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::fileset::{self, enumerate_files};
-use crate::perspective::CompiledPerspectives;
+use crate::schema::fileset::{self, enumerate_files};
+use crate::schema::perspective::CompiledPerspectives;
 use crate::runtime::PerspectiveSummary;
 
 use super::check::CompiledChecks;
@@ -89,7 +89,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::rulebook::{CheckName, CheckPolicy, Rulebook};
+    use crate::schema::rulebook::{CheckName, CheckPolicy, Rulebook};
 
     fn design_rulebook() -> Rulebook {
         Rulebook::from_toml_str(

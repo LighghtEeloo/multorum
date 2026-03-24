@@ -131,7 +131,7 @@ mod tests {
     use std::fs;
 
     use super::*;
-    use crate::fileset::{ExprParser, Validator};
+    use crate::schema::fileset::{ExprParser, Validator};
 
     fn n(s: &str) -> Name {
         Name::new(s).unwrap()
