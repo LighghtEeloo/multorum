@@ -320,7 +320,7 @@ create ─────────► ACTIVE
                      │
              ┌───────┴───────┐
              ▼               ▼
-           MERGED        DISCARDED
+          MERGED         DISCARDED
 ```
 
 - `ACTIVE`: the workspace exists and execution may proceed
@@ -511,7 +511,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 
 - `multorum util completion <shell>` — Emit shell completions to stdout. Supported shells: `bash`, `zsh`, `fish`, `elvish`, `powershell`.
 
-### Transport
+### MCP Server
 
 - `multorum serve orchestrator` — Start the orchestrator MCP server on stdio from the workspace root.
 - `multorum serve worker` — Start the worker MCP server on stdio from inside a worker worktree.
