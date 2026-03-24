@@ -1,8 +1,5 @@
 //! Error types for the perspective module.
 
-use std::collections::BTreeSet;
-use std::path::PathBuf;
-
 use thiserror::Error;
 
 use crate::fileset;
@@ -25,28 +22,6 @@ pub enum PerspectiveNameError {
     InvalidChar { name: String, ch: char, pos: usize },
 }
 
-/// A violation of the conflict-free invariant.
-///
-/// The conflict-free invariant requires that write sets are pairwise
-/// disjoint and that no file is written by one perspective and read by
-/// another.
-#[derive(Debug, Error)]
-pub enum ConflictViolation {
-    /// Two perspectives have overlapping write sets.
-    #[error(
-        "write-write overlap between `{left}` and `{right}`: {} shared file(s)",
-        files.len()
-    )]
-    WriteWriteOverlap { left: PerspectiveName, right: PerspectiveName, files: BTreeSet<PathBuf> },
-
-    /// A file is written by one perspective and read by another.
-    #[error(
-        "write-read overlap: `{writer}` writes and `{reader}` reads {} shared file(s)",
-        files.len()
-    )]
-    WriteReadOverlap { writer: PerspectiveName, reader: PerspectiveName, files: BTreeSet<PathBuf> },
-}
-
 /// Top-level error for the perspective pipeline.
 #[derive(Debug, Error)]
 pub enum PerspectiveError {
@@ -58,8 +33,4 @@ pub enum PerspectiveError {
     /// the compiled rulebook.
     #[error("perspective `{perspective}` references undefined file set `{name}`")]
     UndefinedFileSet { perspective: PerspectiveName, name: fileset::Name },
-
-    /// The conflict-free invariant was violated.
-    #[error("{0}")]
-    Conflict(#[from] ConflictViolation),
 }

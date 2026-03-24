@@ -8,7 +8,6 @@
 //! against the active workers that already exist.
 
 pub mod compile;
-pub mod validation;
 pub mod decl;
 pub mod error;
 pub mod name;
@@ -17,4 +16,3 @@ pub use compile::{CompiledPerspective, CompiledPerspectives};
 pub use decl::{PerspectiveDecl, PerspectiveTable};
 pub use error::*;
 pub use name::PerspectiveName;
-pub use validation::ConflictFreeValidator;

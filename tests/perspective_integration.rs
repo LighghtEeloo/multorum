@@ -2,18 +2,14 @@
 //!
 //! Exercises the full path: TOML deserialization of file sets and
 //! perspectives → file set compilation against a real temporary
-//! directory → perspective compilation. Runtime-facing conflict checks
-//! use the same compiled perspective boundaries later.
+//! directory → perspective compilation.
 
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 
 use multorum::fileset::{FileSetTable, enumerate_files};
-use multorum::perspective::{
-    CompiledPerspectives, ConflictFreeValidator, ConflictViolation, PerspectiveName,
-    PerspectiveTable,
-};
+use multorum::perspective::{CompiledPerspectives, PerspectiveName, PerspectiveTable};
 
 fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
     strs.iter().map(PathBuf::from).collect()
@@ -78,46 +74,6 @@ fn full_pipeline_with_tempdir() {
     let test_p = compiled.get(&PerspectiveName::new("AuthTester").unwrap()).unwrap();
     assert_eq!(*test_p.write(), path_set(&["auth/test/login_test.rs"]));
     assert_eq!(*test_p.read(), path_set(&["auth/auth.spec.md", "auth/test/login_test.rs"]));
-}
-
-#[test]
-fn conflict_validator_rejects_write_write_overlap() {
-    let (_dir, filesets) = setup_design_doc_filesets();
-
-    let toml_str = r#"
-        [P]
-        read  = "SpecFiles"
-        write = "AuthFiles"
-
-        [Q]
-        read  = "SpecFiles"
-        write = "AuthFiles"
-    "#;
-    let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
-    let compiled = table.compile(&filesets).unwrap();
-    let err = ConflictFreeValidator::new(compiled.perspectives()).validate().unwrap_err();
-    assert!(matches!(err, ConflictViolation::WriteWriteOverlap { .. }));
-}
-
-#[test]
-fn conflict_validator_rejects_write_read_overlap() {
-    let (_dir, filesets) = setup_design_doc_filesets();
-
-    // P writes AuthTests, Q reads AuthTests — disjoint writes but
-    // write-read overlap.
-    let toml_str = r#"
-        [P]
-        read  = "SpecFiles"
-        write = "AuthTests"
-
-        [Q]
-        read  = "AuthTests"
-        write = "SpecFiles"
-    "#;
-    let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
-    let compiled = table.compile(&filesets).unwrap();
-    let err = ConflictFreeValidator::new(compiled.perspectives()).validate().unwrap_err();
-    assert!(matches!(err, ConflictViolation::WriteReadOverlap { .. }));
 }
 
 #[test]
