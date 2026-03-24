@@ -204,14 +204,13 @@ Because the rulebook is version-controlled, every historical state is addressabl
 
 The orchestrator evolves the rulebook through normal commits. Multorum never follows new commits automatically. To advance policy, the orchestrator issues `rulebook install`, which validates the rulebook at `HEAD` against currently active workers.
 
-Install is file-based, not name-based. Multorum:
+Install enforces two conditions:
 
-1. collects the materialized read and write sets of all active bidding groups
-2. compiles the target rulebook at `HEAD`
-3. treats each target perspective as a candidate future bidding group
-4. checks each candidate against each active group using the conflict-free invariant
+**Continuity.** Every active bidding group must remain representable in the target rulebook. For each active group with perspective name P, the target rulebook must define P with a compiled boundary that is a superset of (or equal to) the group's materialized boundary — both read and write sets independently. Boundary expansion is permitted: the live workers keep their frozen contract, and the added files only take effect for future workers. Boundary reduction is rejected, because it would break the contract that live workers were created under.
 
-If every candidate is compatible, the install succeeds. Perspectives may be renamed, split, merged, or replaced, as long as active file boundaries remain conflict-free. On failure, Multorum rejects the install and reports the blocking groups.
+**Conflict-freedom.** Every candidate perspective in the target rulebook must satisfy the conflict-free invariant against every active bidding group whose name differs from the candidate. Same-name pairs are exempt — their compatibility is established by the continuity condition.
+
+If both conditions hold, the install succeeds and Multorum pins the `HEAD` commit as the active rulebook. On failure, Multorum rejects the install and reports the blocking perspectives.
 
 `rulebook uninstall` deactivates the active rulebook. It is rejected when any live bidding group still depends on the active rulebook.
 
@@ -447,7 +446,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 ### Rulebook
 
 - `multorum rulebook init` — Initialize `.multorum/`, write the default committed artifacts if absent, prepare `.multorum/.gitignore`, and create orchestrator runtime directories.
-- `multorum rulebook install` — Validate and activate the rulebook at `HEAD`. Rejected if any candidate perspective boundary conflicts with an active bidding group.
+- `multorum rulebook install` — Validate and activate the rulebook at `HEAD`. Rejected if any active bidding group's perspective is missing or reduced in the target, or if any candidate conflicts with a differently-named active group.
 - `multorum rulebook uninstall` — Deactivate the active rulebook. Rejected if any live bidding group still depends on it.
 - `multorum rulebook validate` — Perform the same validation as `install` without activating the rulebook.
 
