@@ -12,10 +12,11 @@ use crate::perspective::{CompiledPerspective, PerspectiveName};
 use crate::vcs::{CanonicalCommitHash, VersionControl};
 
 use super::{
-    MailboxDirection, MultorumPaths,
+    MailboxDirection,
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
     mailbox::AckRef,
+    project::CurrentProject,
     state::{
         ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,
         MergeResult, OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookInstall,
@@ -189,12 +190,12 @@ impl FsOrchestratorService {
 
     /// Construct the orchestrator service from the current directory.
     ///
-    /// If the current directory is a managed worker worktree, the
-    /// canonical workspace above `.multorum/worktrees/` is used.
+    /// The current path may be anywhere inside the canonical workspace,
+    /// but it must resolve to the orchestrator repository rather than a
+    /// managed worker worktree.
     pub fn from_current_dir() -> Result<Self> {
-        let cwd = std::env::current_dir()?;
-        let workspace_root = MultorumPaths::canonical_workspace_root(&cwd);
-        Self::new(workspace_root)
+        let project = CurrentProject::from_current_dir()?;
+        Self::new(project.orchestrator_workspace_root()?.to_path_buf())
     }
 
     fn validate_rulebook_commit(&self, commit: &CanonicalCommitHash) -> Result<RulebookValidation> {

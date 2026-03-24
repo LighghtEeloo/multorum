@@ -14,6 +14,7 @@ use super::{
     bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
     mailbox::AckRef,
+    project::CurrentProject,
     state::{MailboxMessageView, WorkerContractView, WorkerState, WorkerStatus},
     storage::{RuntimeFs, can_submit_from_state},
 };
@@ -80,9 +81,9 @@ impl FsWorkerService {
 
     /// Construct the worker service from the current directory.
     pub fn from_current_dir() -> Result<Self> {
-        let cwd = std::env::current_dir()?;
         let vcs: Arc<dyn VersionControl> = Arc::new(GitVcs::new());
-        let worktree_root = vcs.repository_root(&cwd);
+        let project = CurrentProject::with_vcs(&std::env::current_dir()?, Arc::clone(&vcs))?;
+        let worktree_root = project.worker_repo_root()?.to_path_buf();
         Self::with_vcs(worktree_root, vcs)
     }
 

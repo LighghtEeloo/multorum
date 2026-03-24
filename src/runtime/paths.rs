@@ -29,27 +29,6 @@ impl MultorumPaths {
         Ok(Self::new(workspace_root.into().canonicalize()?))
     }
 
-    /// Resolve the canonical workspace root for a path in either the
-    /// canonical workspace or a managed worker worktree.
-    pub(crate) fn canonical_workspace_root(path: &Path) -> PathBuf {
-        let components = path.components().collect::<Vec<_>>();
-        for index in 0..components.len().saturating_sub(2) {
-            if components[index].as_os_str() == OsStr::new(".multorum")
-                && components[index + 1].as_os_str() == OsStr::new("worktrees")
-            {
-                let mut root = PathBuf::new();
-                for component in &components[..index] {
-                    root.push(component.as_os_str());
-                }
-                if !root.as_os_str().is_empty() {
-                    return root;
-                }
-            }
-        }
-
-        path.to_path_buf()
-    }
-
     /// Workspace root path used for derived runtime locations.
     pub fn workspace_root(&self) -> &Path {
         &self.workspace_root

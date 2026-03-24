@@ -65,18 +65,59 @@ impl Cli {
 ///
 #[derive(Debug)]
 pub struct CliServices {
-    orchestrator: FsOrchestratorService,
+    runtime: CliRuntime,
+}
+
+/// Instantiated runtime surface for the current repository.
+#[derive(Debug)]
+enum CliRuntime {
+    /// Orchestrator-facing service bound to the canonical workspace.
+    Orchestrator(FsOrchestratorService),
+    /// Worker-facing service bound to one managed worktree.
+    Worker(FsWorkerService),
 }
 
 impl CliServices {
     /// Build CLI services from the current directory.
     pub fn from_current_dir() -> runtime::Result<Self> {
-        Ok(Self { orchestrator: FsOrchestratorService::from_current_dir()? })
+        let project = runtime::project::CurrentProject::from_current_dir()?;
+        let runtime = match project.role() {
+            | runtime::project::RuntimeRole::Orchestrator => CliRuntime::Orchestrator(
+                FsOrchestratorService::new(project.orchestrator_workspace_root()?.to_path_buf())?,
+            ),
+            | runtime::project::RuntimeRole::Worker => {
+                CliRuntime::Worker(FsWorkerService::new(project.worker_repo_root()?.to_path_buf())?)
+            }
+        };
+        Ok(Self { runtime })
+    }
+
+    /// Borrow the orchestrator service for commands that require it.
+    pub fn orchestrator(&self) -> runtime::Result<&FsOrchestratorService> {
+        match &self.runtime {
+            | CliRuntime::Orchestrator(service) => Ok(service),
+            | CliRuntime::Worker(_) => Err(runtime::RuntimeError::RuntimeRoleMismatch {
+                expected: "orchestrator",
+                actual: "worker",
+                repo_root: runtime::project::CurrentProject::from_current_dir()?
+                    .repo_root()
+                    .to_path_buf(),
+            }),
+        }
     }
 
     /// Construct the worker service for the current worktree.
-    pub fn worker(&self) -> runtime::Result<FsWorkerService> {
-        FsWorkerService::from_current_dir()
+    pub fn worker(&self) -> runtime::Result<&FsWorkerService> {
+        match &self.runtime {
+            | CliRuntime::Worker(service) => Ok(service),
+            | CliRuntime::Orchestrator(_) => Err(runtime::RuntimeError::RuntimeRoleMismatch {
+                expected: "worker",
+                actual: "orchestrator",
+                repo_root: runtime::project::CurrentProject::from_current_dir()?
+                    .repo_root()
+                    .to_path_buf(),
+            }),
+        }
     }
 }
 
@@ -406,19 +447,19 @@ impl RulebookCommand {
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
             | Self::Init => {
-                let result = services.orchestrator.rulebook_init()?;
+                let result = services.orchestrator()?.rulebook_init()?;
                 println!("{result:#?}");
             }
             | Self::Install => {
-                let result = services.orchestrator.rulebook_install()?;
+                let result = services.orchestrator()?.rulebook_install()?;
                 println!("{result:#?}");
             }
             | Self::Uninstall => {
-                let result = services.orchestrator.rulebook_uninstall()?;
+                let result = services.orchestrator()?.rulebook_uninstall()?;
                 println!("{result:#?}");
             }
             | Self::Validate => {
-                let result = services.orchestrator.rulebook_validate()?;
+                let result = services.orchestrator()?.rulebook_validate()?;
                 println!("{result:#?}");
             }
         }
@@ -508,7 +549,7 @@ impl RuntimeCommand {
             | Self::Worker { command } => command.execute(services)?,
             | Self::Local { command } => command.execute(services)?,
             | Self::Status => {
-                let result = services.orchestrator.status()?;
+                let result = services.orchestrator()?.status()?;
                 println!("{result:#?}");
             }
         }
@@ -521,7 +562,7 @@ impl PerspectiveCommand {
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
             | Self::List => {
-                let result = services.orchestrator.list_perspectives()?;
+                let result = services.orchestrator()?.list_perspectives()?;
                 println!("{result:#?}");
             }
         }
@@ -546,29 +587,30 @@ impl WorkerCommand {
                 if let Some(task) = task {
                     request = request.with_task(task);
                 }
-                let result = services.orchestrator.create_worker(request)?;
+                let result = services.orchestrator()?.create_worker(request)?;
                 println!("{result:#?}");
             }
             | Self::List => {
-                let result = services.orchestrator.list_workers()?;
+                let result = services.orchestrator()?.list_workers()?;
                 println!("{result:#?}");
             }
             | Self::Show { worker_id } => {
-                let result = services.orchestrator.get_worker(worker_id)?;
+                let result = services.orchestrator()?.get_worker(worker_id)?;
                 println!("{result:#?}");
             }
             | Self::Outbox { worker_id, after } => {
-                let result =
-                    services.orchestrator.read_outbox(worker_id, after.map(runtime::Sequence))?;
+                let result = services
+                    .orchestrator()?
+                    .read_outbox(worker_id, after.map(runtime::Sequence))?;
                 println!("{result:#?}");
             }
             | Self::Ack { worker_id, sequence } => {
                 let result =
-                    services.orchestrator.ack_outbox(worker_id, runtime::Sequence(sequence))?;
+                    services.orchestrator()?.ack_outbox(worker_id, runtime::Sequence(sequence))?;
                 println!("{result:#?}");
             }
             | Self::Resolve { worker_id, payload, reply } => {
-                let result = services.orchestrator.resolve_worker(
+                let result = services.orchestrator()?.resolve_worker(
                     worker_id,
                     reply.into_runtime(),
                     payload.into_runtime(),
@@ -576,7 +618,7 @@ impl WorkerCommand {
                 println!("{result:#?}");
             }
             | Self::Revise { worker_id, payload, reply } => {
-                let result = services.orchestrator.revise_worker(
+                let result = services.orchestrator()?.revise_worker(
                     worker_id,
                     reply.into_runtime(),
                     payload.into_runtime(),
@@ -584,15 +626,15 @@ impl WorkerCommand {
                 println!("{result:#?}");
             }
             | Self::Discard { worker_id } => {
-                let result = services.orchestrator.discard_worker(worker_id)?;
+                let result = services.orchestrator()?.discard_worker(worker_id)?;
                 println!("{result:#?}");
             }
             | Self::Delete { worker_id } => {
-                let result = services.orchestrator.delete_worker(worker_id)?;
+                let result = services.orchestrator()?.delete_worker(worker_id)?;
                 println!("{result:#?}");
             }
             | Self::Merge { worker_id, skip_checks } => {
-                let result = services.orchestrator.merge_worker(worker_id, skip_checks)?;
+                let result = services.orchestrator()?.merge_worker(worker_id, skip_checks)?;
                 println!("{result:#?}");
             }
         }

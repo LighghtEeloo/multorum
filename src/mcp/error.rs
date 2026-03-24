@@ -66,6 +66,9 @@ pub struct McpToolError {
 impl From<RuntimeError> for McpToolError {
     fn from(value: RuntimeError) -> Self {
         let code = match value {
+            | RuntimeError::UnmanagedProject(_) => McpErrorCode::InvalidState,
+            | RuntimeError::AmbiguousRuntimeRole { .. } => McpErrorCode::InvalidState,
+            | RuntimeError::RuntimeRoleMismatch { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MissingActiveRulebook => McpErrorCode::InvalidState,
             | RuntimeError::RulebookExists(_) => McpErrorCode::InvalidState,
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,

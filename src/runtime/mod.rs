@@ -11,6 +11,7 @@ pub(crate) mod storage;
 pub mod mailbox;
 pub mod orchestrator;
 pub mod paths;
+pub(crate) mod project;
 pub mod projection;
 pub mod state;
 pub mod worker;

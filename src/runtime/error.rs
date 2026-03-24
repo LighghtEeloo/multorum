@@ -16,6 +16,30 @@ pub type Result<T> = std::result::Result<T, RuntimeError>;
 /// Errors produced by the runtime application layer.
 #[derive(Debug, Error)]
 pub enum RuntimeError {
+    /// The current repository is not managed by Multorum.
+    #[error("current repository is not a Multorum-managed project: `{0}`")]
+    UnmanagedProject(PathBuf),
+
+    /// The runtime markers for the current repository disagree.
+    #[error("cannot determine Multorum runtime role for `{repo_root}`: {details}", repo_root = repo_root.display())]
+    AmbiguousRuntimeRole {
+        /// Repository root whose runtime markers disagree.
+        repo_root: PathBuf,
+        /// Short explanation of the conflicting markers.
+        details: &'static str,
+    },
+
+    /// The caller requested the wrong runtime surface for the current repository.
+    #[error("current repository `{repo_root}` is a {actual} runtime, not a {expected} runtime", repo_root = repo_root.display())]
+    RuntimeRoleMismatch {
+        /// Runtime role required by the caller.
+        expected: &'static str,
+        /// Runtime role discovered for the current repository.
+        actual: &'static str,
+        /// Repository root used for role detection.
+        repo_root: PathBuf,
+    },
+
     /// The runtime has not activated a rulebook yet.
     #[error("no active rulebook; run `multorum rulebook install` first")]
     MissingActiveRulebook,
