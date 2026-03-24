@@ -1,5 +1,6 @@
+use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use tempfile::TempDir;
@@ -954,4 +955,57 @@ fn install_rejects_new_perspective_conflicting_with_active_group() {
 
     let error = orchestrator.rulebook_install().unwrap_err();
     assert!(matches!(error, RuntimeError::RulebookConflict { .. }));
+}
+
+fn read_exclusion_set(dir: &Path) -> BTreeSet<PathBuf> {
+    let path = dir.canonicalize().unwrap().join(".multorum/orchestrator/exclusion-set.txt");
+    if !path.exists() {
+        return BTreeSet::new();
+    }
+    fs::read_to_string(&path)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+#[test]
+fn exclusion_set_tracks_active_worker_boundaries() {
+    let (dir, orchestrator, _head) = setup_repo();
+
+    // After install with no workers the exclusion set is empty.
+    assert!(read_exclusion_set(dir.path()).is_empty());
+
+    // Creating a worker adds its read and write sets to the exclusion set.
+    let result =
+        orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let exclusion = read_exclusion_set(dir.path());
+    assert!(exclusion.contains(&PathBuf::from("src/owned.rs")), "write set file missing");
+    assert!(exclusion.contains(&PathBuf::from("src/other.rs")), "read set file missing");
+
+    // Discarding the worker clears the exclusion set.
+    orchestrator.discard_worker(result.worker_id).unwrap();
+    assert!(read_exclusion_set(dir.path()).is_empty());
+}
+
+#[test]
+fn exclusion_set_clears_after_merge() {
+    let (dir, orchestrator, _head) = setup_repo();
+
+    let result =
+        orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    assert!(!read_exclusion_set(dir.path()).is_empty());
+
+    // Commit a change in the worker worktree so we can merge.
+    let worker = FsWorkerService::new(&result.worktree_path).unwrap();
+    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 42 }\n")
+        .unwrap();
+    git(&result.worktree_path, &["add", "src/owned.rs"]);
+    git(&result.worktree_path, &["commit", "-m", "feat: update owned"]);
+    let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
+    worker.send_commit(head, BundlePayload::default()).unwrap();
+
+    orchestrator.merge_worker(result.worker_id, vec![]).unwrap();
+    assert!(read_exclusion_set(dir.path()).is_empty());
 }

@@ -213,6 +213,28 @@ impl RuntimeFs {
             .collect())
     }
 
+    /// Recompute and persist the orchestrator exclusion set.
+    ///
+    /// The exclusion set is the union of every active bidding group's
+    /// read and write sets. It must be rewritten after any lifecycle
+    /// transition that changes the set of active workers (create,
+    /// merge, discard).
+    pub(crate) fn rewrite_exclusion_set(&self) -> Result<(), RuntimeError> {
+        let mut exclusion = BTreeSet::<PathBuf>::new();
+        for record in self.list_worker_records()? {
+            if !super::is_live_worker_state(record.state) {
+                continue;
+            }
+            let worker_paths = self.worker_paths(&record.worker_id);
+            exclusion.extend(Self::read_path_list(&worker_paths.read_set())?);
+            exclusion.extend(Self::read_path_list(&worker_paths.write_set())?);
+        }
+        let path = self.paths.orchestrator().exclusion_set();
+        Self::write_path_list(&path, &exclusion)?;
+        tracing::debug!(count = exclusion.len(), "rewrote orchestrator exclusion set");
+        Ok(())
+    }
+
     fn ensure_multorum_gitignore(&self) -> Result<(), RuntimeError> {
         let gitignore_path = self.paths.multorum_gitignore();
         let mut lines = if gitignore_path.exists() {

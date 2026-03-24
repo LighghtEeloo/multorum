@@ -468,6 +468,7 @@ impl OrchestratorService for FsOrchestratorService {
         let record =
             ActiveRulebookRecord { base_commit: commit.clone(), activated_at: timestamp_now() };
         self.fs.store_active_rulebook(&record)?;
+        self.fs.rewrite_exclusion_set()?;
         tracing::info!(base_commit = %record.base_commit, "installed rulebook");
         Ok(RulebookInstall { active_commit: record.base_commit })
     }
@@ -489,6 +490,7 @@ impl OrchestratorService for FsOrchestratorService {
         }
 
         self.fs.remove_active_rulebook()?;
+        self.fs.rewrite_exclusion_set()?;
         tracing::info!(base_commit = %active.base_commit, "uninstalled rulebook");
         Ok(RulebookUninstall { previous_commit: active.base_commit })
     }
@@ -607,6 +609,8 @@ impl OrchestratorService for FsOrchestratorService {
             None
         };
 
+        self.fs.rewrite_exclusion_set()?;
+
         tracing::info!(
             worker_id = %worker_id,
             perspective = %perspective,
@@ -646,6 +650,7 @@ impl OrchestratorService for FsOrchestratorService {
         }
 
         self.finalize_discarded_worker(&mut record)?;
+        self.fs.rewrite_exclusion_set()?;
 
         tracing::info!(worker_id = %record.worker_id, perspective = %record.perspective, "discarded worker");
         Ok(DiscardResult {
@@ -768,6 +773,7 @@ impl OrchestratorService for FsOrchestratorService {
         }) {
             self.finalize_discarded_worker(&mut sibling)?;
         }
+        self.fs.rewrite_exclusion_set()?;
 
         tracing::info!(
             worker_id = %record.worker_id,

@@ -99,6 +99,15 @@ impl OrchestratorPaths {
     pub fn audit(&self) -> PathBuf {
         self.root.join("audit")
     }
+
+    /// Materialized orchestrator exclusion set.
+    ///
+    /// Contains the union of all active bidding groups' read and write
+    /// sets. The pre-commit hook reads this file to reject orchestrator
+    /// commits that touch protected files.
+    pub fn exclusion_set(&self) -> PathBuf {
+        self.root.join("exclusion-set.txt")
+    }
 }
 
 /// Paths under a worker worktree.
