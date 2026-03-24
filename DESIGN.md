@@ -332,7 +332,7 @@ create ─────────► ACTIVE
 
 Once one worker in a bidding group reaches `MERGED`, every sibling in that group becomes `DISCARDED`.
 
-`delete` is not a lifecycle transition. It removes the worktree of a finalized worker.
+`delete` is not a lifecycle transition. It removes the worktree and worker state file of a finalized worker.
 
 ### Transitions
 
@@ -493,7 +493,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 - `multorum worker revise <worker-id>` — Publish a `revise` bundle to a committed worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
 - `multorum worker merge <worker-id> [--skip-check <check>]... [--body <text>] [--body-path <file>] [--artifact <file>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. The optional payload arguments attach an audit rationale. Transition: `COMMITTED` to `MERGED`.
 - `multorum worker discard <worker-id>` — Finalize a worker without integration. Allowed from `ACTIVE` or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
-- `multorum worker delete <worker-id>` — Delete the worktree of a finalized worker. Allowed only from `MERGED` or `DISCARDED`.
+- `multorum worker delete <worker-id>` — Delete the worktree and worker state file of a finalized worker. Allowed only from `MERGED` or `DISCARDED`.
 
 ### Worker-Local Commands
 
