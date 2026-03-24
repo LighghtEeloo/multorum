@@ -40,6 +40,8 @@ pub enum MessageKind {
     Revise,
     /// Worker submission of a completed commit.
     Commit,
+    /// Orchestrator audit record published to a merged worker after integration.
+    Audit,
 }
 
 /// Stable reference to a published bundle.

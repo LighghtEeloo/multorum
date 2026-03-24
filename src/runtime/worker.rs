@@ -183,7 +183,7 @@ impl FsWorkerService {
                 record.state = WorkerState::Active;
                 self.fs.store_worker_record(&record)?;
             }
-            | MessageKind::Report | MessageKind::Commit => {}
+            | MessageKind::Report | MessageKind::Commit | MessageKind::Audit => {}
         }
 
         Ok(())

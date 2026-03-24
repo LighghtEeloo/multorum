@@ -360,21 +360,44 @@ Each worker exposes two mailbox trees in its `.multorum/` directory:
 
 ### Message Bundles
 
-Every message is a directory bundle published atomically:
+Every message is a directory bundle. A bundle is an immutable directory that carries metadata and payloads atomically.
 
-```text
-.multorum/outbox/new/0007-report/
-  envelope.toml
-  body.md
-  artifacts/
-    test.log
+```
+<mailbox>/new/<sequence>-<kind>/
+  envelope.toml    # machine-readable metadata
+  body.md          # primary content
+  artifacts/       # optional auxiliary files
 ```
 
-`envelope.toml` carries the metadata Multorum interprets: `protocol`, `worker`, `perspective`, `kind`, `sequence`, `created_at`, and optionally `in_reply_to` and `head_commit`.
+`envelope.toml` is the only file Multorum interprets:
 
-`body.md` and `artifacts/` are opaque payloads. Multorum validates the envelope but does not interpret the content.
+```toml
+protocol    = "multorum/v1"
+worker      = "my-worker-id"     # author runtime identity
+perspective = "AuthImplementor"  # author perspective
+kind        = "report"           # message classification
+sequence    = 7                  # monotonic counter per author
+created_at  = "2026-03-24T10:00:00Z"
+in_reply_to = 5                  # optional, for correlation
+head_commit = "a1b2c3d"          # optional, for submission kinds
+```
 
-Publication is atomic: bundles are written under a temporary name and renamed into `new/`, so readers see either the full message or nothing.
+`body.md` and `artifacts/` are opaque to Multorum. The runtime validates the envelope on publication and delivery, but never parses the content.
+
+The `kind` field classifies the message:
+
+- `task` — orchestrator assigns or updates a task for the worker
+- `report` — worker reports a blocker, transitions worker to `BLOCKED`
+- `commit` — worker submits completed work, transitions worker to `COMMITTED`
+- `resolve` — orchestrator resolves a blocker
+- `revise` — orchestrator requests revisions to a submission
+- `audit` — orchestrator records the decision rationale after a merge
+
+Bundles are published atomically: Multorum writes to a temporary name inside `new/` then renames into place. Readers see either the complete bundle or nothing. Sequence numbers are assigned by the author at publication time and never reused.
+
+Published bundles are immutable. Receipt is recorded by writing an acknowledgement file with the same sequence number into the corresponding `ack/` directory. The unique runtime identity in all exchanges is the worker id, not the perspective name.
+
+If a publication supplies payloads by path, Multorum consumes them rather than copying. On successful publish, the runtime moves the files into bundle storage and becomes responsible for retaining them.
 
 ### Ownership and Acknowledgement
 
@@ -384,20 +407,6 @@ Each mailbox subtree has exactly one writer:
 - worker writes `inbox/ack/`
 - worker writes `outbox/new/`
 - orchestrator writes `outbox/ack/`
-
-Published bundles are immutable. Receipt is recorded by writing an acknowledgement file with the same sequence number into the corresponding `ack/` directory.
-
-The unique runtime identity is the worker id, not the perspective name. Perspective metadata travels in the envelope so the orchestrator can reason about role and bidding-group membership.
-
-### Reports, Revisions, and Submission
-
-Worker reports are first-class messages. A worker sends `report` for any issue that blocks confident completion: permission problems, task ambiguity, boundary mismatches, or evidence for orchestrator review. Multorum transitions the worker from `ACTIVE` to `BLOCKED`. The orchestrator answers with `resolve`.
-
-The same transport handles post-review feedback: the worker submits `commit`, and the orchestrator responds with `revise` when more work is required.
-
-`merge`, `discard`, and `delete` are orchestrator-local actions, not mailbox messages.
-
-If a publication supplies payloads by path, Multorum consumes them rather than copying. On successful publish, the runtime moves the files into bundle storage and becomes responsible for retaining them.
 
 ---
 

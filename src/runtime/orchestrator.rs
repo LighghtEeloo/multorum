@@ -418,6 +418,9 @@ impl FsOrchestratorService {
             | MessageKind::Revise if record.state == WorkerState::Committed => {
                 Some(WorkerState::Committed)
             }
+            | MessageKind::Audit if record.state == WorkerState::Merged => {
+                Some(WorkerState::Merged)
+            }
             | _ => None,
         };
         if expected_state.is_some() {
@@ -436,12 +439,14 @@ impl FsOrchestratorService {
         let expected = match kind {
             | MessageKind::Resolve => "BLOCKED",
             | MessageKind::Revise => "COMMITTED",
+            | MessageKind::Audit => "MERGED",
             | _ => "a state that accepts inbox publication",
         };
         Err(RuntimeError::InvalidState {
             operation: match kind {
                 | MessageKind::Resolve => "publish resolve bundle",
                 | MessageKind::Revise => "publish revise bundle",
+                | MessageKind::Audit => "publish audit bundle",
                 | _ => "publish inbox bundle",
             },
             expected,
