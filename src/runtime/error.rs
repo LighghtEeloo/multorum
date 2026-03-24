@@ -30,7 +30,11 @@ pub enum RuntimeError {
     },
 
     /// The caller requested the wrong runtime surface for the current repository.
-    #[error("current repository `{repo_root}` is a {actual} runtime, not a {expected} runtime", repo_root = repo_root.display())]
+    #[error(
+        "current repository `{repo_root}` uses the {actual} runtime, not the {expected} runtime; {hint}",
+        repo_root = repo_root.display(),
+        hint = runtime_role_mismatch_hint(expected, actual)
+    )]
     RuntimeRoleMismatch {
         /// Runtime role required by the caller.
         expected: &'static str,
@@ -275,10 +279,58 @@ fn worker_state_name(state: WorkerState) -> &'static str {
     }
 }
 
+/// Return the most useful CLI hint for one runtime-role mismatch.
+fn runtime_role_mismatch_hint(expected: &str, actual: &str) -> &'static str {
+    match (expected, actual) {
+        | ("worker", "orchestrator") => {
+            "this looks like running `local` command in orchestrator workspace"
+        }
+        | ("orchestrator", "worker") => {
+            "this looks like running `worker` command in worker workspace"
+        }
+        | _ => "the current workspace does not support that runtime operation",
+    }
+}
+
 fn format_perspectives(perspectives: &[PerspectiveName]) -> String {
     perspectives.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")
 }
 
 fn format_paths(paths: &[PathBuf]) -> String {
     paths.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", ")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::RuntimeError;
+
+    #[test]
+    fn runtime_role_mismatch_mentions_local_command_in_orchestrator_workspace() {
+        let error = RuntimeError::RuntimeRoleMismatch {
+            expected: "worker",
+            actual: "orchestrator",
+            repo_root: PathBuf::from("/repo"),
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "current repository `/repo` uses the orchestrator runtime, not the worker runtime; this looks like running `local` command in orchestrator workspace"
+        );
+    }
+
+    #[test]
+    fn runtime_role_mismatch_mentions_worker_command_in_worker_workspace() {
+        let error = RuntimeError::RuntimeRoleMismatch {
+            expected: "orchestrator",
+            actual: "worker",
+            repo_root: PathBuf::from("/repo"),
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "current repository `/repo` uses the worker runtime, not the orchestrator runtime; this looks like running `worker` command in worker workspace"
+        );
+    }
 }
