@@ -82,7 +82,7 @@ When adding new features, record and observe details with the `tracing` crate.
 
 ## Version Control
 
-This project uses jujutsu, which is compatible to git. Use mcp for jujutsu to operate.
+This project uses git. Use git to operate.
 
 ### Commit Message Convention
 
