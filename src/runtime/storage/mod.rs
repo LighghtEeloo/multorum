@@ -114,7 +114,6 @@ impl MessageKind {
             | Self::Resolve => "resolve",
             | Self::Revise => "revise",
             | Self::Commit => "commit",
-            | Self::Audit => "audit",
         }
     }
 }

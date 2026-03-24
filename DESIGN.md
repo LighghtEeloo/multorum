@@ -391,7 +391,6 @@ The `kind` field classifies the message:
 - `commit` — worker submits completed work, transitions worker to `COMMITTED`
 - `resolve` — orchestrator resolves a blocker
 - `revise` — orchestrator requests revisions to a submission
-- `audit` — orchestrator records the decision rationale after a merge
 
 Bundles are published atomically: Multorum writes to a temporary name inside `new/` then renames into place. Readers see either the complete bundle or nothing. Sequence numbers are assigned by the author at publication time and never reused.
 
@@ -430,7 +429,7 @@ Workers may submit evidence with their reports or commits to support the case fo
 
 ### Audit
 
-After a successful merge, Multorum writes an audit entry to `.multorum/orchestrator/audit/<worker-id>.toml`. The entry records the worker id, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The orchestrator supplies the rationale as a payload at merge time — a body describing what the worker accomplished and why the merge was accepted, with optional supporting artifacts. If no rationale is supplied, the entry is still written with an empty payload.
+After a successful merge, Multorum writes an audit entry to `.multorum/orchestrator/audit/<worker-id>.toml`. The entry records the worker id, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is attached to the `merge` command via `--body`, `--body-path`, and `--artifact` flags. Multorum consumes those files and stores them alongside the TOML entry under the same audit directory.
 
 ---
 
