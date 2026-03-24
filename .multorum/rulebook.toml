@@ -7,6 +7,9 @@
 # contracts against concurrent writes.
 
 [fileset]
+# Rust code.
+RustFiles.path = "**/*.rs"
+
 # Cross-cutting project surface.
 CargoToml.path = "Cargo.toml"
 CargoLock.path = "Cargo.lock"
@@ -42,6 +45,11 @@ McpTests.path = "tests/mcp/**"
 McpFiles = "McpSrc | McpTests"
 
 [perspective]
+# Blanket perspective that owns all Rust code.
+[perspective.RustDeveloper]
+read = "RustFiles"
+write = "RustFiles"
+
 # Owns files that change project-wide behavior or define the repository's
 # canonical documentation and policy surface.
 [perspective.ProjectSurface]
