@@ -55,3 +55,13 @@ pub fn assert_tool_error(result: &CallToolResult) {
         tool_text(result),
     );
 }
+
+/// Assert a tool error and return the parsed error code string.
+pub fn assert_tool_error_code(result: &CallToolResult, expected_code: &str) {
+    assert_tool_error(result);
+    let err = tool_json(result);
+    assert_eq!(
+        err["code"], expected_code,
+        "expected error code `{expected_code}`, got: {err}",
+    );
+}

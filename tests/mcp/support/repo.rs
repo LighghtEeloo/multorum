@@ -23,6 +23,73 @@ fn rulebook_toml() -> &'static str {
     "#
 }
 
+/// Rulebook with two disjoint perspectives and a check pipeline.
+///
+/// Each perspective has fully isolated read and write sets so that
+/// both may have concurrent active workers without exclusion
+/// conflicts:
+///
+/// - `AuthImplementor`: writes `src/auth.rs`, reads `src/auth_ref.rs`
+/// - `DataImplementor`: writes `src/data.rs`, reads `src/data_ref.rs`
+///
+/// The check pipeline includes a skippable `lint` and a non-skippable
+/// `build`.
+fn multi_perspective_rulebook_toml() -> &'static str {
+    r#"
+        [fileset]
+        AuthOwned.path = "src/auth.rs"
+        AuthRef.path = "src/auth_ref.rs"
+        DataOwned.path = "src/data.rs"
+        DataRef.path = "src/data_ref.rs"
+
+        [perspective.AuthImplementor]
+        read = "AuthRef"
+        write = "AuthOwned"
+
+        [perspective.DataImplementor]
+        read = "DataRef"
+        write = "DataOwned"
+
+        [check]
+        pipeline = ["lint", "build"]
+
+        [check.command]
+        lint = "true"
+        build = "true"
+
+        [check.policy]
+        lint = "skippable"
+    "#
+}
+
+/// Set up a repo with two fully disjoint perspectives and a check
+/// pipeline.
+pub fn setup_multi_perspective_repo() -> (TempDir, FsOrchestratorService) {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::create_dir_all(dir.path().join(".multorum")).unwrap();
+    fs::write(dir.path().join("src/auth.rs"), "pub fn auth() -> i32 { 1 }\n").unwrap();
+    fs::write(dir.path().join("src/auth_ref.rs"), "pub fn auth_ref() -> i32 { 2 }\n").unwrap();
+    fs::write(dir.path().join("src/data.rs"), "pub fn data() -> i32 { 3 }\n").unwrap();
+    fs::write(dir.path().join("src/data_ref.rs"), "pub fn data_ref() -> i32 { 4 }\n").unwrap();
+    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
+    fs::write(
+        dir.path().join(".multorum/rulebook.toml"),
+        multi_perspective_rulebook_toml(),
+    )
+    .unwrap();
+
+    git(dir.path(), &["init"]);
+    git(dir.path(), &["config", "user.name", "Multorum Test"]);
+    git(dir.path(), &["config", "user.email", "multorum@test.invalid"]);
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-m", "feat: initialize multi-perspective fixture"]);
+
+    let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
+    orchestrator.rulebook_install().unwrap();
+    (dir, orchestrator)
+}
+
 pub fn git(root: &Path, args: &[&str]) -> String {
     let output = Command::new("git").args(args).current_dir(root).output().unwrap();
     if !output.status.success() {

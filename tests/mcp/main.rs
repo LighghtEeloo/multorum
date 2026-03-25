@@ -8,6 +8,7 @@ mod support;
 mod cli_subprocess;
 mod concurrent_dispatch;
 mod malformed_args;
+mod scenarios;
 mod schema_snapshot;
 mod transport;
 mod wire_roundtrip;
