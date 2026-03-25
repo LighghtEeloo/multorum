@@ -25,8 +25,9 @@ impl RuntimeFs {
     /// Publish a mailbox bundle and transfer any path-backed payloads.
     pub(crate) fn publish_bundle(
         &self, worktree_root: &Path, direction: MailboxDirection, kind: MessageKind,
-        worker_id: &crate::runtime::WorkerId, perspective: &crate::schema::perspective::PerspectiveName,
-        reply: ReplyReference, head_commit: Option<CanonicalCommitHash>, payload: BundlePayload,
+        worker_id: &crate::runtime::WorkerId,
+        perspective: &crate::schema::perspective::PerspectiveName, reply: ReplyReference,
+        head_commit: Option<CanonicalCommitHash>, payload: BundlePayload,
     ) -> Result<PublishedBundle, RuntimeError> {
         if payload.body_text.is_some() && payload.body_path.is_some() {
             return Err(RuntimeError::InvalidPayload(

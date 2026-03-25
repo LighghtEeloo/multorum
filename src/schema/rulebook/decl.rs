@@ -137,7 +137,8 @@ mod tests {
         assert_eq!(rulebook.perspective().declarations().len(), 2);
         assert_eq!(rulebook.check().pipeline().len(), 2);
         assert_eq!(
-            rulebook.check().declarations()[&crate::schema::rulebook::CheckName::new("test").unwrap()]
+            rulebook.check().declarations()
+                [&crate::schema::rulebook::CheckName::new("test").unwrap()]
                 .policy(),
             CheckPolicy::Skippable
         );

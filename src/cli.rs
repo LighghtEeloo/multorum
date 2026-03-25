@@ -18,11 +18,11 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 
 use crate::{
-    schema::perspective::PerspectiveName,
     runtime::{
         self, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerId,
         WorkerService,
     },
+    schema::perspective::PerspectiveName,
 };
 
 /// Multorum — multi-perspective conflict-free codebase orchestration.
@@ -638,8 +638,11 @@ impl WorkerCommand {
                 println!("{result:#?}");
             }
             | Self::Merge { worker_id, skip_checks, payload } => {
-                let result =
-                    services.orchestrator()?.merge_worker(worker_id, skip_checks, payload.into_runtime())?;
+                let result = services.orchestrator()?.merge_worker(
+                    worker_id,
+                    skip_checks,
+                    payload.into_runtime(),
+                )?;
                 println!("{result:#?}");
             }
         }

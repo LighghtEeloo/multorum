@@ -6,12 +6,13 @@ use std::process::Command;
 use tempfile::TempDir;
 use toml::Value;
 
-use multorum::schema::perspective::PerspectiveName;
-use multorum::schema::rulebook::Rulebook;
 use multorum::runtime::{
     BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, MessageKind,
     OrchestratorService, ReplyReference, RuntimeError, WorkerService, WorkerState,
 };
+use multorum::schema::perspective::PerspectiveName;
+use multorum::schema::rulebook::Rulebook;
+use multorum::vcs::VcsError;
 
 fn perspective() -> PerspectiveName {
     PerspectiveName::new("AuthImplementor").unwrap()
@@ -724,12 +725,12 @@ fn send_commit_reports_missing_commit_with_worktree_context() {
     let error = worker.send_commit("deadbeef".to_owned(), BundlePayload::default()).unwrap_err();
     assert!(matches!(
         error,
-        RuntimeError::CommitNotFound {
+        RuntimeError::Vcs(VcsError::CommitNotFound {
             operation,
             worktree_root,
             commit,
             ..
-        } if operation == "verify submitted worker commit"
+        }) if operation == "verify submitted worker commit"
             && worktree_root == provision.worktree_path
             && commit == "deadbeef"
     ));

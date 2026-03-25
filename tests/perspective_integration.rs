@@ -17,8 +17,10 @@ fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
 
 /// Create the design-doc file tree in a temporary directory and
 /// return compiled file sets ready for perspective compilation.
-fn setup_design_doc_filesets()
--> (tempfile::TempDir, std::collections::BTreeMap<multorum::schema::fileset::Name, BTreeSet<PathBuf>>) {
+fn setup_design_doc_filesets() -> (
+    tempfile::TempDir,
+    std::collections::BTreeMap<multorum::schema::fileset::Name, BTreeSet<PathBuf>>,
+) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 

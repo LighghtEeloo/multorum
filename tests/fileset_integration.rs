@@ -7,7 +7,9 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 
-use multorum::schema::fileset::{FileSetError, FileSetTable, Name, ValidationError, enumerate_files};
+use multorum::schema::fileset::{
+    FileSetError, FileSetTable, Name, ValidationError, enumerate_files,
+};
 
 fn path_set(strs: &[&str]) -> BTreeSet<PathBuf> {
     strs.iter().map(PathBuf::from).collect()

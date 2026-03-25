@@ -8,14 +8,16 @@
 //! implementation.
 
 mod commit;
+pub mod error;
 mod git;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::runtime::RuntimeError;
+use error::Result;
 
 pub use commit::CanonicalCommitHash;
+pub use error::VcsError;
 pub use git::GitVcs;
 
 /// Repository operations required by the Multorum runtime.
@@ -38,20 +40,20 @@ pub trait VersionControl: std::fmt::Debug + Send + Sync {
     /// commit identifier used by the runtime.
     fn resolve_commit(
         &self, repo_root: &Path, revision: &str, operation: &'static str,
-    ) -> Result<CanonicalCommitHash, RuntimeError>;
+    ) -> Result<CanonicalCommitHash>;
 
     /// Return the current `HEAD` commit for one repository view.
-    fn head_commit(&self, repo_root: &Path) -> Result<CanonicalCommitHash, RuntimeError>;
+    fn head_commit(&self, repo_root: &Path) -> Result<CanonicalCommitHash>;
 
     /// Return every changed path between two commits.
     fn changed_files(
         &self, repo_root: &Path, from: &CanonicalCommitHash, to: &CanonicalCommitHash,
-    ) -> Result<BTreeSet<PathBuf>, RuntimeError>;
+    ) -> Result<BTreeSet<PathBuf>>;
 
     /// Materialize a worker worktree at one pinned base commit.
     fn create_worktree(
         &self, workspace_root: &Path, worktree_root: &Path, base_commit: &CanonicalCommitHash,
-    ) -> Result<(), RuntimeError>;
+    ) -> Result<()>;
 
     /// Remove a previously-managed worker worktree.
     ///
@@ -59,38 +61,34 @@ pub trait VersionControl: std::fmt::Debug + Send + Sync {
     /// to remove, even if the directory was already missing on disk.
     /// `multorum worker delete` relies on the backend instead of raw
     /// filesystem deletion so repository metadata stays consistent.
-    fn remove_worktree(
-        &self, workspace_root: &Path, worktree_root: &Path,
-    ) -> Result<bool, RuntimeError>;
+    fn remove_worktree(&self, workspace_root: &Path, worktree_root: &Path) -> Result<bool>;
 
     /// Refuse integration when the canonical workspace already carries
     /// unrelated tracked modifications.
-    fn ensure_clean_workspace(&self, workspace_root: &Path) -> Result<(), RuntimeError>;
+    fn ensure_clean_workspace(&self, workspace_root: &Path) -> Result<()>;
 
     /// Integrate one submitted worker commit into the canonical
     /// workspace.
-    fn integrate_commit(
-        &self, workspace_root: &Path, commit: &CanonicalCommitHash,
-    ) -> Result<(), RuntimeError>;
+    fn integrate_commit(&self, workspace_root: &Path, commit: &CanonicalCommitHash) -> Result<()>;
 
     /// Install backend-local ignore rules and mutation guards inside a
     /// worker worktree created during worker creation.
-    fn install_worker_runtime_support(&self, worktree_root: &Path) -> Result<(), RuntimeError>;
+    fn install_worker_runtime_support(&self, worktree_root: &Path) -> Result<()>;
 
     /// Install or update the orchestrator pre-commit hook in the
     /// canonical workspace.
     ///
     /// The hook reads the materialized exclusion set and rejects commits
     /// that touch any listed file.
-    fn install_orchestrator_hook(&self, workspace_root: &Path) -> Result<(), RuntimeError>;
+    fn install_orchestrator_hook(&self, workspace_root: &Path) -> Result<()>;
 
     /// Read one repository-relative file from a specific commit.
     fn show_file_at_commit(
         &self, workspace_root: &Path, commit: &CanonicalCommitHash, path: &Path,
-    ) -> Result<String, RuntimeError>;
+    ) -> Result<String>;
 
     /// List every repository-relative file visible at one commit.
     fn list_files_at_commit(
         &self, workspace_root: &Path, commit: &CanonicalCommitHash,
-    ) -> Result<Vec<PathBuf>, RuntimeError>;
+    ) -> Result<Vec<PathBuf>>;
 }

@@ -91,8 +91,7 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::MissingSubmittedHeadCommit { .. }
             | RuntimeError::NoNewCommit { .. }
             | RuntimeError::WorkerHeadMismatch { .. }
-            | RuntimeError::CommitNotFound { .. }
-            | RuntimeError::Vcs { .. }
+            | RuntimeError::Vcs(_)
             | RuntimeError::Rulebook(_)
             | RuntimeError::Io(_)
             | RuntimeError::TomlDecode(_)

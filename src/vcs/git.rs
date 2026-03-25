@@ -5,8 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::runtime::RuntimeError;
-
+use super::error::{Result, VcsError};
 use super::{CanonicalCommitHash, VersionControl};
 
 const WORKER_EXCLUDE_ENTRIES: [&str; 6] = [
@@ -34,9 +33,7 @@ impl GitVcs {
         command
     }
 
-    fn run_command(
-        &self, mut command: Command, action: &'static str,
-    ) -> Result<String, RuntimeError> {
+    fn run_command(&self, mut command: Command, action: &'static str) -> Result<String> {
         let cwd =
             command.get_current_dir().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
         let output = command.output()?;
@@ -44,7 +41,7 @@ impl GitVcs {
             return Ok(String::from_utf8_lossy(&output.stdout).trim_end().to_owned());
         }
 
-        Err(RuntimeError::Vcs {
+        Err(VcsError::CommandFailed {
             backend: self.backend_name(),
             action,
             cwd,
@@ -57,9 +54,7 @@ impl GitVcs {
     ///
     /// Note: `multorum worker delete` must clear Git's administrative
     /// worktree entry even when the directory vanished on disk.
-    fn is_registered_worktree(
-        &self, workspace_root: &Path, worktree_root: &Path,
-    ) -> Result<bool, RuntimeError> {
+    fn is_registered_worktree(&self, workspace_root: &Path, worktree_root: &Path) -> Result<bool> {
         let mut command = self.git_command(workspace_root);
         command.arg("worktree").arg("list").arg("--porcelain");
         let output = self.run_command(command, "list worktrees")?;
@@ -70,7 +65,7 @@ impl GitVcs {
             .any(|entry| normalize_worktree_path(workspace_root, Path::new(entry)) == expected))
     }
 
-    fn install_worker_exclude(&self, worktree_root: &Path) -> Result<(), RuntimeError> {
+    fn install_worker_exclude(&self, worktree_root: &Path) -> Result<()> {
         let mut command = self.git_command(worktree_root);
         command.arg("rev-parse").arg("--git-path").arg("info/exclude");
         let output = self.run_command(command, "resolve local exclude path")?;
@@ -101,7 +96,7 @@ impl GitVcs {
     /// a single script handles both the worker write-set check and the
     /// orchestrator exclusion-set check. The hook detects which context
     /// it runs in by probing the files present in the working directory.
-    fn install_pre_commit_hook(&self, repo_root: &Path) -> Result<(), RuntimeError> {
+    fn install_pre_commit_hook(&self, repo_root: &Path) -> Result<()> {
         let mut command = self.git_command(repo_root);
         command.arg("rev-parse").arg("--git-path").arg("hooks/pre-commit");
         let output = self.run_command(command, "resolve pre-commit hook path")?;
@@ -187,7 +182,7 @@ impl VersionControl for GitVcs {
 
     fn resolve_commit(
         &self, repo_root: &Path, revision: &str, operation: &'static str,
-    ) -> Result<CanonicalCommitHash, RuntimeError> {
+    ) -> Result<CanonicalCommitHash> {
         let mut command = self.git_command(repo_root);
         command.arg("rev-parse").arg("--verify").arg(format!("{revision}^{{commit}}"));
         let output = command.output()?;
@@ -204,7 +199,7 @@ impl VersionControl for GitVcs {
         }
 
         let details = command_failure_details(&output.stdout, &output.stderr);
-        Err(RuntimeError::CommitNotFound {
+        Err(VcsError::CommitNotFound {
             operation,
             worktree_root: repo_root.to_path_buf(),
             commit: revision.to_owned(),
@@ -212,13 +207,13 @@ impl VersionControl for GitVcs {
         })
     }
 
-    fn head_commit(&self, repo_root: &Path) -> Result<CanonicalCommitHash, RuntimeError> {
+    fn head_commit(&self, repo_root: &Path) -> Result<CanonicalCommitHash> {
         self.resolve_commit(repo_root, "HEAD", "read HEAD")
     }
 
     fn changed_files(
         &self, repo_root: &Path, from: &CanonicalCommitHash, to: &CanonicalCommitHash,
-    ) -> Result<BTreeSet<PathBuf>, RuntimeError> {
+    ) -> Result<BTreeSet<PathBuf>> {
         let mut command = self.git_command(repo_root);
         command.arg("diff").arg("--name-only").arg(format!("{from}..{to}"));
         let output = self.run_command(command, "diff commits")?;
@@ -227,7 +222,7 @@ impl VersionControl for GitVcs {
 
     fn create_worktree(
         &self, workspace_root: &Path, worktree_root: &Path, base_commit: &CanonicalCommitHash,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<()> {
         if worktree_root.exists() {
             fs::remove_dir_all(worktree_root)?;
         }
@@ -245,9 +240,7 @@ impl VersionControl for GitVcs {
         self.run_command(command, "create worktree").map(|_| ())
     }
 
-    fn remove_worktree(
-        &self, workspace_root: &Path, worktree_root: &Path,
-    ) -> Result<bool, RuntimeError> {
+    fn remove_worktree(&self, workspace_root: &Path, worktree_root: &Path) -> Result<bool> {
         if !self.is_registered_worktree(workspace_root, worktree_root)? {
             tracing::trace!(
                 backend = self.backend_name(),
@@ -264,7 +257,7 @@ impl VersionControl for GitVcs {
         Ok(true)
     }
 
-    fn ensure_clean_workspace(&self, workspace_root: &Path) -> Result<(), RuntimeError> {
+    fn ensure_clean_workspace(&self, workspace_root: &Path) -> Result<()> {
         let mut command = self.git_command(workspace_root);
         command.arg("status").arg("--porcelain").arg("--untracked-files=no");
         let output = self.run_command(command, "read workspace status")?;
@@ -278,31 +271,27 @@ impl VersionControl for GitVcs {
             .filter(|line| !line.is_empty())
             .collect::<Vec<_>>()
             .join(", ");
-        Err(RuntimeError::CheckFailed(format!(
-            "canonical workspace has uncommitted tracked changes: {changed_paths}"
-        )))
+        Err(VcsError::DirtyWorkspace { changed_paths })
     }
 
-    fn integrate_commit(
-        &self, workspace_root: &Path, commit: &CanonicalCommitHash,
-    ) -> Result<(), RuntimeError> {
+    fn integrate_commit(&self, workspace_root: &Path, commit: &CanonicalCommitHash) -> Result<()> {
         let mut command = self.git_command(workspace_root);
         command.arg("cherry-pick").arg(commit.as_str());
         self.run_command(command, "integrate submitted commit").map(|_| ())
     }
 
-    fn install_worker_runtime_support(&self, worktree_root: &Path) -> Result<(), RuntimeError> {
+    fn install_worker_runtime_support(&self, worktree_root: &Path) -> Result<()> {
         self.install_worker_exclude(worktree_root)?;
         self.install_pre_commit_hook(worktree_root)
     }
 
-    fn install_orchestrator_hook(&self, workspace_root: &Path) -> Result<(), RuntimeError> {
+    fn install_orchestrator_hook(&self, workspace_root: &Path) -> Result<()> {
         self.install_pre_commit_hook(workspace_root)
     }
 
     fn show_file_at_commit(
         &self, workspace_root: &Path, commit: &CanonicalCommitHash, path: &Path,
-    ) -> Result<String, RuntimeError> {
+    ) -> Result<String> {
         let mut command = self.git_command(workspace_root);
         let relative_path = path.to_string_lossy().replace('\\', "/");
         command.arg("show").arg(format!("{commit}:{relative_path}"));
@@ -311,7 +300,7 @@ impl VersionControl for GitVcs {
 
     fn list_files_at_commit(
         &self, workspace_root: &Path, commit: &CanonicalCommitHash,
-    ) -> Result<Vec<PathBuf>, RuntimeError> {
+    ) -> Result<Vec<PathBuf>> {
         let mut command = self.git_command(workspace_root);
         command.arg("ls-tree").arg("-r").arg("--name-only").arg(commit.as_str());
         let output = self.run_command(command, "list commit files")?;

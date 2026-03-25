@@ -3,9 +3,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use crate::runtime::PerspectiveSummary;
 use crate::schema::fileset::{self, enumerate_files};
 use crate::schema::perspective::CompiledPerspectives;
-use crate::runtime::PerspectiveSummary;
 
 use super::check::CompiledChecks;
 use super::decl::Rulebook;

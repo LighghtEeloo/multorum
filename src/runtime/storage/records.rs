@@ -8,8 +8,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::schema::perspective::PerspectiveName;
 use crate::runtime::{Sequence, WorkerId, WorkerState};
+use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
 /// Active rulebook projection stored under `.multorum/orchestrator/`.

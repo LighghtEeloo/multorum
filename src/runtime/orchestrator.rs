@@ -402,7 +402,7 @@ impl FsOrchestratorService {
         // Note: finalized worktrees must be deleted through the VCS
         // backend so Git drops the administrative entry even when the
         // worktree directory has already been removed manually.
-        self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)
+        Ok(self.fs.vcs().remove_worktree(self.fs.workspace_root(), &record.worktree_path)?)
     }
 
     fn publish_worker_inbox(
@@ -809,7 +809,12 @@ impl OrchestratorService for FsOrchestratorService {
         }
         self.fs.rewrite_exclusion_set()?;
         self.fs.write_audit_entry(
-            &record, &head_commit, &changed_files, &ran_checks, &skipped_checks, audit_payload,
+            &record,
+            &head_commit,
+            &changed_files,
+            &ran_checks,
+            &skipped_checks,
+            audit_payload,
         )?;
 
         tracing::info!(

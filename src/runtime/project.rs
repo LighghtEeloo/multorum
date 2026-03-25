@@ -142,8 +142,8 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use crate::schema::perspective::PerspectiveName;
     use crate::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService};
+    use crate::schema::perspective::PerspectiveName;
     use crate::vcs::GitVcs;
 
     use super::*;

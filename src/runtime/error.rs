@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use crate::schema::perspective::PerspectiveName;
 use crate::runtime::WorkerId;
+use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
 use super::state::WorkerState;
@@ -224,23 +224,6 @@ pub enum RuntimeError {
         head_commit: CanonicalCommitHash,
     },
 
-    /// A referenced commit is not reachable from the repository view
-    /// used for one operation.
-    #[error(
-        "cannot {operation}: commit `{commit}` is not available from `{worktree_root}` ({details})",
-        worktree_root = worktree_root.display()
-    )]
-    CommitNotFound {
-        /// Operation that required the commit to exist.
-        operation: &'static str,
-        /// Repository or worktree root used to resolve the commit.
-        worktree_root: PathBuf,
-        /// Commit hash that could not be resolved.
-        commit: String,
-        /// Git-provided failure details.
-        details: String,
-    },
-
     /// The operation is intentionally stubbed during the current
     /// scaffolding phase.
     #[error("operation is not implemented yet: {0}")]
@@ -250,21 +233,9 @@ pub enum RuntimeError {
     #[error("invalid bundle payload: {0}")]
     InvalidPayload(&'static str),
 
-    /// Repository backend command execution failed.
-    #[error(
-        "{backend} command failed while attempting to {action} in `{cwd}`: {details}",
-        cwd = cwd.display()
-    )]
-    Vcs {
-        /// Repository backend that reported the failure.
-        backend: &'static str,
-        /// Human-readable description of the repository action.
-        action: &'static str,
-        /// Working directory used for the repository command.
-        cwd: PathBuf,
-        /// Backend-provided failure details.
-        details: String,
-    },
+    /// Version-control backend failure.
+    #[error(transparent)]
+    Vcs(#[from] crate::vcs::VcsError),
 
     /// Rulebook loading or compilation failed.
     #[error(transparent)]

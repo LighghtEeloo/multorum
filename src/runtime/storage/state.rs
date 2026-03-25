@@ -7,12 +7,12 @@ use std::path::{Path, PathBuf};
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::schema::perspective::CompiledPerspective;
-use crate::schema::rulebook::{CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook};
 use crate::runtime::{
     AuditEntry, BundlePayload, RulebookInit, RuntimeError, WorkerContractView, WorkerId,
     WorkerPaths,
 };
+use crate::schema::perspective::CompiledPerspective;
+use crate::schema::rulebook::{CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook};
 use crate::vcs::CanonicalCommitHash;
 
 use super::{ActiveRulebookRecord, RuntimeFs, WorkerRecord};

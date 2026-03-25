@@ -1,7 +1,7 @@
 //! Worker creation helpers for integration tests.
 
-use multorum::schema::perspective::PerspectiveName;
 use multorum::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService};
+use multorum::schema::perspective::PerspectiveName;
 
 pub fn perspective() -> PerspectiveName {
     PerspectiveName::new("AuthImplementor").unwrap()
