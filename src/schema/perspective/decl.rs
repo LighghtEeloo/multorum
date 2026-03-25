@@ -149,7 +149,7 @@ mod tests {
             [Bad]
             read = "A"
         "#;
-        assert!(matches!(toml::from_str::<PerspectiveTable>(toml_str), Err(_)));
+        assert!(toml::from_str::<PerspectiveTable>(toml_str).is_err());
     }
 
     #[test]
@@ -158,7 +158,7 @@ mod tests {
             [Bad]
             write = "A"
         "#;
-        assert!(matches!(toml::from_str::<PerspectiveTable>(toml_str), Err(_)));
+        assert!(toml::from_str::<PerspectiveTable>(toml_str).is_err());
     }
 
     #[test]
