@@ -27,10 +27,7 @@ use super::{
         RulebookInit, RulebookInstall, RulebookUninstall, RulebookValidation, WorkerDetail,
         WorkerState, WorkerSummary,
     },
-    storage::{
-        ActiveRulebookRecord, RuntimeFs, WorkerRecord, is_live_worker_state, timestamp_now,
-        validate_skip_request,
-    },
+    storage::{ActiveRulebookRecord, RuntimeFs, WorkerRecord, timestamp_now, validate_skip_request},
     worker_id::WorkerId,
 };
 
@@ -322,7 +319,7 @@ impl FsOrchestratorService {
             .fs
             .list_worker_records()?
             .into_iter()
-            .filter(|record| is_live_worker_state(record.state))
+            .filter(|record| record.state.is_live())
             .collect())
     }
 
@@ -429,7 +426,7 @@ impl FsOrchestratorService {
                 .into_iter()
                 .find(|record| record.worker_id == worker_id)
             {
-                if is_live_worker_state(record.state) {
+                if record.state.is_live() {
                     return Err(RuntimeError::WorkerIdExists(worker_id));
                 }
                 return Ok((worker_id, Some(record)));
@@ -512,16 +509,12 @@ impl FsOrchestratorService {
         payload: BundlePayload,
     ) -> Result<PublishedBundle> {
         let record = self.fs.load_worker_record(worker_id)?;
-        let expected_state = match kind {
-            | MessageKind::Resolve if record.state == WorkerState::Blocked => {
-                Some(WorkerState::Blocked)
-            }
-            | MessageKind::Revise if record.state == WorkerState::Committed => {
-                Some(WorkerState::Committed)
-            }
-            | _ => None,
-        };
-        if expected_state.is_some() {
+        let state_accepted = matches!(
+            (kind, record.state),
+            (MessageKind::Resolve, WorkerState::Blocked)
+                | (MessageKind::Revise, WorkerState::Committed)
+        );
+        if state_accepted {
             return self.fs.publish_bundle(
                 &record.worktree_path,
                 MailboxDirection::Inbox,
@@ -534,18 +527,17 @@ impl FsOrchestratorService {
             );
         }
 
-        let expected = match kind {
-            | MessageKind::Resolve => "BLOCKED",
-            | MessageKind::Revise => "COMMITTED",
-            | _ => "a state that accepts inbox publication",
-        };
         Err(RuntimeError::InvalidState {
             operation: match kind {
                 | MessageKind::Resolve => "publish resolve bundle",
                 | MessageKind::Revise => "publish revise bundle",
                 | _ => "publish inbox bundle",
             },
-            expected,
+            expected: match kind {
+                | MessageKind::Resolve => "BLOCKED",
+                | MessageKind::Revise => "COMMITTED",
+                | _ => "a state that accepts inbox publication",
+            },
             actual: record.state,
         })
     }

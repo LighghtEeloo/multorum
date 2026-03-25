@@ -43,6 +43,41 @@ pub enum WorkerState {
     Discarded,
 }
 
+impl WorkerState {
+    /// Stable screaming-case name for diagnostics and display.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            | Self::Active => "ACTIVE",
+            | Self::Blocked => "BLOCKED",
+            | Self::Committed => "COMMITTED",
+            | Self::Merged => "MERGED",
+            | Self::Discarded => "DISCARDED",
+        }
+    }
+
+    /// Whether the worker still participates in runtime conflict checks.
+    ///
+    /// Live workers hold a bidding-group slot and contribute to the
+    /// orchestrator exclusion set. Finalized workers (`MERGED` or
+    /// `DISCARDED`) do not.
+    pub fn is_live(self) -> bool {
+        !matches!(self, Self::Merged | Self::Discarded)
+    }
+
+    /// Whether the worker may still produce mailbox submissions.
+    ///
+    /// Only `ACTIVE` workers may publish report or commit bundles.
+    pub fn can_submit(self) -> bool {
+        matches!(self, Self::Active)
+    }
+}
+
+impl std::fmt::Display for WorkerState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Summary of a compiled perspective known to the runtime.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PerspectiveSummary {

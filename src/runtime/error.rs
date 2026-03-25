@@ -69,7 +69,6 @@ pub enum RuntimeError {
     /// managed path for the requested id.
     #[error(
         "worker `{worker_id}` already has a preserved {state} workspace at `{worktree_path}`; delete it first or request overwrite",
-        state = worker_state_name(*state),
         worktree_path = worktree_path.display()
     )]
     ExistingWorkerWorkspace {
@@ -82,10 +81,7 @@ pub enum RuntimeError {
     },
 
     /// The worker state machine does not permit the requested action.
-    #[error(
-        "{operation} requires worker state {expected}; found {actual}",
-        actual = worker_state_name(*actual)
-    )]
+    #[error("{operation} requires worker state {expected}; found {actual}")]
     InvalidState {
         /// Operation that rejected the current state.
         operation: &'static str,
@@ -265,10 +261,7 @@ pub enum RuntimeError {
 
     /// A worker submission expected a recorded head commit, but the
     /// worker record did not contain one.
-    #[error(
-        "worker `{worker_id}` is in state {state} but has no submitted head commit recorded",
-        state = worker_state_name(*state)
-    )]
+    #[error("worker `{worker_id}` is in state {state} but has no submitted head commit recorded")]
     MissingSubmittedHeadCommit {
         /// Worker whose committed submission lost its recorded head.
         worker_id: WorkerId,
@@ -332,16 +325,6 @@ pub enum RuntimeError {
     TomlEncode(#[from] toml::ser::Error),
 }
 
-fn worker_state_name(state: WorkerState) -> &'static str {
-    match state {
-        | WorkerState::Active => "ACTIVE",
-        | WorkerState::Blocked => "BLOCKED",
-        | WorkerState::Committed => "COMMITTED",
-        | WorkerState::Merged => "MERGED",
-        | WorkerState::Discarded => "DISCARDED",
-    }
-}
-
 /// Return the most useful CLI hint for one runtime-role mismatch.
 fn runtime_role_mismatch_hint(expected: &str, actual: &str) -> &'static str {
     match (expected, actual) {
@@ -366,7 +349,7 @@ fn format_paths(paths: &[PathBuf]) -> String {
 fn format_worker_states(workers: &[(WorkerId, WorkerState)]) -> String {
     workers
         .iter()
-        .map(|(worker_id, state)| format!("{worker_id}:{}", worker_state_name(*state)))
+        .map(|(worker_id, state)| format!("{worker_id}:{state}"))
         .collect::<Vec<_>>()
         .join(", ")
 }

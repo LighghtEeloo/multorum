@@ -283,7 +283,7 @@ impl RuntimeFs {
     pub(crate) fn rewrite_exclusion_set(&self) -> Result<(), RuntimeError> {
         let mut exclusion = BTreeSet::<PathBuf>::new();
         for record in self.list_worker_records()? {
-            if !super::is_live_worker_state(record.state) {
+            if !record.state.is_live() {
                 continue;
             }
             let worker_paths = self.worker_paths(&record.worker_id);

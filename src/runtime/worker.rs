@@ -17,7 +17,7 @@ use super::{
     mailbox::{AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence},
     project::CurrentProject,
     state::{MailboxMessageView, WorkerContractView, WorkerState, WorkerStatus},
-    storage::{RuntimeFs, can_submit_from_state},
+    storage::RuntimeFs,
 };
 
 /// Typed operations available to a worker frontend.
@@ -120,7 +120,7 @@ impl FsWorkerService {
     ) -> Result<()> {
         let contract = self.contract_view()?;
         let mut record = self.fs.load_worker_record(&contract.worker_id)?;
-        if !can_submit_from_state(record.state) {
+        if !record.state.can_submit() {
             return Err(RuntimeError::InvalidState {
                 operation: "publish worker submission",
                 expected: "ACTIVE",

@@ -17,7 +17,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::runtime::{MultorumPaths, RuntimeError, WorkerId, WorkerPaths, WorkerState};
+use crate::runtime::{MultorumPaths, RuntimeError, WorkerId, WorkerPaths};
 use crate::schema::rulebook::{CheckName, CheckPolicy, CompiledRulebook};
 use crate::vcs::{GitVcs, VersionControl};
 
@@ -96,15 +96,6 @@ impl RuntimeFs {
     }
 }
 
-/// Return `true` when a worker still participates in runtime conflict checks.
-pub(super) fn is_live_worker_state(state: WorkerState) -> bool {
-    !matches!(state, WorkerState::Merged | WorkerState::Discarded)
-}
-
-/// Return `true` when a worker may still produce mailbox submissions.
-pub(super) fn can_submit_from_state(state: WorkerState) -> bool {
-    matches!(state, WorkerState::Active)
-}
 
 /// Validate that a skip request only targets skippable declared checks.
 ///

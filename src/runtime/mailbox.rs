@@ -121,6 +121,4 @@ pub enum MailboxDirection {
 pub struct AckRef {
     /// Message being acknowledged.
     pub message: MessageRef,
-    /// Acknowledged sequence number.
-    pub sequence: Sequence,
 }

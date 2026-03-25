@@ -143,7 +143,6 @@ impl RuntimeFs {
 
         Ok(AckRef {
             message: MessageRef { worker_id: envelope.worker_id, kind: envelope.kind, sequence },
-            sequence,
         })
     }
 
