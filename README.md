@@ -8,6 +8,10 @@ That split is the entire trick.
 
 Multorum is not an agent. It does not plan, negotiate, ideate, or otherwise hallucinate that it is management. It is infrastructure for orchestrated parallel work: isolated workspaces, explicit ownership, and hard guarantees that workers do not quietly sabotage each other.
 
+<p align="center">
+  <img src="assets/multorum-20260325.png" alt="Multorum logo" width="40%">
+</p>
+
 > Belua multorum es capitums!
 
 ## Y?
