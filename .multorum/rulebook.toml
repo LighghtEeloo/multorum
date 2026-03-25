@@ -82,7 +82,8 @@ clippy = "cargo clippy --workspace --all-targets -- -D warnings"
 test = "cargo test --workspace"
 
 [check.policy]
-# Full test runs are valuable, but making them skippable keeps doc-only or
-# policy-only work from paying the full suite cost when the orchestrator has
-# better evidence for a narrower change.
+# Full test runs and whole-workspace lints are valuable, but making them
+# skippable lets the orchestrator accept narrowly scoped submissions when a
+# failure is clearly unrelated to the worker's declared write set.
+clippy = "skippable"
 test = "skippable"
