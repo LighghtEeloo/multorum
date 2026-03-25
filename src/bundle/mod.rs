@@ -16,4 +16,4 @@ pub mod writer;
 
 pub use error::BundleError;
 pub use payload::BundlePayload;
-pub use writer::{BundleWriter, WrittenBundle, ARTIFACTS_DIR_NAME, BODY_FILE_NAME};
+pub use writer::{ARTIFACTS_DIR_NAME, BODY_FILE_NAME, BundleWriter, WrittenBundle};

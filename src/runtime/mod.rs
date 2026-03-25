@@ -16,11 +16,11 @@ pub mod worker;
 pub mod worker_id;
 
 pub use crate::bundle::BundlePayload;
+pub use error::{Result, RuntimeError};
 pub use mailbox::{
     AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, PublishedBundle,
     ReplyReference, Sequence,
 };
-pub use error::{Result, RuntimeError};
 pub use orchestrator::{CreateWorker, FsOrchestratorService, OrchestratorService};
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};
 pub use state::{

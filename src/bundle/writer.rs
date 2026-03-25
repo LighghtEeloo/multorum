@@ -44,12 +44,11 @@ impl BundleWriter {
     /// created and `body_path` in the result is `None`.
     pub fn write(target_dir: &Path, payload: BundlePayload) -> Result<WrittenBundle, BundleError> {
         let body_target = target_dir.join(BODY_FILE_NAME);
-        let body_path =
-            if Self::write_body(&body_target, payload.body_text, payload.body_path)? {
-                Some(body_target)
-            } else {
-                None
-            };
+        let body_path = if Self::write_body(&body_target, payload.body_text, payload.body_path)? {
+            Some(body_target)
+        } else {
+            None
+        };
 
         let artifact_paths = if !payload.artifacts.is_empty() {
             let artifacts_dir = target_dir.join(ARTIFACTS_DIR_NAME);

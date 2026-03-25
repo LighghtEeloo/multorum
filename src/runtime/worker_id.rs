@@ -79,7 +79,9 @@ pub enum WorkerIdError {
     InvalidStart { id: String },
 
     /// The id contained a character outside the kebab-case alphabet.
-    #[error("worker id `{id}` contains invalid character `{ch}` at byte {pos}; only lowercase letters, digits, and hyphens are allowed")]
+    #[error(
+        "worker id `{id}` contains invalid character `{ch}` at byte {pos}; only lowercase letters, digits, and hyphens are allowed"
+    )]
     InvalidChar { id: String, ch: char, pos: usize },
 
     /// The id ends with a hyphen.
