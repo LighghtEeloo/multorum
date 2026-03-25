@@ -100,11 +100,10 @@ impl FsWorkerService {
         match message.message.kind {
             | MessageKind::Task | MessageKind::Resolve | MessageKind::Revise => {
                 let mut state_file = self.fs.load_state()?;
-                let group = state_file
-                    .find_worker_group_mut(&message.message.worker_id)
-                    .ok_or_else(|| {
-                        RuntimeError::UnknownWorker(message.message.worker_id.to_string())
-                    })?;
+                let group =
+                    state_file.find_worker_group_mut(&message.message.worker_id).ok_or_else(
+                        || RuntimeError::UnknownWorker(message.message.worker_id.to_string()),
+                    )?;
                 let entry = group.find_worker_mut(&message.message.worker_id).unwrap();
                 if entry.worktree_path != self.worktree_root {
                     return Err(RuntimeError::MissingWorkerRuntime(

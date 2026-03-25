@@ -211,7 +211,7 @@ pub enum ServeCommand {
 /// Commands that require a Multorum repository and runtime services.
 #[derive(Debug, Subcommand)]
 pub enum RuntimeCommand {
-    /// Manage the active rulebook.
+    /// Manage the project rulebook.
     Rulebook {
         #[command(subcommand)]
         command: RulebookCommand,

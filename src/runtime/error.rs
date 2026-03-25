@@ -52,7 +52,7 @@ pub enum RuntimeError {
     #[error("rulebook already exists at {0}")]
     RulebookExists(std::path::PathBuf),
 
-    /// The requested perspective does not exist in the active rulebook
+    /// The requested perspective does not exist in the current rulebook
     /// or runtime state.
     #[error("unknown perspective: {0}")]
     UnknownPerspective(String),

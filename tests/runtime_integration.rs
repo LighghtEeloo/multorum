@@ -81,6 +81,11 @@ fn short_commit(commit: &str) -> String {
     commit.chars().take(12).collect()
 }
 
+fn read_state_toml(dir: &Path) -> Value {
+    let path = dir.canonicalize().unwrap().join(".multorum/orchestrator/state.toml");
+    toml::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+}
+
 #[test]
 fn rulebook_init_creates_default_committed_files() {
     let dir = tempfile::tempdir().unwrap();
@@ -95,12 +100,21 @@ fn rulebook_init_creates_default_committed_files() {
     assert_eq!(fs::read_to_string(&init.rulebook_path).unwrap(), Rulebook::default_template());
     assert_eq!(fs::read_to_string(&init.gitignore_path).unwrap(), "orchestrator/\ntr/\n");
     assert!(init.multorum_root.join("orchestrator").is_dir());
+    assert!(init.multorum_root.join("orchestrator/audit").is_dir());
+    assert!(init.multorum_root.join("orchestrator/state.toml").is_file());
+    assert!(init.multorum_root.join("orchestrator/exclusion-set.txt").is_file());
+    assert_eq!(
+        fs::read_to_string(init.multorum_root.join("orchestrator/exclusion-set.txt")).unwrap(),
+        ""
+    );
     assert!(init.multorum_root.join("tr").is_dir());
 
     let rulebook = Rulebook::from_workspace_root(dir.path()).unwrap();
     assert!(rulebook.fileset().definitions().is_empty());
     assert!(rulebook.perspective().declarations().is_empty());
     assert!(rulebook.check().pipeline().is_empty());
+    let state = read_state_toml(dir.path());
+    assert!(state["groups"].as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -251,6 +265,10 @@ fn same_perspective_can_spawn_multiple_workers_and_close_the_group_on_integratio
     assert!(first.worktree_path.exists(), "merged worktree should be preserved");
     assert!(second.worktree_path.exists(), "discarded sibling worktree should be preserved");
     assert!(orchestrator.status().unwrap().workers.is_empty());
+    let state =
+        read_state_toml(first.worktree_path.parent().unwrap().parent().unwrap().parent().unwrap());
+    assert!(state["groups"][0]["read_set"].as_array().unwrap().is_empty());
+    assert!(state["groups"][0]["write_set"].as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -280,6 +298,30 @@ fn create_worker_rejects_duplicate_explicit_worker_id() {
         .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
         .unwrap_err();
     assert!(matches!(error, RuntimeError::WorkerIdExists(actual) if actual == worker_id));
+}
+
+#[test]
+fn create_worker_rejects_missing_perspective_even_with_live_group() {
+    let (repo, orchestrator, _) = setup_repo();
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    fs::write(
+        repo.path().join(".multorum/rulebook.toml"),
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+
+            [perspective]
+
+            [check]
+            pipeline = []
+        "#,
+    )
+    .unwrap();
+
+    let error = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap_err();
+    assert!(matches!(error, RuntimeError::UnknownPerspective(name) if name == "AuthImplementor"));
 }
 
 #[test]
@@ -421,6 +463,22 @@ fn delete_worker_removes_workspace_after_discard() {
 }
 
 #[test]
+fn delete_worker_rewrites_exclusion_set_projection() {
+    let (repo, orchestrator, _) = setup_repo();
+    let created = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    orchestrator.discard_worker(created.worker_id.clone()).unwrap();
+    assert!(read_exclusion_set(repo.path()).is_empty());
+
+    let exclusion_path =
+        repo.path().canonicalize().unwrap().join(".multorum/orchestrator/exclusion-set.txt");
+    fs::write(&exclusion_path, "src/owned.rs\n").unwrap();
+    assert!(!read_exclusion_set(repo.path()).is_empty());
+
+    orchestrator.delete_worker(created.worker_id).unwrap();
+    assert!(read_exclusion_set(repo.path()).is_empty());
+}
+
+#[test]
 fn delete_worker_clears_git_worktree_registration_after_manual_directory_removal() {
     let (repo, orchestrator, _) = setup_repo();
     let created = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
@@ -474,20 +532,17 @@ fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() 
 
     // Verify the canonical commit hash is stored in state.toml.
     let state_toml = fs::read_to_string(
-        provision
-            .worktree_path
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("orchestrator/state.toml"),
+        provision.worktree_path.parent().unwrap().parent().unwrap().join("orchestrator/state.toml"),
     )
     .unwrap();
     let state: Value = toml::from_str(&state_toml).unwrap();
     let groups = state["groups"].as_array().unwrap();
-    let worker_entry = groups[0]["workers"].as_array().unwrap().iter().find(|w| {
-        w["worker_id"].as_str() == Some(provision.worker_id.as_str())
-    }).unwrap();
+    let worker_entry = groups[0]["workers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|w| w["worker_id"].as_str() == Some(provision.worker_id.as_str()))
+        .unwrap();
     assert_eq!(worker_entry["submitted_head_commit"].as_str(), Some(head_commit.as_str()));
 
     let integration = orchestrator
@@ -771,6 +826,9 @@ fn discard_worker_accepts_blocked_state_and_clears_exclusion_set() {
     assert_eq!(discarded.state, WorkerState::Discarded);
     assert_eq!(worker.status().unwrap().state, WorkerState::Discarded);
     assert!(read_exclusion_set(dir.path()).is_empty());
+    let state = read_state_toml(dir.path());
+    assert!(state["groups"][0]["read_set"].as_array().unwrap().is_empty());
+    assert!(state["groups"][0]["write_set"].as_array().unwrap().is_empty());
 }
 
 #[test]

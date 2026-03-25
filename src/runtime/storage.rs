@@ -54,6 +54,11 @@ pub(crate) struct StateFile {
 /// Its base commit and boundary are locked at formation. Subsequent
 /// workers for the same perspective join the existing group and share
 /// its base commit and boundary.
+///
+/// Note: When the group has no live workers left (all members are
+/// `MERGED` or `DISCARDED`), Multorum clears the materialized boundary.
+/// The historical group membership stays in `state.toml` until
+/// `worker delete` removes the final member record.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct BiddingGroupRecord {
     /// Perspective governing this group.
@@ -82,6 +87,14 @@ impl BiddingGroupRecord {
     /// Find a mutable worker entry by id.
     pub fn find_worker_mut(&mut self, worker_id: &WorkerId) -> Option<&mut WorkerEntry> {
         self.workers.iter_mut().find(|w| w.worker_id == *worker_id)
+    }
+
+    /// Clear the materialized boundary for a finalized group.
+    ///
+    /// An empty boundary marks "no active ownership" for this group.
+    pub fn clear_boundary(&mut self) {
+        self.read_set.clear();
+        self.write_set.clear();
     }
 }
 
@@ -294,18 +307,22 @@ impl RuntimeFs {
         let multorum_root = self.paths.multorum_root();
         let gitignore_path = self.paths.multorum_gitignore();
         let rulebook_path = Rulebook::rulebook_path(self.workspace_root());
+        let orchestrator_paths = self.paths.orchestrator();
 
         if rulebook_path.exists() {
             return Err(RuntimeError::RulebookExists(rulebook_path));
         }
 
         fs::create_dir_all(&multorum_root)?;
-        fs::create_dir_all(self.paths.orchestrator().root())?;
+        fs::create_dir_all(orchestrator_paths.root())?;
+        fs::create_dir_all(orchestrator_paths.audit())?;
         fs::create_dir_all(multorum_root.join("tr"))?;
 
         self.ensure_multorum_gitignore()?;
         fs::write(&rulebook_path, Rulebook::default_template())?;
-        self.store_state(&StateFile::default())?;
+        let state = StateFile::default();
+        self.store_state(&state)?;
+        self.rewrite_exclusion_set(&state)?;
         tracing::info!(
             multorum_root = %multorum_root.display(),
             rulebook_path = %rulebook_path.display(),
@@ -455,9 +472,8 @@ impl RuntimeFs {
     /// Recompute and persist the orchestrator exclusion set from `state.toml`.
     ///
     /// The exclusion set is the union of every live bidding group's
-    /// read and write sets. It must be rewritten after any lifecycle
-    /// transition that changes the set of active workers (create,
-    /// merge, discard).
+    /// read and write sets. It must be rewritten after every persisted
+    /// `state.toml` update so the projection always matches runtime state.
     pub(crate) fn rewrite_exclusion_set(&self, state: &StateFile) -> Result<(), RuntimeError> {
         let mut exclusion = BTreeSet::<PathBuf>::new();
         for group in state.live_groups() {

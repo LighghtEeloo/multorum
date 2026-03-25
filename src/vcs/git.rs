@@ -320,7 +320,7 @@ impl VersionControl for GitVcs {
             .arg(to_base.as_str())
             .arg(from_base.as_str())
             .arg("HEAD");
-        let result = self.run_command(command, "forward worker worktree to active rulebook commit");
+        let result = self.run_command(command, "forward worker worktree to new base commit");
         if let Err(error) = result {
             let mut abort = self.git_command(worktree_root);
             abort.arg("rebase").arg("--abort");

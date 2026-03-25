@@ -6,8 +6,8 @@
 //! perspectives, and the validated `[check]` pipeline that runtime code consumes.
 //!
 //! The rulebook module deliberately stops at typed loading and
-//! compilation. Git pinning, active-rulebook switching, and runtime
-//! projections remain orchestrator concerns.
+//! compilation. Runtime state projection and group-level base commit pinning
+//! belong to the orchestrator service.
 
 pub mod check;
 pub mod compile;

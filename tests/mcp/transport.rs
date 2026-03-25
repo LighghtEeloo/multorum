@@ -99,10 +99,7 @@ fn orchestrator_validate_perspectives() {
     let handler = OrchestratorHandler::new(svc);
 
     let result = handler
-        .dispatch(
-            "validate_perspectives",
-            json_args(json!({"perspectives": ["AuthImplementor"]})),
-        )
+        .dispatch("validate_perspectives", json_args(json!({"perspectives": ["AuthImplementor"]})))
         .unwrap();
     assert_tool_success(&result);
     let json = tool_json(&result);

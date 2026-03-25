@@ -28,9 +28,7 @@ use super::{
         PerspectiveSummary, PerspectiveValidation, RulebookInit, WorkerDetail, WorkerState,
         WorkerSummary,
     },
-    storage::{
-        BiddingGroupRecord, RuntimeFs, StateFile, WorkerEntry, validate_skip_request,
-    },
+    storage::{BiddingGroupRecord, RuntimeFs, StateFile, WorkerEntry, validate_skip_request},
     worker_id::WorkerId,
 };
 
@@ -515,6 +513,12 @@ impl OrchestratorService for FsOrchestratorService {
     fn create_worker(&self, request: CreateWorker) -> Result<CreateResult> {
         let CreateWorker { perspective, worker_id, task, overwriting_worktree } = request;
         let mut state = self.fs.load_state()?;
+        let compiled = self.fs.load_working_tree_rulebook()?;
+        let compiled_perspective = compiled
+            .perspectives()
+            .get(&perspective)
+            .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?
+            .clone();
 
         // Check if there's an existing live bidding group for this perspective.
         let existing_group = state.find_live_group(&perspective);
@@ -524,12 +528,7 @@ impl OrchestratorService for FsOrchestratorService {
             (group.base_commit.clone(), group.read_set.clone(), group.write_set.clone())
         } else {
             // Form new group — compile from working tree, pin base to HEAD.
-            let compiled = self.fs.load_working_tree_rulebook()?;
-            let compiled_perspective = compiled
-                .perspectives()
-                .get(&perspective)
-                .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?;
-            self.validate_create_boundary(&perspective, compiled_perspective, &state)?;
+            self.validate_create_boundary(&perspective, &compiled_perspective, &state)?;
 
             let base_commit = self.fs.vcs().head_commit(self.fs.workspace_root())?;
             (base_commit, compiled_perspective.read().clone(), compiled_perspective.write().clone())
@@ -735,23 +734,30 @@ impl OrchestratorService for FsOrchestratorService {
             .find_worker_group_mut(&worker_id)
             .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
         let perspective = group.perspective.clone();
-        let worker = group
-            .find_worker_mut(&worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+        {
+            let worker = group
+                .find_worker_mut(&worker_id)
+                .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
 
-        if !matches!(
-            worker.state,
-            WorkerState::Active | WorkerState::Blocked | WorkerState::Committed
-        ) {
-            return Err(RuntimeError::InvalidState {
-                operation: "discard worker",
-                expected: "ACTIVE, BLOCKED, or COMMITTED",
-                actual: worker.state,
-            });
+            if !matches!(
+                worker.state,
+                WorkerState::Active | WorkerState::Blocked | WorkerState::Committed
+            ) {
+                return Err(RuntimeError::InvalidState {
+                    operation: "discard worker",
+                    expected: "ACTIVE, BLOCKED, or COMMITTED",
+                    actual: worker.state,
+                });
+            }
+
+            worker.state = WorkerState::Discarded;
+            worker.submitted_head_commit = None;
         }
 
-        worker.state = WorkerState::Discarded;
-        worker.submitted_head_commit = None;
+        if !group.has_live_workers() {
+            group.clear_boundary();
+        }
+
         self.fs.store_state(&state)?;
         self.fs.rewrite_exclusion_set(&state)?;
 
@@ -787,6 +793,7 @@ impl OrchestratorService for FsOrchestratorService {
         // Remove empty groups.
         state.gc_empty_groups();
         self.fs.store_state(&state)?;
+        self.fs.rewrite_exclusion_set(&state)?;
 
         tracing::info!(
             worker_id = %worker_id,
@@ -903,6 +910,9 @@ impl OrchestratorService for FsOrchestratorService {
                 w.submitted_head_commit = None;
             }
         }
+
+        group_mut.clear_boundary();
+
         self.fs.store_state(&state)?;
         self.fs.rewrite_exclusion_set(&state)?;
         self.fs.write_audit_entry(
