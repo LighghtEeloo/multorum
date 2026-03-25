@@ -2,66 +2,57 @@
 
 use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor, ToolInputType};
 
-const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
-    name: "after",
-    description: "Optional sequence number; only inbox bundles after it are returned.",
-    kind: ToolInputType::Integer,
-    required: false,
-}];
+const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::optional(
+    "after",
+    "Optional sequence number; only inbox bundles after it are returned.",
+    ToolInputType::Integer,
+)];
 
-const ACK_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
-    name: "sequence",
-    description: "Inbox sequence number to acknowledge.",
-    kind: ToolInputType::Integer,
-    required: true,
-}];
+const ACK_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
+    "sequence",
+    "Inbox sequence number to acknowledge.",
+    ToolInputType::Integer,
+)];
 
 const REPORT_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor {
-        name: "head_commit",
-        description: "Optional git commit hash relevant to the blocker report.",
-        kind: ToolInputType::String,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "reply_to",
-        description: "Optional mailbox sequence number answered by this report.",
-        kind: ToolInputType::Integer,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "body",
-        description: "Optional Markdown file to move into the report body.",
-        kind: ToolInputType::String,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "artifacts",
-        description: "Optional files to move into the report artifacts directory.",
-        kind: ToolInputType::StringList,
-        required: false,
-    },
+    ToolInputDescriptor::optional(
+        "head_commit",
+        "Optional git commit hash relevant to the blocker report.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "reply_to",
+        "Optional mailbox sequence number answered by this report.",
+        ToolInputType::Integer,
+    ),
+    ToolInputDescriptor::optional(
+        "body",
+        "Optional Markdown file to move into the report body.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "artifacts",
+        "Optional files to move into the report artifacts directory.",
+        ToolInputType::StringList,
+    ),
 ];
 
 const COMMIT_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor {
-        name: "head_commit",
-        description: "Git commit hash submitted by the worker.",
-        kind: ToolInputType::String,
-        required: true,
-    },
-    ToolInputDescriptor {
-        name: "body",
-        description: "Optional Markdown file to move into the commit bundle body.",
-        kind: ToolInputType::String,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "artifacts",
-        description: "Optional files to move into the commit bundle artifacts directory.",
-        kind: ToolInputType::StringList,
-        required: false,
-    },
+    ToolInputDescriptor::required(
+        "head_commit",
+        "Git commit hash submitted by the worker.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "body",
+        "Optional Markdown file to move into the commit bundle body.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "artifacts",
+        "Optional files to move into the commit bundle artifacts directory.",
+        ToolInputType::StringList,
+    ),
 ];
 
 /// Return the worker MCP tool descriptors.

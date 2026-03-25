@@ -18,7 +18,7 @@ use crate::runtime::{FsWorkerService, Sequence, WorkerService};
 use super::{
     args_or_empty, dispatch_tool, extract_payload, extract_reply, list_resource_templates_result,
     list_resources_result, list_tools_result, optional_str, optional_u64, required_str,
-    resource_success, runtime_to_resource_error, server_info,
+    required_u64, resource_success, runtime_to_resource_error, server_info,
 };
 
 /// MCP server handler for the worker surface.
@@ -132,17 +132,4 @@ impl ServerHandler for WorkerHandler {
     ) -> impl Future<Output = Result<ReadResourceResult, ErrorData>> + Send + '_ {
         std::future::ready(self.read(&request.uri))
     }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Extract a required u64 argument.
-fn required_u64(
-    args: &serde_json::Map<String, serde_json::Value>, key: &str,
-) -> Result<u64, ErrorData> {
-    args.get(key)
-        .and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| ErrorData::invalid_params(format!("missing required field: {key}"), None))
 }

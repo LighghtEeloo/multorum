@@ -34,6 +34,29 @@ pub struct ToolInputDescriptor {
     pub required: bool,
 }
 
+impl ToolInputDescriptor {
+    /// Construct one MCP tool input descriptor with explicit requiredness.
+    pub const fn new(
+        name: &'static str, description: &'static str, kind: ToolInputType, required: bool,
+    ) -> Self {
+        Self { name, description, kind, required }
+    }
+
+    /// Construct one required MCP tool input descriptor.
+    pub const fn required(
+        name: &'static str, description: &'static str, kind: ToolInputType,
+    ) -> Self {
+        Self::new(name, description, kind, true)
+    }
+
+    /// Construct one optional MCP tool input descriptor.
+    pub const fn optional(
+        name: &'static str, description: &'static str, kind: ToolInputType,
+    ) -> Self {
+        Self::new(name, description, kind, false)
+    }
+}
+
 /// Description of one exposed MCP tool.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolDescriptor {

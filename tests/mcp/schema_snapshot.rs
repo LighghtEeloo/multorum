@@ -6,6 +6,9 @@
 
 use multorum::mcp::dto::ToolInputType;
 
+type ToolInputSchemaEntry = (&'static str, ToolInputType, bool);
+type ToolSchemaSnapshot = (&'static str, Vec<ToolInputSchemaEntry>);
+
 // ---------------------------------------------------------------------------
 // Orchestrator tools
 // ---------------------------------------------------------------------------
@@ -42,7 +45,7 @@ fn orchestrator_tool_names_stable() {
 #[test]
 fn orchestrator_tool_input_schemas_stable() {
     let descriptors = multorum::mcp::tool::orchestrator::descriptors();
-    let schemas: Vec<(&str, Vec<(&str, ToolInputType, bool)>)> = descriptors
+    let schemas: Vec<ToolSchemaSnapshot> = descriptors
         .iter()
         .map(|d| {
             let inputs: Vec<_> = d.inputs.iter().map(|i| (i.name, i.kind, i.required)).collect();
@@ -187,7 +190,7 @@ fn worker_tool_names_stable() {
 #[test]
 fn worker_tool_input_schemas_stable() {
     let descriptors = multorum::mcp::tool::worker::descriptors();
-    let schemas: Vec<(&str, Vec<(&str, ToolInputType, bool)>)> = descriptors
+    let schemas: Vec<ToolSchemaSnapshot> = descriptors
         .iter()
         .map(|d| {
             let inputs: Vec<_> = d.inputs.iter().map(|i| (i.name, i.kind, i.required)).collect();

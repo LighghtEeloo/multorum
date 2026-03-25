@@ -2,142 +2,122 @@
 
 use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor, ToolInputType};
 
-const GET_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
-    name: "worker_id",
-    description: "Runtime worker identity to inspect.",
-    kind: ToolInputType::String,
-    required: true,
-}];
+const GET_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
+    "worker_id",
+    "Runtime worker identity to inspect.",
+    ToolInputType::String,
+)];
 
 const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor {
-        name: "worker_id",
-        description: "Runtime worker identity whose outbox should be read.",
-        kind: ToolInputType::String,
-        required: true,
-    },
-    ToolInputDescriptor {
-        name: "after",
-        description: "Optional sequence number; only outbox bundles after it are returned.",
-        kind: ToolInputType::Integer,
-        required: false,
-    },
+    ToolInputDescriptor::required(
+        "worker_id",
+        "Runtime worker identity whose outbox should be read.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "after",
+        "Optional sequence number; only outbox bundles after it are returned.",
+        ToolInputType::Integer,
+    ),
 ];
 
 const ACK_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor {
-        name: "worker_id",
-        description: "Runtime worker identity whose outbox owns the message.",
-        kind: ToolInputType::String,
-        required: true,
-    },
-    ToolInputDescriptor {
-        name: "sequence",
-        description: "Outbox sequence number to acknowledge.",
-        kind: ToolInputType::Integer,
-        required: true,
-    },
+    ToolInputDescriptor::required(
+        "worker_id",
+        "Runtime worker identity whose outbox owns the message.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::required(
+        "sequence",
+        "Outbox sequence number to acknowledge.",
+        ToolInputType::Integer,
+    ),
 ];
 
 const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor {
-        name: "perspective",
-        description: "Compiled perspective to instantiate.",
-        kind: ToolInputType::String,
-        required: true,
-    },
-    ToolInputDescriptor {
-        name: "worker_id",
-        description: "Optional orchestrator-selected runtime worker identity. When omitted, Multorum allocates the default perspective-based worker id.",
-        kind: ToolInputType::String,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "overwriting_worktree",
-        description: "Optional flag to replace an existing finalized workspace for the same explicit worker id.",
-        kind: ToolInputType::Boolean,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "body",
-        description: "Optional Markdown file to move into the seeded task bundle body.",
-        kind: ToolInputType::String,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "artifacts",
-        description: "Optional files to move into the seeded task bundle artifacts directory.",
-        kind: ToolInputType::StringList,
-        required: false,
-    },
+    ToolInputDescriptor::required(
+        "perspective",
+        "Compiled perspective to instantiate.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "worker_id",
+        "Optional orchestrator-selected runtime worker identity. When omitted, Multorum allocates the default perspective-based worker id.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "overwriting_worktree",
+        "Optional flag to replace an existing finalized workspace for the same explicit worker id.",
+        ToolInputType::Boolean,
+    ),
+    ToolInputDescriptor::optional(
+        "body",
+        "Optional Markdown file to move into the seeded task bundle body.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "artifacts",
+        "Optional files to move into the seeded task bundle artifacts directory.",
+        ToolInputType::StringList,
+    ),
 ];
 
-const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
-    name: "perspective",
-    description: "Perspective whose blocked bidding group should move to the active rulebook commit.",
-    kind: ToolInputType::String,
-    required: true,
-}];
+const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
+    "perspective",
+    "Perspective whose blocked bidding group should move to the active rulebook commit.",
+    ToolInputType::String,
+)];
 
 const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor {
-        name: "worker_id",
-        description: "Runtime worker identity that owns the inbox.",
-        kind: ToolInputType::String,
-        required: true,
-    },
-    ToolInputDescriptor {
-        name: "reply_to",
-        description: "Optional mailbox sequence number answered by this bundle.",
-        kind: ToolInputType::Integer,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "body",
-        description: "Optional Markdown file to move into the bundle body.",
-        kind: ToolInputType::String,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "artifacts",
-        description: "Optional files to move into the bundle artifacts directory.",
-        kind: ToolInputType::StringList,
-        required: false,
-    },
+    ToolInputDescriptor::required(
+        "worker_id",
+        "Runtime worker identity that owns the inbox.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "reply_to",
+        "Optional mailbox sequence number answered by this bundle.",
+        ToolInputType::Integer,
+    ),
+    ToolInputDescriptor::optional(
+        "body",
+        "Optional Markdown file to move into the bundle body.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "artifacts",
+        "Optional files to move into the bundle artifacts directory.",
+        ToolInputType::StringList,
+    ),
 ];
 
-const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
-    name: "worker_id",
-    description: "Runtime worker identity to act on.",
-    kind: ToolInputType::String,
-    required: true,
-}];
+const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
+    "worker_id",
+    "Runtime worker identity to act on.",
+    ToolInputType::String,
+)];
 
 const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor {
-        name: "worker_id",
-        description: "Runtime worker identity to merge.",
-        kind: ToolInputType::String,
-        required: true,
-    },
-    ToolInputDescriptor {
-        name: "skip_checks",
-        description: "Optional project-defined checks to skip based on trusted worker evidence.",
-        kind: ToolInputType::StringList,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "body",
-        description: "Optional Markdown file to move into the audit rationale body.",
-        kind: ToolInputType::String,
-        required: false,
-    },
-    ToolInputDescriptor {
-        name: "artifacts",
-        description: "Optional files to move into the audit rationale artifacts directory.",
-        kind: ToolInputType::StringList,
-        required: false,
-    },
+    ToolInputDescriptor::required(
+        "worker_id",
+        "Runtime worker identity to merge.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "skip_checks",
+        "Optional project-defined checks to skip based on trusted worker evidence.",
+        ToolInputType::StringList,
+    ),
+    ToolInputDescriptor::optional(
+        "body",
+        "Optional Markdown file to move into the audit rationale body.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "artifacts",
+        "Optional files to move into the audit rationale artifacts directory.",
+        ToolInputType::StringList,
+    ),
 ];
 
 /// Return the orchestrator MCP tool descriptors.

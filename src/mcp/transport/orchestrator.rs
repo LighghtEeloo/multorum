@@ -18,7 +18,8 @@ use crate::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService, W
 use super::{
     args_or_empty, dispatch_tool, extract_payload, extract_reply, list_resource_templates_result,
     list_resources_result, list_tools_result, optional_bool, optional_str, optional_string_list,
-    optional_u64, required_str, resource_success, runtime_to_resource_error, server_info,
+    optional_u64, required_str, required_u64, resource_success, runtime_to_resource_error,
+    server_info,
 };
 
 /// MCP server handler for the orchestrator surface.
@@ -235,13 +236,4 @@ fn parse_worker_id(s: &str) -> Result<WorkerId, ErrorData> {
 
 fn parse_perspective(s: &str) -> Result<crate::schema::perspective::PerspectiveName, ErrorData> {
     s.parse().map_err(|e| ErrorData::invalid_params(format!("invalid perspective name: {e}"), None))
-}
-
-/// Extract a required u64 argument.
-fn required_u64(
-    args: &serde_json::Map<String, serde_json::Value>, key: &str,
-) -> Result<u64, ErrorData> {
-    args.get(key)
-        .and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| ErrorData::invalid_params(format!("missing required field: {key}"), None))
 }

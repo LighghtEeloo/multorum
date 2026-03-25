@@ -207,6 +207,13 @@ fn required_str<'a>(
     })
 }
 
+/// Extract a required u64 argument from the JSON arguments object.
+fn required_u64(args: &serde_json::Map<String, Value>, key: &str) -> Result<u64, rmcp::ErrorData> {
+    args.get(key).and_then(Value::as_u64).ok_or_else(|| {
+        rmcp::ErrorData::invalid_params(format!("missing required field: {key}"), None)
+    })
+}
+
 /// Extract an optional string argument.
 fn optional_str<'a>(args: &'a serde_json::Map<String, Value>, key: &str) -> Option<&'a str> {
     args.get(key).and_then(Value::as_str)
