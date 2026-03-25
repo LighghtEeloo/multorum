@@ -326,23 +326,23 @@ These files are runtime-only and must never be committed. Multorum installs loca
 ### State Machine
 
 ```
-                 BLOCKED
-                    ▲ │
-             report │ │ resolve
-                    │ ▼
-create ─────────► ACTIVE
-                    │ ▲
-             commit │ │ revise
-                    ▼ │
-                 COMMITTED
+                 BLOCKED ──────►┐
+                    ▲ │         │
+             report │ │ resolve │
+                    │ ▼         │
+create ─────────► ACTIVE ──────►┼──────────► DISCARDED
+                    │ ▲         │ discard
+             commit │ │ revise  │
+                    ▼ │         │
+                 COMMITTED ────►┘
                      │
-             ┌───────┴───────┐
-             ▼               ▼
-          MERGED         DISCARDED
+               merge │
+                     ▼
+                  MERGED
 ```
 
 - `ACTIVE`: the workspace exists and execution may proceed
-- `BLOCKED`: the worker has reported a blocker and awaits resolution
+- `BLOCKED`: the worker has reported a blocker and awaits orchestrator resolution or discard
 - `COMMITTED`: the worker has submitted a commit; the workspace is frozen pending orchestrator action
 - `MERGED`: the commit passed the merge pipeline and was integrated
 - `DISCARDED`: the worker was finalized without merge
@@ -360,6 +360,7 @@ Once one worker in a bidding group reaches `MERGED`, every sibling in that group
 | ACTIVE | COMMITTED | worker issues `commit` |
 | ACTIVE | DISCARDED | orchestrator issues `discard` |
 | BLOCKED | ACTIVE | orchestrator issues `resolve` |
+| BLOCKED | DISCARDED | orchestrator issues `discard` |
 | COMMITTED | ACTIVE | orchestrator issues `revise` |
 | COMMITTED | MERGED | orchestrator issues `merge` and checks pass |
 | COMMITTED | DISCARDED | orchestrator issues `discard` |
@@ -513,7 +514,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 - `multorum worker resolve <worker-id>` — Publish a `resolve` bundle to a blocked worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
 - `multorum worker revise <worker-id>` — Publish a `revise` bundle to a committed worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
 - `multorum worker merge <worker-id> [--skip-check <check>]... [--body <text>] [--body-path <file>] [--artifact <file>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. The optional payload arguments attach an audit rationale. Transition: `COMMITTED` to `MERGED`.
-- `multorum worker discard <worker-id>` — Finalize a worker without integration. Allowed from `ACTIVE` or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
+- `multorum worker discard <worker-id>` — Finalize a worker without integration. Allowed from `ACTIVE`, `BLOCKED`, or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
 - `multorum worker delete <worker-id>` — Delete the worktree and worker state file of a finalized worker. Allowed only from `MERGED` or `DISCARDED`.
 
 ### Worker-Local Commands

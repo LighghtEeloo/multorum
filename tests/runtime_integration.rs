@@ -1021,6 +1021,25 @@ fn exclusion_set_tracks_active_worker_boundaries() {
 }
 
 #[test]
+fn discard_worker_accepts_blocked_state_and_clears_exclusion_set() {
+    let (dir, orchestrator, _head) = setup_repo();
+    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let worker = FsWorkerService::new(&result.worktree_path).unwrap();
+
+    worker
+        .send_report(None, ReplyReference::default(), BundlePayload::default())
+        .unwrap();
+    assert_eq!(worker.status().unwrap().state, WorkerState::Blocked);
+    assert!(!read_exclusion_set(dir.path()).is_empty());
+
+    let discarded = orchestrator.discard_worker(result.worker_id.clone()).unwrap();
+    assert_eq!(discarded.worker_id, result.worker_id);
+    assert_eq!(discarded.state, WorkerState::Discarded);
+    assert_eq!(worker.status().unwrap().state, WorkerState::Discarded);
+    assert!(read_exclusion_set(dir.path()).is_empty());
+}
+
+#[test]
 fn exclusion_set_clears_after_merge() {
     let (dir, orchestrator, _head) = setup_repo();
 

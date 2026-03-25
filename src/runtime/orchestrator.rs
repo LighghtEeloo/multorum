@@ -8,10 +8,11 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::schema::perspective::{CompiledPerspective, PerspectiveName};
-use crate::vcs::{CanonicalCommitHash, VersionControl};
-
-use crate::bundle::BundlePayload;
+use crate::{
+    bundle::BundlePayload,
+    schema::perspective::{CompiledPerspective, PerspectiveName},
+    vcs::{CanonicalCommitHash, VersionControl},
+};
 
 use super::{
     error::{Result, RuntimeError},
@@ -143,6 +144,8 @@ pub trait OrchestratorService {
     ) -> Result<PublishedBundle>;
 
     /// Finalize a worker without integration while preserving its workspace.
+    ///
+    /// Note: Discard is allowed from `ACTIVE`, `BLOCKED`, and `COMMITTED`.
     fn discard_worker(&self, worker_id: WorkerId) -> Result<DiscardResult>;
 
     /// Delete one finalized worker workspace.
@@ -568,16 +571,17 @@ impl OrchestratorService for FsOrchestratorService {
         let (worker_id, previous_finalized_record) =
             self.resolve_create_worker_id(&perspective, worker_id)?;
         if let Some(record) = previous_finalized_record.as_ref()
-            && record.worktree_path.exists() {
-                if !overwriting_worktree {
-                    return Err(RuntimeError::ExistingWorkerWorkspace {
-                        worker_id: record.worker_id.clone(),
-                        state: record.state,
-                        worktree_path: record.worktree_path.clone(),
-                    });
-                }
-                self.cleanup_workspace_before_create(record)?;
+            && record.worktree_path.exists()
+        {
+            if !overwriting_worktree {
+                return Err(RuntimeError::ExistingWorkerWorkspace {
+                    worker_id: record.worker_id.clone(),
+                    state: record.state,
+                    worktree_path: record.worktree_path.clone(),
+                });
             }
+            self.cleanup_workspace_before_create(record)?;
+        }
         let worktree_path = self.fs.worker_paths(&worker_id).worktree_root().to_path_buf();
         self.fs.vcs().create_worktree(
             self.fs.workspace_root(),
@@ -658,10 +662,13 @@ impl OrchestratorService for FsOrchestratorService {
 
     fn discard_worker(&self, worker_id: WorkerId) -> Result<DiscardResult> {
         let mut record = self.fs.load_worker_record(&worker_id)?;
-        if !matches!(record.state, WorkerState::Active | WorkerState::Committed) {
+        if !matches!(
+            record.state,
+            WorkerState::Active | WorkerState::Blocked | WorkerState::Committed
+        ) {
             return Err(RuntimeError::InvalidState {
                 operation: "discard worker",
-                expected: "ACTIVE or COMMITTED",
+                expected: "ACTIVE, BLOCKED, or COMMITTED",
                 actual: record.state,
             });
         }

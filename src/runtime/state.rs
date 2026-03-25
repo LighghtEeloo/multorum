@@ -24,6 +24,10 @@ pub enum WorkerState {
     /// not model a separate idle post-creation state.
     Active,
     /// The worker is blocked on orchestrator input.
+    ///
+    /// Note: A blocked worker may either return to `ACTIVE` after the
+    /// orchestrator resolves the report, or be finalized directly as
+    /// `DISCARDED` when the current contract should be retired.
     Blocked,
     /// The worker has submitted a commit and is frozen pending review.
     Committed,
