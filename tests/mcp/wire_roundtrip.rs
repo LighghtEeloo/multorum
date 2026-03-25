@@ -33,7 +33,7 @@ async fn orchestrator_wire_server_info() {
 async fn orchestrator_wire_list_tools() {
     let (_dir, client) = orchestrator_duplex().await;
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 17);
+    assert_eq!(tools.len(), 15);
     client.cancel().await.unwrap();
 }
 
@@ -41,7 +41,7 @@ async fn orchestrator_wire_list_tools() {
 async fn orchestrator_wire_list_resources() {
     let (_dir, client) = orchestrator_duplex().await;
     let resources = client.list_all_resources().await.unwrap();
-    assert_eq!(resources.len(), 4);
+    assert_eq!(resources.len(), 3);
     let templates = client.list_all_resource_templates().await.unwrap();
     assert_eq!(templates.len(), 2);
     client.cancel().await.unwrap();
@@ -53,7 +53,8 @@ async fn orchestrator_wire_call_tool_get_status() {
     let result = client.call_tool(CallToolRequestParams::new("get_status")).await.unwrap();
     assert_tool_success(&result);
     let status = tool_json(&result);
-    assert!(status["active_rulebook_commit"].is_string());
+    assert!(status["active_perspectives"].is_array());
+    assert!(status["workers"].is_array());
     client.cancel().await.unwrap();
 }
 
@@ -79,7 +80,8 @@ async fn orchestrator_wire_read_resource() {
         .unwrap();
     let text = resource_text(&result);
     let status: serde_json::Value = serde_json::from_str(text).unwrap();
-    assert!(status["active_rulebook_commit"].is_string());
+    assert!(status["active_perspectives"].is_array());
+    assert!(status["workers"].is_array());
     client.cancel().await.unwrap();
 }
 

@@ -89,34 +89,33 @@ pub struct PerspectiveSummary {
     pub write_count: usize,
 }
 
-/// Result of validating a rulebook install.
+/// Result of validating a set of perspectives for conflict-freedom.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct RulebookValidation {
-    /// `true` if the target rulebook may be activated.
+pub struct PerspectiveValidation {
+    /// `true` if the named perspectives satisfy the conflict-free invariant.
     pub ok: bool,
-    /// Perspectives with live runtime boundaries that still block the install.
-    pub blocking_perspectives: Vec<PerspectiveName>,
+    /// Compiled summaries for the validated perspectives.
+    pub perspectives: Vec<PerspectiveSummary>,
+    /// Detected boundary conflicts.
+    pub conflicts: Vec<PerspectiveConflict>,
 }
 
-/// Result of activating a rulebook install.
+/// One boundary conflict between two perspectives.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct RulebookInstall {
-    /// Activated canonical rulebook commit hash.
-    pub active_commit: CanonicalCommitHash,
-}
-
-/// Result of deactivating the active rulebook.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct RulebookUninstall {
-    /// Previously active canonical rulebook commit hash.
-    pub previous_commit: CanonicalCommitHash,
+pub struct PerspectiveConflict {
+    /// Perspective on one side of the conflict.
+    pub perspective: PerspectiveName,
+    /// Perspective on the other side.
+    pub blocking_perspective: PerspectiveName,
+    /// Human-readable description of the overlap relation.
+    pub relation: &'static str,
+    /// Overlapping files.
+    pub files: Vec<std::path::PathBuf>,
 }
 
 /// Summary of one active perspective in the current runtime.
 ///
-/// Note: Derived from live workers rather than persisted as a separate
-/// entity. Each perspective with at least one active worker produces
-/// one summary.
+/// Note: Derived from live bidding groups in `state.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ActivePerspectiveSummary {
     /// Perspective identifier.
@@ -155,7 +154,7 @@ pub struct CreateResult {
     pub seeded_task_path: Option<PathBuf>,
 }
 
-/// Result of forwarding one live bidding group to the active rulebook commit.
+/// Result of forwarding one live bidding group to HEAD.
 ///
 /// Note: This is a group-scoped operation. Every live worker for the
 /// perspective moves together or the command fails without persisting
@@ -168,8 +167,8 @@ pub struct PerspectiveForwardResult {
     pub worker_ids: Vec<WorkerId>,
     /// Base commit previously pinned by the live bidding group.
     pub previous_base_commit: CanonicalCommitHash,
-    /// Active rulebook commit adopted by the live bidding group.
-    pub active_base_commit: CanonicalCommitHash,
+    /// New base commit (HEAD at the time of forwarding).
+    pub new_base_commit: CanonicalCommitHash,
 }
 
 /// Result of discarding a worker.
@@ -196,8 +195,6 @@ pub struct DeleteResult {
     pub worktree_path: PathBuf,
     /// Whether the repository backend removed a managed worktree.
     pub deleted_workspace: bool,
-    /// Whether the worker state file was deleted.
-    pub deleted_state_file: bool,
 }
 
 /// Result of merging a worker submission.
@@ -246,9 +243,7 @@ pub struct AuditEntry {
 /// Projected orchestrator view of all active workers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OrchestratorStatus {
-    /// Active canonical rulebook commit hash.
-    pub active_rulebook_commit: CanonicalCommitHash,
-    /// Current active perspective summaries.
+    /// Current active perspective summaries (bidding groups with live workers).
     pub active_perspectives: Vec<ActivePerspectiveSummary>,
     /// Current worker summaries.
     pub workers: Vec<WorkerSummary>,
@@ -277,11 +272,6 @@ pub struct WorkerDetail {
     /// Absolute path to the managed worker worktree.
     pub worktree_path: PathBuf,
     /// Canonical base commit pinning the worker's code snapshot.
-    ///
-    /// Note: A compatible `rulebook install` may expand the materialized
-    /// read/write-set files for this worker without changing
-    /// `base_commit`. The pin changes only when the orchestrator
-    /// forwards the whole bidding group for the worker's perspective.
     pub base_commit: CanonicalCommitHash,
     /// Canonical submitted worker head commit when present.
     pub submitted_head_commit: Option<CanonicalCommitHash>,
@@ -301,10 +291,9 @@ pub struct WorkerStatus {
 /// Worker contract view exported to frontends.
 ///
 /// `base_commit` pins the worker's code snapshot. The referenced
-/// read/write-set files are the authoritative materialized boundary and
-/// may be refreshed by a compatible `rulebook install`. The
-/// `base_commit` itself changes only when the orchestrator explicitly
-/// forwards the whole bidding group to the active rulebook commit.
+/// read/write-set files are the authoritative materialized boundary.
+/// Both change only when the orchestrator explicitly forwards the
+/// whole bidding group to HEAD.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkerContractView {
     /// Worker identity.

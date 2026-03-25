@@ -35,9 +35,7 @@ fn orchestrator_tool_names_stable() {
             "resolve_worker",
             "revise_worker",
             "rulebook_init",
-            "rulebook_install",
-            "rulebook_uninstall",
-            "rulebook_validate",
+            "validate_perspectives",
         ]
     );
 }
@@ -54,18 +52,20 @@ fn orchestrator_tool_input_schemas_stable() {
         .collect();
 
     // No-input tools.
-    for name in [
-        "rulebook_init",
-        "rulebook_validate",
-        "rulebook_install",
-        "rulebook_uninstall",
-        "list_perspectives",
-        "list_workers",
-        "get_status",
-    ] {
+    for name in ["rulebook_init", "list_perspectives", "list_workers", "get_status"] {
         let (_, inputs) = schemas.iter().find(|(n, _)| *n == name).unwrap();
         assert!(inputs.is_empty(), "{name} should have no inputs");
     }
+
+    // validate_perspectives
+    let (_, inputs) = schemas.iter().find(|(n, _)| *n == "validate_perspectives").unwrap();
+    assert_eq!(
+        inputs,
+        &[
+            ("perspectives", ToolInputType::StringList, true),
+            ("no_live", ToolInputType::Boolean, false),
+        ]
+    );
 
     // get_worker
     let (_, inputs) = schemas.iter().find(|(n, _)| *n == "get_worker").unwrap();
@@ -93,6 +93,7 @@ fn orchestrator_tool_input_schemas_stable() {
             ("perspective", ToolInputType::String, true),
             ("worker_id", ToolInputType::String, false),
             ("overwriting_worktree", ToolInputType::Boolean, false),
+            ("body_text", ToolInputType::String, false),
             ("body", ToolInputType::String, false),
             ("artifacts", ToolInputType::StringList, false),
         ]
@@ -106,6 +107,7 @@ fn orchestrator_tool_input_schemas_stable() {
             &[
                 ("worker_id", ToolInputType::String, true),
                 ("reply_to", ToolInputType::Integer, false),
+                ("body_text", ToolInputType::String, false),
                 ("body", ToolInputType::String, false),
                 ("artifacts", ToolInputType::StringList, false),
             ],
@@ -126,6 +128,7 @@ fn orchestrator_tool_input_schemas_stable() {
         &[
             ("worker_id", ToolInputType::String, true),
             ("skip_checks", ToolInputType::StringList, false),
+            ("body_text", ToolInputType::String, false),
             ("body", ToolInputType::String, false),
             ("artifacts", ToolInputType::StringList, false),
         ]
@@ -145,7 +148,6 @@ fn orchestrator_resource_uris_stable() {
         uris,
         vec![
             "multorum://orchestrator/perspectives",
-            "multorum://orchestrator/rulebook/active",
             "multorum://orchestrator/status",
             "multorum://orchestrator/workers",
         ]
@@ -219,6 +221,7 @@ fn worker_tool_input_schemas_stable() {
         &[
             ("head_commit", ToolInputType::String, false),
             ("reply_to", ToolInputType::Integer, false),
+            ("body_text", ToolInputType::String, false),
             ("body", ToolInputType::String, false),
             ("artifacts", ToolInputType::StringList, false),
         ]
@@ -230,6 +233,7 @@ fn worker_tool_input_schemas_stable() {
         inputs,
         &[
             ("head_commit", ToolInputType::String, true),
+            ("body_text", ToolInputType::String, false),
             ("body", ToolInputType::String, false),
             ("artifacts", ToolInputType::StringList, false),
         ]

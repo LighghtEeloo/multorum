@@ -187,7 +187,7 @@ fn runtime_to_resource_error(error: RuntimeError) -> rmcp::ErrorData {
         | McpErrorCode::WorkerIdExists
         | McpErrorCode::InvalidState
         | McpErrorCode::AlreadyAcknowledged
-        | McpErrorCode::RulebookConflict
+        | McpErrorCode::BiddingGroupConflict
         | McpErrorCode::CheckFailed
         | McpErrorCode::WriteSetViolation
         | McpErrorCode::MailboxConflict

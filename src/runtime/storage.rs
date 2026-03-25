@@ -26,7 +26,6 @@ use crate::runtime::{
         ReplyReference, Sequence,
     },
 };
-use crate::schema::perspective::CompiledPerspective;
 use crate::schema::rulebook::{
     CheckName, CheckPolicy, CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook,
 };
@@ -36,41 +35,130 @@ use crate::vcs::{CanonicalCommitHash, GitVcs, VersionControl};
 // Records
 // ---------------------------------------------------------------------------
 
-/// Active rulebook projection stored under `.multorum/orchestrator/`.
+/// Orchestrator runtime state stored at `.multorum/orchestrator/state.toml`.
 ///
-/// The rulebook is always the one committed at `base_commit`. There is no
-/// separate rulebook pin — the repository-wide rulebook is consistent with
-/// the pinned base snapshot.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct ActiveRulebookRecord {
-    /// Canonical commit pinning both the active rulebook and the base
-    /// snapshot for newly created workers.
-    pub base_commit: CanonicalCommitHash,
-    /// Activation timestamp.
-    pub activated_at: String,
+/// This is the single source of truth for all bidding groups and workers.
+/// Each group entry carries the perspective name, base commit, and compiled
+/// boundary. Each worker entry within a group carries the worker id,
+/// lifecycle state, and submitted head commit where applicable.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct StateFile {
+    /// Bidding groups, each containing its member workers.
+    #[serde(default)]
+    pub groups: Vec<BiddingGroupRecord>,
 }
 
-/// Orchestrator-local projection for one live or historical worker.
+/// One bidding group with its compiled boundary and member workers.
 ///
-/// `base_commit` pins the worker's code snapshot. The materialized
-/// read/write-set files remain the authoritative worker boundary and may
-/// be expanded by a later compatible rulebook install without changing
-/// `base_commit`. The base pin changes only when the orchestrator
-/// explicitly forwards the whole bidding group for this perspective.
+/// A group forms when the first worker for a perspective is created.
+/// Its base commit and boundary are locked at formation. Subsequent
+/// workers for the same perspective join the existing group and share
+/// its base commit and boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct WorkerRecord {
+pub(crate) struct BiddingGroupRecord {
+    /// Perspective governing this group.
+    pub perspective: crate::schema::perspective::PerspectiveName,
+    /// Base commit pinning the group's code snapshot.
+    pub base_commit: CanonicalCommitHash,
+    /// Compiled read set at group formation.
+    pub read_set: BTreeSet<PathBuf>,
+    /// Compiled write set at group formation.
+    pub write_set: BTreeSet<PathBuf>,
+    /// Workers in this group.
+    pub workers: Vec<WorkerEntry>,
+}
+
+impl BiddingGroupRecord {
+    /// Whether the group has at least one live (non-finalized) worker.
+    pub fn has_live_workers(&self) -> bool {
+        self.workers.iter().any(|w| w.state.is_live())
+    }
+
+    /// Find a worker entry by id.
+    pub fn find_worker(&self, worker_id: &WorkerId) -> Option<&WorkerEntry> {
+        self.workers.iter().find(|w| w.worker_id == *worker_id)
+    }
+
+    /// Find a mutable worker entry by id.
+    pub fn find_worker_mut(&mut self, worker_id: &WorkerId) -> Option<&mut WorkerEntry> {
+        self.workers.iter_mut().find(|w| w.worker_id == *worker_id)
+    }
+}
+
+/// One worker within a bidding group.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct WorkerEntry {
     /// Unique worker identity.
     pub worker_id: WorkerId,
-    /// Perspective currently held by the worker.
-    pub perspective: crate::schema::perspective::PerspectiveName,
     /// Current lifecycle state.
     pub state: crate::runtime::WorkerState,
     /// Absolute path to the managed worktree.
     pub worktree_path: PathBuf,
-    /// Canonical base commit pinning the worker's code snapshot.
-    pub base_commit: CanonicalCommitHash,
     /// Canonical submitted worker commit when the worker is in `COMMITTED`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submitted_head_commit: Option<CanonicalCommitHash>,
+}
+
+impl StateFile {
+    /// Find the live bidding group for a perspective.
+    ///
+    /// A "live" group is one with at least one non-finalized worker.
+    pub fn find_live_group(
+        &self, perspective: &crate::schema::perspective::PerspectiveName,
+    ) -> Option<&BiddingGroupRecord> {
+        self.groups.iter().find(|g| g.perspective == *perspective && g.has_live_workers())
+    }
+
+    /// Find a mutable reference to the live bidding group for a perspective.
+    pub fn find_live_group_mut(
+        &mut self, perspective: &crate::schema::perspective::PerspectiveName,
+    ) -> Option<&mut BiddingGroupRecord> {
+        self.groups.iter_mut().find(|g| g.perspective == *perspective && g.has_live_workers())
+    }
+
+    /// Find the group and worker entry for a given worker id.
+    pub fn find_worker(&self, worker_id: &WorkerId) -> Option<(&BiddingGroupRecord, &WorkerEntry)> {
+        for group in &self.groups {
+            if let Some(worker) = group.find_worker(worker_id) {
+                return Some((group, worker));
+            }
+        }
+        None
+    }
+
+    /// Find mutable references to the group and worker entry for a
+    /// given worker id.
+    pub fn find_worker_group_mut(
+        &mut self, worker_id: &WorkerId,
+    ) -> Option<&mut BiddingGroupRecord> {
+        self.groups.iter_mut().find(|g| g.find_worker(worker_id).is_some())
+    }
+
+    /// Remove one worker entry by id and garbage-collect empty groups.
+    ///
+    /// Note: Reusing an explicit worker id must evict any finalized entry
+    /// before the new worker is inserted, otherwise lookups can keep
+    /// resolving the stale finalized record first.
+    pub fn remove_worker(&mut self, worker_id: &WorkerId) -> bool {
+        let mut removed = false;
+        for group in &mut self.groups {
+            let before = group.workers.len();
+            group.workers.retain(|worker| worker.worker_id != *worker_id);
+            removed |= group.workers.len() != before;
+        }
+        self.gc_empty_groups();
+        removed
+    }
+
+    /// All groups that still have at least one live worker.
+    pub fn live_groups(&self) -> impl Iterator<Item = &BiddingGroupRecord> {
+        self.groups.iter().filter(|g| g.has_live_workers())
+    }
+
+    /// Remove groups that have no remaining workers at all.
+    pub fn gc_empty_groups(&mut self) {
+        self.groups.retain(|g| !g.workers.is_empty());
+    }
 }
 
 /// Acknowledgement metadata written to mailbox `ack/`.
@@ -197,19 +285,8 @@ impl RuntimeFs {
         Ok(())
     }
 
-    pub(crate) fn read_path_list(path: &Path) -> Result<BTreeSet<PathBuf>, RuntimeError> {
-        if !path.exists() {
-            return Ok(BTreeSet::new());
-        }
-        Ok(fs::read_to_string(path)?
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .map(PathBuf::from)
-            .collect())
-    }
-
     // -----------------------------------------------------------------------
-    // Rulebook state
+    // Rulebook initialization
     // -----------------------------------------------------------------------
 
     /// Initialize the committed `.multorum/` project surface.
@@ -228,6 +305,7 @@ impl RuntimeFs {
 
         self.ensure_multorum_gitignore()?;
         fs::write(&rulebook_path, Rulebook::default_template())?;
+        self.store_state(&StateFile::default())?;
         tracing::info!(
             multorum_root = %multorum_root.display(),
             rulebook_path = %rulebook_path.display(),
@@ -238,36 +316,47 @@ impl RuntimeFs {
         Ok(RulebookInit { multorum_root, rulebook_path, gitignore_path })
     }
 
-    /// Load the active rulebook projection.
-    pub(crate) fn load_active_rulebook(&self) -> Result<ActiveRulebookRecord, RuntimeError> {
-        let path = self.paths.orchestrator().active_rulebook();
+    // -----------------------------------------------------------------------
+    // State file
+    // -----------------------------------------------------------------------
+
+    /// Load the orchestrator state file.
+    pub(crate) fn load_state(&self) -> Result<StateFile, RuntimeError> {
+        let path = self.paths.orchestrator().state();
         if !path.exists() {
-            return Err(RuntimeError::MissingActiveRulebook);
+            return Err(RuntimeError::MissingOrchestratorState);
         }
         Self::read_toml(&path)
     }
 
-    /// Persist the active rulebook projection.
-    pub(crate) fn store_active_rulebook(
-        &self, record: &ActiveRulebookRecord,
-    ) -> Result<(), RuntimeError> {
-        let orchestrator = self.paths.orchestrator();
-        let orchestrator_root = orchestrator.root();
-        fs::create_dir_all(orchestrator.workers_dir())?;
-        fs::create_dir_all(orchestrator_root.join("audit"))?;
-        Self::write_toml(&orchestrator.active_rulebook(), record)
+    /// Persist the orchestrator state file.
+    pub(crate) fn store_state(&self, state: &StateFile) -> Result<(), RuntimeError> {
+        let path = self.paths.orchestrator().state();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        Self::write_toml(&path, state)
     }
 
-    /// Remove the active rulebook projection.
-    pub(crate) fn remove_active_rulebook(&self) -> Result<(), RuntimeError> {
-        let path = self.paths.orchestrator().active_rulebook();
-        if path.exists() {
-            fs::remove_file(&path)?;
-        }
-        Ok(())
+    // -----------------------------------------------------------------------
+    // Rulebook compilation
+    // -----------------------------------------------------------------------
+
+    /// Load and compile the rulebook from the working tree.
+    ///
+    /// Reads `rulebook.toml` from disk and compiles perspective
+    /// boundaries against the current working tree files.
+    pub(crate) fn load_working_tree_rulebook(&self) -> Result<CompiledRulebook, RuntimeError> {
+        let rulebook_path = Rulebook::rulebook_path(self.workspace_root());
+        let rulebook_text = fs::read_to_string(&rulebook_path)?;
+        let rulebook = Rulebook::from_toml_str(&rulebook_text)?;
+        rulebook.compile_for_root(self.workspace_root()).map_err(RuntimeError::from)
     }
 
     /// Load and compile a rulebook at one pinned commit.
+    ///
+    /// Used at merge time to recover the check pipeline from the
+    /// rulebook that was current when the bidding group formed.
     pub(crate) fn load_compiled_rulebook(
         &self, commit: &CanonicalCommitHash,
     ) -> Result<CompiledRulebook, RuntimeError> {
@@ -281,86 +370,11 @@ impl RuntimeFs {
         rulebook.compile(&files).map_err(RuntimeError::from)
     }
 
-    /// Load the active rulebook projection and its compiled rulebook.
-    pub(crate) fn load_active_compiled_rulebook(
-        &self,
-    ) -> Result<(ActiveRulebookRecord, CompiledRulebook), RuntimeError> {
-        let active = self.load_active_rulebook()?;
-        let compiled = self.load_compiled_rulebook(&active.base_commit)?;
-        Ok((active, compiled))
-    }
-
-    // -----------------------------------------------------------------------
-    // Worker records
-    // -----------------------------------------------------------------------
-
-    /// Load one worker projection.
-    pub(crate) fn load_worker_record(
-        &self, worker_id: &WorkerId,
-    ) -> Result<WorkerRecord, RuntimeError> {
-        let path = self.paths.orchestrator().worker_state(worker_id);
-        if !path.exists() {
-            return Err(RuntimeError::UnknownWorker(worker_id.to_string()));
-        }
-        Self::read_toml(&path)
-    }
-
-    /// Persist one worker projection.
-    pub(crate) fn store_worker_record(&self, record: &WorkerRecord) -> Result<(), RuntimeError> {
-        let path = self.paths.orchestrator().worker_state(&record.worker_id);
-        Self::write_toml(&path, record)
-    }
-
-    /// Delete one worker projection file.
-    pub(crate) fn delete_worker_record(&self, worker_id: &WorkerId) -> Result<bool, RuntimeError> {
-        let path = self.paths.orchestrator().worker_state(worker_id);
-        if path.exists() {
-            fs::remove_file(&path)?;
-            tracing::trace!(path = %path.display(), "deleted worker state file");
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    /// Return all known worker projections.
-    pub(crate) fn list_worker_records(&self) -> Result<Vec<WorkerRecord>, RuntimeError> {
-        let workers_root = self.paths.orchestrator().workers_dir();
-        if !workers_root.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut workers = Vec::new();
-        for entry in fs::read_dir(&workers_root)? {
-            let entry = entry?;
-            if !entry.file_type()?.is_file() {
-                continue;
-            }
-            let path = entry.path();
-            let Some(extension) = path.extension() else {
-                continue;
-            };
-            if extension == "toml" {
-                workers.push(Self::read_toml(&path)?);
-            }
-        }
-        workers.sort_by(|left: &WorkerRecord, right: &WorkerRecord| {
-            left.worker_id.cmp(&right.worker_id)
-        });
-        Ok(workers)
-    }
-
     // -----------------------------------------------------------------------
     // Worker contract and boundary materialization
     // -----------------------------------------------------------------------
 
     /// Load the worker contract view from a worker worktree.
-    ///
-    /// The contract file pins worker identity and base snapshot. The
-    /// referenced read/write-set files remain separately materialized so
-    /// `rulebook install` may expand them for a live worker without
-    /// rewriting the stable contract metadata. The contract file itself
-    /// changes only when a whole bidding group is explicitly forwarded.
     pub(crate) fn load_worker_contract(
         &self, worktree_root: &Path,
     ) -> Result<WorkerContractView, RuntimeError> {
@@ -373,9 +387,9 @@ impl RuntimeFs {
 
     /// Prepare the worker-local runtime surface.
     pub(crate) fn prepare_worker_runtime(
-        &self, record: &WorkerRecord, perspective: &CompiledPerspective,
+        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
     ) -> Result<(), RuntimeError> {
-        let worker_paths = WorkerPaths::new(record.worktree_path.clone());
+        let worker_paths = WorkerPaths::new(worker.worktree_path.clone());
 
         fs::create_dir_all(worker_paths.inbox_new())?;
         fs::create_dir_all(worker_paths.inbox_ack())?;
@@ -383,37 +397,35 @@ impl RuntimeFs {
         fs::create_dir_all(worker_paths.outbox_ack())?;
         fs::create_dir_all(worker_paths.artifacts())?;
 
-        self.write_worker_contract(record)?;
-        self.materialize_worker_boundary(record, perspective)?;
+        self.write_worker_contract(worker, group)?;
+        self.materialize_worker_boundary(worker, group)?;
 
         self.vcs().install_worker_runtime_support(worker_paths.worktree_root())?;
         Ok(())
     }
 
-    /// Refresh the materialized boundary for one live worker.
-    ///
-    /// This rewrites only the read/write-set files. The worker keeps its
-    /// pinned base snapshot and runtime identity.
+    /// Refresh the materialized boundary for one worker from its group.
     pub(crate) fn refresh_worker_boundary(
-        &self, record: &WorkerRecord, perspective: &CompiledPerspective,
+        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
     ) -> Result<(), RuntimeError> {
-        self.materialize_worker_boundary(record, perspective)
+        self.materialize_worker_boundary(worker, group)
     }
 
-    /// Refresh the worker contract after one explicit base-forwarding
-    /// operation.
+    /// Refresh the worker contract after a base-forwarding operation.
     pub(crate) fn refresh_worker_contract(
-        &self, record: &WorkerRecord,
+        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
     ) -> Result<(), RuntimeError> {
-        self.write_worker_contract(record)
+        self.write_worker_contract(worker, group)
     }
 
-    fn write_worker_contract(&self, record: &WorkerRecord) -> Result<(), RuntimeError> {
-        let worker_paths = WorkerPaths::new(record.worktree_path.clone());
+    fn write_worker_contract(
+        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
+    ) -> Result<(), RuntimeError> {
+        let worker_paths = WorkerPaths::new(worker.worktree_path.clone());
         let contract = WorkerContractView {
-            worker_id: record.worker_id.clone(),
-            perspective: record.perspective.clone(),
-            base_commit: record.base_commit.clone(),
+            worker_id: worker.worker_id.clone(),
+            perspective: group.perspective.clone(),
+            base_commit: group.base_commit.clone(),
             read_set_path: worker_paths.read_set(),
             write_set_path: worker_paths.write_set(),
         };
@@ -421,16 +433,16 @@ impl RuntimeFs {
     }
 
     fn materialize_worker_boundary(
-        &self, record: &WorkerRecord, perspective: &CompiledPerspective,
+        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
     ) -> Result<(), RuntimeError> {
-        let worker_paths = WorkerPaths::new(record.worktree_path.clone());
-        Self::write_path_list(&worker_paths.read_set(), perspective.read())?;
-        Self::write_path_list(&worker_paths.write_set(), perspective.write())?;
+        let worker_paths = WorkerPaths::new(worker.worktree_path.clone());
+        Self::write_path_list(&worker_paths.read_set(), &group.read_set)?;
+        Self::write_path_list(&worker_paths.write_set(), &group.write_set)?;
         tracing::trace!(
-            worker_id = %record.worker_id,
-            perspective = %record.perspective,
-            read_count = perspective.read().len(),
-            write_count = perspective.write().len(),
+            worker_id = %worker.worker_id,
+            perspective = %group.perspective,
+            read_count = group.read_set.len(),
+            write_count = group.write_set.len(),
             "materialized worker boundary"
         );
         Ok(())
@@ -440,21 +452,17 @@ impl RuntimeFs {
     // Exclusion set
     // -----------------------------------------------------------------------
 
-    /// Recompute and persist the orchestrator exclusion set.
+    /// Recompute and persist the orchestrator exclusion set from `state.toml`.
     ///
-    /// The exclusion set is the union of every active bidding group's
+    /// The exclusion set is the union of every live bidding group's
     /// read and write sets. It must be rewritten after any lifecycle
     /// transition that changes the set of active workers (create,
     /// merge, discard).
-    pub(crate) fn rewrite_exclusion_set(&self) -> Result<(), RuntimeError> {
+    pub(crate) fn rewrite_exclusion_set(&self, state: &StateFile) -> Result<(), RuntimeError> {
         let mut exclusion = BTreeSet::<PathBuf>::new();
-        for record in self.list_worker_records()? {
-            if !record.state.is_live() {
-                continue;
-            }
-            let worker_paths = self.worker_paths(&record.worker_id);
-            exclusion.extend(Self::read_path_list(&worker_paths.read_set())?);
-            exclusion.extend(Self::read_path_list(&worker_paths.write_set())?);
+        for group in state.live_groups() {
+            exclusion.extend(group.read_set.iter().cloned());
+            exclusion.extend(group.write_set.iter().cloned());
         }
         let path = self.paths.orchestrator().exclusion_set();
         Self::write_path_list(&path, &exclusion)?;
@@ -472,12 +480,12 @@ impl RuntimeFs {
     /// directory alongside the TOML entry, using the same bundle I/O as
     /// mailbox publishing.
     pub(crate) fn write_audit_entry(
-        &self, record: &WorkerRecord, head_commit: &CanonicalCommitHash,
+        &self, worker: &WorkerEntry, group: &BiddingGroupRecord, head_commit: &CanonicalCommitHash,
         changed_files: &BTreeSet<PathBuf>, ran_checks: &[String], skipped_checks: &[String],
         payload: BundlePayload,
     ) -> Result<(), RuntimeError> {
         let audit_dir = self.paths.orchestrator().audit();
-        let entry_dir = audit_dir.join(record.worker_id.as_str());
+        let entry_dir = audit_dir.join(worker.worker_id.as_str());
         fs::create_dir_all(&entry_dir)?;
 
         let (rationale_body, rationale_artifacts) = if !payload.is_empty() {
@@ -488,9 +496,9 @@ impl RuntimeFs {
         };
 
         let entry = AuditEntry {
-            worker_id: record.worker_id.clone(),
-            perspective: record.perspective.clone(),
-            base_commit: record.base_commit.clone(),
+            worker_id: worker.worker_id.clone(),
+            perspective: group.perspective.clone(),
+            base_commit: group.base_commit.clone(),
             head_commit: head_commit.clone(),
             changed_files: changed_files.iter().cloned().collect(),
             ran_checks: ran_checks.to_vec(),
@@ -499,8 +507,8 @@ impl RuntimeFs {
             rationale_body,
             rationale_artifacts,
         };
-        Self::write_toml(&self.paths.orchestrator().audit_entry(&record.worker_id), &entry)?;
-        tracing::info!(worker_id = %record.worker_id, "wrote audit entry");
+        Self::write_toml(&self.paths.orchestrator().audit_entry(&worker.worker_id), &entry)?;
+        tracing::info!(worker_id = %worker.worker_id, "wrote audit entry");
         Ok(())
     }
 

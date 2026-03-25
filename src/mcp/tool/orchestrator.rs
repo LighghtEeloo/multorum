@@ -67,9 +67,22 @@ const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ),
 ];
 
+const VALIDATE_PERSPECTIVES_INPUTS: &[ToolInputDescriptor] = &[
+    ToolInputDescriptor::required(
+        "perspectives",
+        "Perspective names to validate for conflict-freedom.",
+        ToolInputType::StringList,
+    ),
+    ToolInputDescriptor::optional(
+        "no_live",
+        "Skip checking against active bidding groups.",
+        ToolInputType::Boolean,
+    ),
+];
+
 const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
     "perspective",
-    "Perspective whose blocked bidding group should move to the active rulebook commit.",
+    "Perspective whose blocked bidding group should move to HEAD.",
     ToolInputType::String,
 )];
 
@@ -144,28 +157,18 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
             inputs: &[],
         },
         ToolDescriptor {
-            name: "rulebook_validate",
-            description: "Dry-run validation of the HEAD rulebook against active bidding groups.",
-            inputs: &[],
-        },
-        ToolDescriptor {
-            name: "rulebook_install",
-            description: "Activate the HEAD rulebook after validation.",
-            inputs: &[],
-        },
-        ToolDescriptor {
-            name: "rulebook_uninstall",
-            description: "Deactivate the active rulebook. Rejected if any live bidding group still depends on it.",
-            inputs: &[],
-        },
-        ToolDescriptor {
             name: "list_perspectives",
-            description: "List compiled perspectives from the active rulebook.",
+            description: "List compiled perspectives from the current rulebook.",
             inputs: &[],
+        },
+        ToolDescriptor {
+            name: "validate_perspectives",
+            description: "Validate a set of perspectives for conflict-freedom against each other and active bidding groups.",
+            inputs: VALIDATE_PERSPECTIVES_INPUTS,
         },
         ToolDescriptor {
             name: "forward_perspective",
-            description: "Move one blocked bidding group to the active rulebook commit.",
+            description: "Move one blocked bidding group to HEAD.",
             inputs: FORWARD_PERSPECTIVE_INPUTS,
         },
         ToolDescriptor {

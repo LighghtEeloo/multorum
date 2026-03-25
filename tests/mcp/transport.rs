@@ -33,12 +33,12 @@ fn orchestrator_server_info() {
 
 #[test]
 fn orchestrator_tool_descriptor_count() {
-    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 17);
+    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 15);
 }
 
 #[test]
 fn orchestrator_resource_descriptor_count() {
-    assert_eq!(multorum::mcp::resource::orchestrator::descriptors().len(), 4);
+    assert_eq!(multorum::mcp::resource::orchestrator::descriptors().len(), 3);
 }
 
 #[test]
@@ -57,7 +57,6 @@ fn orchestrator_get_status() {
     let result = handler.dispatch("get_status", empty_args()).unwrap();
     assert_tool_success(&result);
     let status = tool_json(&result);
-    assert!(status["active_rulebook_commit"].is_string());
     assert!(status["workers"].as_array().unwrap().is_empty());
 }
 
@@ -95,25 +94,21 @@ fn orchestrator_list_workers_empty() {
 }
 
 #[test]
-fn orchestrator_rulebook_validate() {
+fn orchestrator_validate_perspectives() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
-    let result = handler.dispatch("rulebook_validate", empty_args()).unwrap();
+
+    let result = handler
+        .dispatch(
+            "validate_perspectives",
+            json_args(json!({"perspectives": ["AuthImplementor"]})),
+        )
+        .unwrap();
     assert_tool_success(&result);
-}
-
-#[test]
-fn orchestrator_rulebook_uninstall_and_install() {
-    let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
-
-    let uninstall = handler.dispatch("rulebook_uninstall", empty_args()).unwrap();
-    assert_tool_success(&uninstall);
-
-    let install = handler.dispatch("rulebook_install", empty_args()).unwrap();
-    assert_tool_success(&install);
-    let json = tool_json(&install);
-    assert!(json["active_commit"].is_string());
+    let json = tool_json(&result);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["perspectives"].as_array().unwrap().len(), 1);
+    assert!(json["conflicts"].as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -469,17 +464,8 @@ fn orchestrator_resource_status() {
     let handler = OrchestratorHandler::new(svc);
     let result = handler.read("multorum://orchestrator/status").unwrap();
     let status = resource_json(&result);
-    assert!(status["active_rulebook_commit"].is_string());
-}
-
-#[test]
-fn orchestrator_resource_rulebook_active() {
-    let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
-    let result = handler.read("multorum://orchestrator/rulebook/active").unwrap();
-    let json = resource_json(&result);
-    assert!(json["active_rulebook_commit"].is_string());
-    assert_eq!(json.as_object().unwrap().len(), 1);
+    assert!(status["active_perspectives"].as_array().unwrap().is_empty());
+    assert!(status["workers"].as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -736,11 +722,14 @@ fn worker_send_report_accepts_inline_body_text() {
     let result = handler
         .dispatch(
             "send_report",
-            json_args(json!({"body_text": "Blocked on design question.\nNeed orchestrator input."})),
+            json_args(
+                json!({"body_text": "Blocked on design question.\nNeed orchestrator input."}),
+            ),
         )
         .unwrap();
     assert_tool_success(&result);
-    let body = fs::read_to_string(worktree.join(".multorum/outbox/new/0001-report/body.md")).unwrap();
+    let body =
+        fs::read_to_string(worktree.join(".multorum/outbox/new/0001-report/body.md")).unwrap();
     assert!(body.contains("Blocked on design question."));
 }
 
@@ -782,7 +771,8 @@ fn worker_send_commit_accepts_inline_body_text() {
         )
         .unwrap();
     assert_tool_success(&result);
-    let body = fs::read_to_string(worktree.join(".multorum/outbox/new/0001-commit/body.md")).unwrap();
+    let body =
+        fs::read_to_string(worktree.join(".multorum/outbox/new/0001-commit/body.md")).unwrap();
     assert!(body.contains("Implemented the requested owned.rs update."));
 }
 

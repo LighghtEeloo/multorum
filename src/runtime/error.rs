@@ -44,9 +44,9 @@ pub enum RuntimeError {
         repo_root: PathBuf,
     },
 
-    /// The runtime has not activated a rulebook yet.
-    #[error("no active rulebook; run `multorum rulebook install` first")]
-    MissingActiveRulebook,
+    /// The orchestrator state file is missing.
+    #[error("no orchestrator state found; run `multorum rulebook init` first")]
+    MissingOrchestratorState,
 
     /// The workspace already has a committed rulebook.
     #[error("rulebook already exists at {0}")]
@@ -98,32 +98,6 @@ pub enum RuntimeError {
     /// The requested message has already been acknowledged.
     #[error("message already acknowledged")]
     AlreadyAcknowledged,
-
-    /// The requested rulebook install or uninstall conflicts with active workers.
-    #[error(
-        "cannot activate rulebook commit `{commit}` while active perspectives are still live: {blocking_perspectives}",
-        blocking_perspectives = format_perspectives(blocking_perspectives)
-    )]
-    RulebookConflict {
-        /// Canonical rulebook commit the caller attempted to activate.
-        commit: CanonicalCommitHash,
-        /// Live perspectives that still depend on the current rulebook.
-        blocking_perspectives: Vec<PerspectiveName>,
-    },
-
-    /// An active bidding group's perspective is missing or reduced in
-    /// the target rulebook.
-    #[error(
-        "cannot activate rulebook commit `{commit}`: active perspective `{perspective}` {reason}"
-    )]
-    ActivePerspectiveIncompatible {
-        /// Canonical rulebook commit the caller attempted to activate.
-        commit: CanonicalCommitHash,
-        /// Active perspective that is incompatible with the target.
-        perspective: PerspectiveName,
-        /// Human-readable explanation of the incompatibility.
-        reason: &'static str,
-    },
 
     /// A candidate bidding group conflicts with active runtime state.
     #[error(
@@ -213,20 +187,6 @@ pub enum RuntimeError {
         reported_head_commit: CanonicalCommitHash,
         /// Commit currently checked out in the worker worktree.
         current_head_commit: CanonicalCommitHash,
-    },
-
-    /// A same-perspective live bidding group must be forwarded before
-    /// adding another worker from the active rulebook snapshot.
-    #[error(
-        "cannot create worker for perspective `{perspective}` because its live bidding group is still pinned to `{live_base_commit}` while the active rulebook is pinned to `{active_base_commit}`; run `multorum perspective forward {perspective}` first"
-    )]
-    PerspectiveRequiresForwardBeforeCreate {
-        /// Perspective whose live group is still pinned to an older base.
-        perspective: PerspectiveName,
-        /// Active rulebook commit used for new worker creation.
-        active_base_commit: CanonicalCommitHash,
-        /// Base commit still held by the live bidding group.
-        live_base_commit: CanonicalCommitHash,
     },
 
     /// A pre-merge or lifecycle check failed.
@@ -336,10 +296,6 @@ fn runtime_role_mismatch_hint(expected: &str, actual: &str) -> &'static str {
         }
         | _ => "the current workspace does not support that runtime operation",
     }
-}
-
-fn format_perspectives(perspectives: &[PerspectiveName]) -> String {
-    perspectives.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")
 }
 
 fn format_paths(paths: &[PathBuf]) -> String {

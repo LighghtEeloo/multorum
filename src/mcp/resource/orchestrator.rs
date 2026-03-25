@@ -10,12 +10,8 @@ pub fn descriptors() -> Vec<ResourceDescriptor> {
             description: "Projected orchestrator snapshot including active perspectives and workers.",
         },
         ResourceDescriptor {
-            uri: "multorum://orchestrator/rulebook/active",
-            description: "Active rulebook commit governing the current runtime.",
-        },
-        ResourceDescriptor {
             uri: "multorum://orchestrator/perspectives",
-            description: "Compiled perspective summaries from the active rulebook.",
+            description: "Compiled perspective summaries from the current rulebook.",
         },
         ResourceDescriptor {
             uri: "multorum://orchestrator/workers",

@@ -97,17 +97,22 @@ impl FsWorkerService {
     }
 
     fn update_state_after_ack(&self, message: &AckRef) -> Result<()> {
-        let mut record = self.fs.load_worker_record(&message.message.worker_id)?;
-        if record.worktree_path != self.worktree_root {
-            return Err(RuntimeError::MissingWorkerRuntime(
-                self.worktree_root.display().to_string(),
-            ));
-        }
-
         match message.message.kind {
             | MessageKind::Task | MessageKind::Resolve | MessageKind::Revise => {
-                record.state = WorkerState::Active;
-                self.fs.store_worker_record(&record)?;
+                let mut state_file = self.fs.load_state()?;
+                let group = state_file
+                    .find_worker_group_mut(&message.message.worker_id)
+                    .ok_or_else(|| {
+                        RuntimeError::UnknownWorker(message.message.worker_id.to_string())
+                    })?;
+                let entry = group.find_worker_mut(&message.message.worker_id).unwrap();
+                if entry.worktree_path != self.worktree_root {
+                    return Err(RuntimeError::MissingWorkerRuntime(
+                        self.worktree_root.display().to_string(),
+                    ));
+                }
+                entry.state = WorkerState::Active;
+                self.fs.store_state(&state_file)?;
             }
             | MessageKind::Report | MessageKind::Commit => {}
         }
@@ -116,20 +121,24 @@ impl FsWorkerService {
     }
 
     fn update_submission_state(
-        &self, state: WorkerState, head_commit: Option<CanonicalCommitHash>,
+        &self, new_state: WorkerState, head_commit: Option<CanonicalCommitHash>,
     ) -> Result<()> {
         let contract = self.contract_view()?;
-        let mut record = self.fs.load_worker_record(&contract.worker_id)?;
-        if !record.state.can_submit() {
+        let mut state_file = self.fs.load_state()?;
+        let group = state_file
+            .find_worker_group_mut(&contract.worker_id)
+            .ok_or_else(|| RuntimeError::UnknownWorker(contract.worker_id.to_string()))?;
+        let entry = group.find_worker_mut(&contract.worker_id).unwrap();
+        if !entry.state.can_submit() {
             return Err(RuntimeError::InvalidState {
                 operation: "publish worker submission",
                 expected: "ACTIVE",
-                actual: record.state,
+                actual: entry.state.clone(),
             });
         }
-        record.state = state;
-        record.submitted_head_commit = head_commit;
-        self.fs.store_worker_record(&record)
+        entry.state = new_state;
+        entry.submitted_head_commit = head_commit;
+        self.fs.store_state(&state_file)
     }
 }
 
@@ -227,11 +236,14 @@ impl WorkerService for FsWorkerService {
 
     fn status(&self) -> Result<WorkerStatus> {
         let contract = self.contract_view()?;
-        let record = self.fs.load_worker_record(&contract.worker_id)?;
+        let state_file = self.fs.load_state()?;
+        let (_group, entry) = state_file
+            .find_worker(&contract.worker_id)
+            .ok_or_else(|| RuntimeError::UnknownWorker(contract.worker_id.to_string()))?;
         Ok(WorkerStatus {
             worker_id: contract.worker_id,
             perspective: contract.perspective,
-            state: record.state,
+            state: entry.state.clone(),
         })
     }
 }

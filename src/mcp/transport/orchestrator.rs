@@ -47,10 +47,15 @@ impl OrchestratorHandler {
         validate_tool_arguments(name, &args, &crate::mcp::tool::orchestrator::descriptors())?;
         match name {
             | "rulebook_init" => dispatch_tool(self.service.rulebook_init()),
-            | "rulebook_validate" => dispatch_tool(self.service.rulebook_validate()),
-            | "rulebook_install" => dispatch_tool(self.service.rulebook_install()),
-            | "rulebook_uninstall" => dispatch_tool(self.service.rulebook_uninstall()),
             | "list_perspectives" => dispatch_tool(self.service.list_perspectives()),
+            | "validate_perspectives" => {
+                let perspectives = optional_string_list(&args, "perspectives")
+                    .into_iter()
+                    .map(|s| parse_perspective(&s))
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+                let no_live = optional_bool(&args, "no_live").unwrap_or(false);
+                dispatch_tool(self.service.validate_perspectives(perspectives, no_live))
+            }
             | "forward_perspective" => {
                 let perspective = parse_perspective(required_str(&args, "perspective")?)?;
                 dispatch_tool(self.service.forward_perspective(perspective))
@@ -128,15 +133,6 @@ impl OrchestratorHandler {
             | "multorum://orchestrator/status" => {
                 let status = self.service.status().map_err(runtime_to_resource_error)?;
                 resource_success(uri, &status)
-            }
-            | "multorum://orchestrator/rulebook/active" => {
-                let status = self.service.status().map_err(runtime_to_resource_error)?;
-                resource_success(
-                    uri,
-                    &serde_json::json!({
-                        "active_rulebook_commit": status.active_rulebook_commit,
-                    }),
-                )
             }
             | "multorum://orchestrator/perspectives" => {
                 let perspectives =

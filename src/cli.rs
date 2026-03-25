@@ -7,7 +7,7 @@
 //! The command surface follows the runtime model directly:
 //!
 //! - `rulebook` manages committed configuration.
-//! - `perspective` inspects declared roles from the active rulebook.
+//! - `perspective` inspects and validates declared roles from the current rulebook.
 //! - `worker` addresses orchestrator-side operations on concrete workers.
 //! - `local` addresses worker-local operations from inside a worker
 //!   worktree.
@@ -217,7 +217,7 @@ pub enum RuntimeCommand {
         command: RulebookCommand,
     },
 
-    /// Inspect compiled perspectives from the active rulebook.
+    /// Inspect and validate perspectives from the current rulebook.
     Perspective {
         #[command(subcommand)]
         command: PerspectiveCommand,
@@ -255,10 +255,24 @@ pub enum UtilCommand {
 /// Perspective inspection commands.
 #[derive(Debug, Subcommand)]
 pub enum PerspectiveCommand {
-    /// List compiled perspectives from the active rulebook.
+    /// List compiled perspectives from the current rulebook.
     List,
 
-    /// Forward one blocked bidding group to the active rulebook commit.
+    /// Validate a set of perspectives for conflict-freedom.
+    ///
+    /// Checks the named perspectives against each other and against
+    /// active bidding groups. With `--no-live`, active groups are
+    /// ignored.
+    Validate {
+        /// Perspectives to check.
+        perspectives: Vec<PerspectiveName>,
+
+        /// Skip checking against active bidding groups.
+        #[arg(long)]
+        no_live: bool,
+    },
+
+    /// Forward one blocked bidding group to HEAD.
     Forward {
         /// Perspective whose live bidding group should move forward.
         perspective: PerspectiveName,
@@ -431,29 +445,9 @@ pub enum RulebookCommand {
     ///
     /// Creates `.multorum/rulebook.toml` from the checked-in default
     /// template, ensures `.multorum/.gitignore` ignores the runtime
-    /// directories, and prepares the local orchestrator runtime
-    /// directories. The command refuses to overwrite an existing
-    /// committed rulebook.
+    /// directories, prepares the local orchestrator runtime
+    /// directories, and creates an empty `state.toml`.
     Init,
-
-    /// Validate and activate the HEAD rulebook.
-    ///
-    /// Compiles the rulebook at HEAD and checks that no active
-    /// bidding-group boundary conflicts with any candidate boundary in
-    /// the new rulebook. If valid, the new rulebook becomes active.
-    Install,
-
-    /// Deactivate the active rulebook.
-    ///
-    /// Removes the active rulebook projection. Rejected if any live
-    /// bidding group still depends on the active rulebook.
-    Uninstall,
-
-    /// Dry-run rulebook validation without making changes.
-    ///
-    /// Performs the same validation as `rulebook install` but does not
-    /// activate. Useful to test whether an install is currently possible.
-    Validate,
 }
 
 impl RulebookCommand {
@@ -462,18 +456,6 @@ impl RulebookCommand {
         match self {
             | Self::Init => {
                 let result = services.orchestrator()?.rulebook_init()?;
-                println!("{result:#?}");
-            }
-            | Self::Install => {
-                let result = services.orchestrator()?.rulebook_install()?;
-                println!("{result:#?}");
-            }
-            | Self::Uninstall => {
-                let result = services.orchestrator()?.rulebook_uninstall()?;
-                println!("{result:#?}");
-            }
-            | Self::Validate => {
-                let result = services.orchestrator()?.rulebook_validate()?;
                 println!("{result:#?}");
             }
         }
@@ -577,6 +559,11 @@ impl PerspectiveCommand {
         match self {
             | Self::List => {
                 let result = services.orchestrator()?.list_perspectives()?;
+                println!("{result:#?}");
+            }
+            | Self::Validate { perspectives, no_live } => {
+                let result =
+                    services.orchestrator()?.validate_perspectives(perspectives, no_live)?;
                 println!("{result:#?}");
             }
             | Self::Forward { perspective } => {

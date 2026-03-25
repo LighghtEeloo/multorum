@@ -6,7 +6,7 @@ use std::process::Command;
 
 use tempfile::TempDir;
 
-use multorum::runtime::{FsOrchestratorService, OrchestratorService};
+use multorum::runtime::FsOrchestratorService;
 
 fn rulebook_toml() -> &'static str {
     r#"
@@ -67,7 +67,7 @@ fn multi_perspective_rulebook_toml() -> &'static str {
 pub fn setup_multi_perspective_repo() -> (TempDir, FsOrchestratorService) {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join("src")).unwrap();
-    fs::create_dir_all(dir.path().join(".multorum")).unwrap();
+    fs::create_dir_all(dir.path().join(".multorum/orchestrator")).unwrap();
     fs::write(dir.path().join("src/auth.rs"), "pub fn auth() -> i32 { 1 }\n").unwrap();
     fs::write(dir.path().join("src/auth_ref.rs"), "pub fn auth_ref() -> i32 { 2 }\n").unwrap();
     fs::write(dir.path().join("src/data.rs"), "pub fn data() -> i32 { 3 }\n").unwrap();
@@ -75,6 +75,7 @@ pub fn setup_multi_perspective_repo() -> (TempDir, FsOrchestratorService) {
     fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
     fs::write(dir.path().join(".multorum/rulebook.toml"), multi_perspective_rulebook_toml())
         .unwrap();
+    fs::write(dir.path().join(".multorum/orchestrator/state.toml"), "").unwrap();
 
     git(dir.path(), &["init"]);
     git(dir.path(), &["config", "user.name", "Multorum Test"]);
@@ -83,7 +84,6 @@ pub fn setup_multi_perspective_repo() -> (TempDir, FsOrchestratorService) {
     git(dir.path(), &["commit", "-m", "feat: initialize multi-perspective fixture"]);
 
     let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
-    orchestrator.rulebook_install().unwrap();
     (dir, orchestrator)
 }
 
@@ -98,11 +98,12 @@ pub fn git(root: &Path, args: &[&str]) -> String {
 pub fn setup_repo() -> (TempDir, FsOrchestratorService) {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join("src")).unwrap();
-    fs::create_dir_all(dir.path().join(".multorum")).unwrap();
+    fs::create_dir_all(dir.path().join(".multorum/orchestrator")).unwrap();
     fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
     fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
     fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
     fs::write(dir.path().join(".multorum/rulebook.toml"), rulebook_toml()).unwrap();
+    fs::write(dir.path().join(".multorum/orchestrator/state.toml"), "").unwrap();
 
     git(dir.path(), &["init"]);
     git(dir.path(), &["config", "user.name", "Multorum Test"]);
@@ -111,6 +112,5 @@ pub fn setup_repo() -> (TempDir, FsOrchestratorService) {
     git(dir.path(), &["commit", "-m", "feat: initialize runtime fixture"]);
 
     let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
-    orchestrator.rulebook_install().unwrap();
     (dir, orchestrator)
 }

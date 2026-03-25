@@ -25,8 +25,8 @@ pub use orchestrator::{CreateWorker, FsOrchestratorService, OrchestratorService}
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};
 pub use state::{
     ActivePerspectiveSummary, AuditEntry, CreateResult, DeleteResult, DiscardResult,
-    MailboxMessageView, MergeResult, OrchestratorStatus, PerspectiveForwardResult,
-    PerspectiveSummary, RulebookInit, RulebookInstall, RulebookUninstall, RulebookValidation,
+    MailboxMessageView, MergeResult, OrchestratorStatus, PerspectiveConflict,
+    PerspectiveForwardResult, PerspectiveSummary, PerspectiveValidation, RulebookInit,
     TranscriptView, WorkerContractView, WorkerDetail, WorkerState, WorkerStatus, WorkerSummary,
 };
 pub use worker::{FsWorkerService, WorkerService};

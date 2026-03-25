@@ -17,8 +17,8 @@ pub enum McpErrorCode {
     MessageNotFound,
     /// Message bundle already acknowledged.
     AlreadyAcknowledged,
-    /// Rulebook install or uninstall conflicts with active workers.
-    RulebookConflict,
+    /// Perspective boundary conflicts with an active bidding group.
+    BiddingGroupConflict,
     /// Requested check failed.
     CheckFailed,
     /// Worker touched files outside its write set.
@@ -43,7 +43,7 @@ impl McpErrorCode {
             | Self::InvalidState => "invalid_state",
             | Self::MessageNotFound => "message_not_found",
             | Self::AlreadyAcknowledged => "already_acknowledged",
-            | Self::RulebookConflict => "rulebook_conflict",
+            | Self::BiddingGroupConflict => "bidding_group_conflict",
             | Self::CheckFailed => "check_failed",
             | Self::WriteSetViolation => "write_set_violation",
             | Self::MailboxConflict => "mailbox_conflict",
@@ -69,7 +69,7 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::UnmanagedProject(_) => McpErrorCode::InvalidState,
             | RuntimeError::AmbiguousRuntimeRole { .. } => McpErrorCode::InvalidState,
             | RuntimeError::RuntimeRoleMismatch { .. } => McpErrorCode::InvalidState,
-            | RuntimeError::MissingActiveRulebook => McpErrorCode::InvalidState,
+            | RuntimeError::MissingOrchestratorState => McpErrorCode::InvalidState,
             | RuntimeError::RulebookExists(_) => McpErrorCode::InvalidState,
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,
             | RuntimeError::UnknownWorker(_) => McpErrorCode::UnknownWorker,
@@ -78,17 +78,14 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::InvalidState { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,
             | RuntimeError::AlreadyAcknowledged => McpErrorCode::AlreadyAcknowledged,
-            | RuntimeError::RulebookConflict { .. }
-            | RuntimeError::ActivePerspectiveIncompatible { .. } => McpErrorCode::RulebookConflict,
             | RuntimeError::ConflictWithActiveBiddingGroup { .. }
             | RuntimeError::BiddingGroupBoundaryMismatch { .. }
-            | RuntimeError::BiddingGroupBaseMismatch { .. }
+            | RuntimeError::BiddingGroupBaseMismatch { .. } => McpErrorCode::BiddingGroupConflict,
             | RuntimeError::PerspectiveForwardRequiresBlocked { .. }
             | RuntimeError::PerspectiveForwardMissingGroup { .. }
             | RuntimeError::PerspectiveForwardMissingReport { .. }
             | RuntimeError::PerspectiveForwardMissingReportedHead { .. }
             | RuntimeError::PerspectiveForwardHeadMismatch { .. }
-            | RuntimeError::PerspectiveRequiresForwardBeforeCreate { .. }
             | RuntimeError::CheckFailed(_) => McpErrorCode::CheckFailed,
             | RuntimeError::WriteSetViolation { .. } => McpErrorCode::WriteSetViolation,
             | RuntimeError::MailboxConflict => McpErrorCode::MailboxConflict,

@@ -74,7 +74,8 @@ impl OrchestratorPaths {
     /// Construct orchestrator path helpers from the runtime root.
     ///
     /// Note: This constructor does not canonicalize because the runtime
-    /// directory is created lazily during activation and worker creation.
+    /// directory is created lazily during initialization and worker
+    /// creation.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
     }
@@ -84,23 +85,13 @@ impl OrchestratorPaths {
         &self.root
     }
 
-    /// Active rulebook commit projection.
-    pub fn active_rulebook(&self) -> PathBuf {
-        self.root.join("active-rulebook.toml")
-    }
-
-    /// Worker state projection directory.
-    pub fn workers_dir(&self) -> PathBuf {
-        self.root.join("workers")
-    }
-
-    /// Worker state projection file.
+    /// Orchestrator runtime state file.
     ///
-    /// Note: Each worker projection is one TOML file named after the
-    /// worker id so the orchestrator control plane stays shallow and
-    /// easy to inspect from disk.
-    pub fn worker_state(&self, worker_id: &WorkerId) -> PathBuf {
-        self.workers_dir().join(format!("{}.toml", worker_id.as_str()))
+    /// Records every bidding group and every worker within it. This is
+    /// the single source of truth for runtime state — there are no
+    /// per-worker state files.
+    pub fn state(&self) -> PathBuf {
+        self.root.join("state.toml")
     }
 
     /// Audit log directory.
@@ -115,9 +106,10 @@ impl OrchestratorPaths {
 
     /// Materialized orchestrator exclusion set.
     ///
-    /// Contains the union of all active bidding groups' read and write
-    /// sets. The pre-commit hook reads this file to reject orchestrator
-    /// commits that touch protected files.
+    /// A flat projection of `state.toml`: the union of all read and
+    /// write sets from groups that still have live workers. A pre-commit
+    /// hook reads this file to reject orchestrator commits that touch
+    /// protected files.
     pub fn exclusion_set(&self) -> PathBuf {
         self.root.join("exclusion-set.txt")
     }
