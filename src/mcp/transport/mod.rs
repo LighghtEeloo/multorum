@@ -231,14 +231,14 @@ fn optional_string_list(args: &serde_json::Map<String, Value>, key: &str) -> Vec
 }
 
 /// Build a [`BundlePayload`] from common MCP tool arguments.
-fn extract_payload(args: &serde_json::Map<String, Value>) -> crate::runtime::BundlePayload {
+fn extract_payload(args: &serde_json::Map<String, Value>) -> crate::bundle::BundlePayload {
     let body_path = optional_str(args, "body").map(std::path::PathBuf::from);
     let artifacts = args
         .get("artifacts")
         .and_then(Value::as_array)
         .map(|arr| arr.iter().filter_map(Value::as_str).map(std::path::PathBuf::from).collect())
         .unwrap_or_default();
-    crate::runtime::BundlePayload { body_text: None, body_path, artifacts }
+    crate::bundle::BundlePayload { body_text: None, body_path, artifacts }
 }
 
 /// Build a [`ReplyReference`] from common MCP tool arguments.

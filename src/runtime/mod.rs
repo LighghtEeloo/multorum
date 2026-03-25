@@ -5,8 +5,8 @@
 //! source of truth; these types and traits provide the validated surface
 //! through which frontends interact with that state.
 
-pub mod bundle;
 pub mod error;
+pub mod mailbox;
 pub(crate) mod storage;
 pub mod orchestrator;
 pub mod paths;
@@ -15,9 +15,10 @@ pub mod state;
 pub mod worker;
 pub mod worker_id;
 
-pub use bundle::{
-    AckRef, BundleEnvelope, BundlePayload, MailboxDirection, MessageKind, MessageRef,
-    PublishedBundle, ReplyReference, Sequence,
+pub use crate::bundle::BundlePayload;
+pub use mailbox::{
+    AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, PublishedBundle,
+    ReplyReference, Sequence,
 };
 pub use error::{Result, RuntimeError};
 pub use orchestrator::{CreateWorker, FsOrchestratorService, OrchestratorService};

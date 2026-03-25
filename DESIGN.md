@@ -220,6 +220,20 @@ If both conditions hold, the install succeeds and Multorum pins the `HEAD` commi
 
 ## Workspace Model
 
+### Bundles
+
+A bundle is a directory containing a `body.md` primary content file and an `artifacts/` subdirectory for supplementary files. Bundles are the shared content container used wherever Multorum stores structured content atomically: mailbox messages carry one and audit entries carry one for the orchestrator's rationale.
+
+```text
+<bundle-directory>/
+  body.md          # primary Markdown content
+  artifacts/       # optional auxiliary files
+```
+
+`body.md` and `artifacts/` are opaque to Multorum. The runtime materializes them from user-supplied payloads but never parses their content.
+
+When a payload supplies files by path, Multorum consumes them rather than copying. On successful publication, the runtime moves the files into bundle storage and becomes responsible for retaining them.
+
 ### Filesystem Layout
 
 A Multorum project adds a `.multorum/` directory at the repository root:
@@ -260,12 +274,15 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
   workers/               # per-worker state projections
     <worker-id>.toml     # lifecycle state, base commit, submitted head commit
   audit/                 # merge audit trail
-    <worker-id>.toml     # one entry per merged worker
+    <worker-id>.toml     # per-worker TOML metadata record
+    <worker-id>/         # optional rationale bundle
+      body.md
+      artifacts/
 ```
 
 `active-rulebook.toml` records the commit at which the rulebook was installed and caches the compiled result. Worker state files track each worker's lifecycle independently of the worktree contents.
 
-`audit/` records the decision trail for merged workers. Each entry is written atomically when `merge` succeeds and contains the worker id, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The rationale is an audit payload — a body and optional artifacts — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. Audit entries are append-only; Multorum never modifies or deletes them.
+`audit/` records the decision trail for merged workers. Each entry is written atomically when `merge` succeeds and contains the worker id, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The rationale is a bundle — a `body.md` and optional `artifacts/` — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. When the orchestrator supplies rationale, Multorum writes it as a bundle subdirectory alongside the TOML record. Audit entries are append-only; Multorum never modifies or deletes them.
 
 `exclusion-set.txt` is the materialized orchestrator exclusion set: the union of all active bidding groups' read and write sets. Multorum rewrites this file on every lifecycle transition that changes the set of active groups (create, merge, discard). A pre-commit hook in the canonical workspace reads it and rejects commits that touch any listed file. When no workers are active the file is empty.
 
@@ -360,16 +377,16 @@ Each worker exposes two mailbox trees in its `.multorum/` directory:
 
 ### Message Bundles
 
-Every message is a directory bundle. A bundle is an immutable directory that carries metadata and payloads atomically.
+Every message is a bundle (see [Bundles](#bundles)) extended with an `envelope.toml` that carries mailbox routing metadata. The envelope is the only file Multorum interprets inside a mailbox bundle.
 
 ```
 <mailbox>/new/<sequence>-<kind>/
-  envelope.toml    # machine-readable metadata
-  body.md          # primary content
+  envelope.toml    # machine-readable routing metadata
+  body.md          # primary content (always present, may be empty)
   artifacts/       # optional auxiliary files
 ```
 
-`envelope.toml` is the only file Multorum interprets:
+`envelope.toml` fields:
 
 ```toml
 protocol    = "multorum/v1"
@@ -382,8 +399,6 @@ in_reply_to = 5                  # optional, for correlation
 head_commit = "a1b2c3d"          # optional, for submission kinds
 ```
 
-`body.md` and `artifacts/` are opaque to Multorum. The runtime validates the envelope on publication and delivery, but never parses the content.
-
 The `kind` field classifies the message:
 
 - `task` — orchestrator assigns or updates a task for the worker
@@ -392,11 +407,9 @@ The `kind` field classifies the message:
 - `resolve` — orchestrator resolves a blocker
 - `revise` — orchestrator requests revisions to a submission
 
-Bundles are published atomically: Multorum writes to a temporary name inside `new/` then renames into place. Readers see either the complete bundle or nothing. Sequence numbers are assigned by the author at publication time and never reused.
+Mailbox bundles are published atomically: Multorum writes to a temporary name inside `new/` then renames into place. Readers see either the complete bundle or nothing. Sequence numbers are assigned by the author at publication time and never reused.
 
 Published bundles are immutable. Receipt is recorded by writing an acknowledgement file with the same sequence number into the corresponding `ack/` directory. The unique runtime identity in all exchanges is the worker id, not the perspective name.
-
-If a publication supplies payloads by path, Multorum consumes them rather than copying. On successful publish, the runtime moves the files into bundle storage and becomes responsible for retaining them.
 
 ### Ownership and Acknowledgement
 
@@ -429,7 +442,7 @@ Workers may submit evidence with their reports or commits to support the case fo
 
 ### Audit
 
-After a successful merge, Multorum writes an audit entry to `.multorum/orchestrator/audit/<worker-id>.toml`. The entry records the worker id, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is attached to the `merge` command via `--body`, `--body-path`, and `--artifact` flags. Multorum consumes those files and stores them alongside the TOML entry under the same audit directory.
+After a successful merge, Multorum writes an audit entry to `.multorum/orchestrator/audit/<worker-id>.toml`. The entry records the worker id, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is a bundle attached to the `merge` command via `--body`, `--body-path`, and `--artifact` flags. When supplied, Multorum writes the rationale as a bundle directory (see [Bundles](#bundles)) alongside the TOML record under the same audit directory.
 
 ---
 

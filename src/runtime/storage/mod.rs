@@ -28,10 +28,6 @@ pub(crate) const PROTOCOL_VERSION: u32 = 1;
 
 /// Canonical mailbox envelope file name within one bundle directory.
 pub(crate) const ENVELOPE_FILE_NAME: &str = "envelope.toml";
-/// Canonical mailbox body file name within one bundle directory.
-pub(crate) const BODY_FILE_NAME: &str = "body.md";
-/// Canonical artifacts directory name within one bundle directory.
-pub(crate) const ARTIFACTS_DIR_NAME: &str = "artifacts";
 /// Canonical acknowledgement file extension for mailbox bundles.
 pub(crate) const ACK_EXTENSION: &str = "ack";
 

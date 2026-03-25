@@ -11,10 +11,11 @@ use std::sync::Arc;
 use crate::schema::perspective::{CompiledPerspective, PerspectiveName};
 use crate::vcs::{CanonicalCommitHash, VersionControl};
 
+use crate::bundle::BundlePayload;
+
 use super::{
-    MailboxDirection,
-    bundle::{AckRef, BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
+    mailbox::{AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence},
     project::CurrentProject,
     state::{
         ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,

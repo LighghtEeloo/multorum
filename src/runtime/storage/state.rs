@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Serialize, de::DeserializeOwned};
 
+use crate::bundle::{BundlePayload, BundleWriter};
 use crate::runtime::{
-    AuditEntry, BundlePayload, RulebookInit, RuntimeError, WorkerContractView, WorkerId,
-    WorkerPaths,
+    AuditEntry, RulebookInit, RuntimeError, WorkerContractView, WorkerId, WorkerPaths,
 };
 use crate::schema::perspective::CompiledPerspective;
 use crate::schema::rulebook::{CompiledRulebook, RULEBOOK_RELATIVE_PATH, Rulebook};
@@ -255,8 +255,8 @@ impl RuntimeFs {
     /// Write an audit entry for a successfully merged worker.
     ///
     /// The rationale payload body and artifacts are moved into the audit
-    /// directory alongside the TOML entry, following the same consume
-    /// semantics as mailbox bundles.
+    /// directory alongside the TOML entry, using the same bundle I/O as
+    /// mailbox publishing.
     pub(crate) fn write_audit_entry(
         &self, record: &WorkerRecord, head_commit: &CanonicalCommitHash,
         changed_files: &BTreeSet<PathBuf>, ran_checks: &[String], skipped_checks: &[String],
@@ -266,34 +266,12 @@ impl RuntimeFs {
         let entry_dir = audit_dir.join(record.worker_id.as_str());
         fs::create_dir_all(&entry_dir)?;
 
-        let rationale_body = if let Some(source) = payload.body_path {
-            let dest = entry_dir.join("body.md");
-            fs::rename(&source, &dest)?;
-            Some(dest)
-        } else if let Some(text) = payload.body_text {
-            let dest = entry_dir.join("body.md");
-            fs::write(&dest, text)?;
-            Some(dest)
+        let (rationale_body, rationale_artifacts) = if !payload.is_empty() {
+            let written = BundleWriter::write(&entry_dir, payload)?;
+            (written.body_path, written.artifact_paths)
         } else {
-            None
+            (None, Vec::new())
         };
-
-        let mut rationale_artifacts = Vec::new();
-        if !payload.artifacts.is_empty() {
-            let artifacts_dir = entry_dir.join("artifacts");
-            fs::create_dir_all(&artifacts_dir)?;
-            for source in &payload.artifacts {
-                let name = source.file_name().ok_or_else(|| {
-                    RuntimeError::CheckFailed(format!(
-                        "artifact path has no file name: {}",
-                        source.display()
-                    ))
-                })?;
-                let dest = artifacts_dir.join(name);
-                fs::rename(source, &dest)?;
-                rationale_artifacts.push(dest);
-            }
-        }
 
         let entry = AuditEntry {
             worker_id: record.worker_id.clone(),

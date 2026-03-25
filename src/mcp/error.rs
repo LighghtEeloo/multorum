@@ -87,7 +87,7 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::MailboxConflict => McpErrorCode::MailboxConflict,
             | RuntimeError::MissingWorkerRuntime(_) => McpErrorCode::MissingWorkerRuntime,
             | RuntimeError::Unimplemented(_) => McpErrorCode::Unimplemented,
-            | RuntimeError::InvalidPayload(_)
+            | RuntimeError::Bundle(_)
             | RuntimeError::MissingSubmittedHeadCommit { .. }
             | RuntimeError::NoNewCommit { .. }
             | RuntimeError::WorkerHeadMismatch { .. }

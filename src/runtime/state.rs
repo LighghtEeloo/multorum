@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
-use super::bundle::{MailboxDirection, MessageKind, Sequence};
+use super::mailbox::{MailboxDirection, MessageKind, Sequence};
 use super::worker_id::WorkerId;
 
 /// Worker lifecycle state as projected by Multorum.

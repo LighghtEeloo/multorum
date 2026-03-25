@@ -3,38 +3,33 @@
 //! This module owns the on-disk mailbox layout and keeps storage
 //! concerns out of the mailbox domain types.
 
-use std::collections::BTreeSet;
-use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use crate::bundle::{BODY_FILE_NAME, BundlePayload, BundleWriter};
 use crate::runtime::{
-    BundleEnvelope, BundlePayload, MailboxDirection, MailboxMessageView, MessageKind,
-    PublishedBundle, ReplyReference, RuntimeError, WorkerPaths,
-    bundle::{AckRef, MessageRef, Sequence},
+    MailboxMessageView, RuntimeError, WorkerPaths,
+    mailbox::{
+        AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, PublishedBundle,
+        ReplyReference, Sequence,
+    },
 };
 use crate::vcs::CanonicalCommitHash;
 
 use super::{
-    ACK_EXTENSION, ARTIFACTS_DIR_NAME, AckRecord, BODY_FILE_NAME, ENVELOPE_FILE_NAME,
-    PROTOCOL_VERSION, RuntimeFs, timestamp_now,
+    ACK_EXTENSION, AckRecord, ENVELOPE_FILE_NAME, PROTOCOL_VERSION, RuntimeFs, timestamp_now,
 };
 
 impl RuntimeFs {
     /// Publish a mailbox bundle and transfer any path-backed payloads.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn publish_bundle(
         &self, worktree_root: &Path, direction: MailboxDirection, kind: MessageKind,
         worker_id: &crate::runtime::WorkerId,
         perspective: &crate::schema::perspective::PerspectiveName, reply: ReplyReference,
         head_commit: Option<CanonicalCommitHash>, payload: BundlePayload,
     ) -> Result<PublishedBundle, RuntimeError> {
-        if payload.body_text.is_some() && payload.body_path.is_some() {
-            return Err(RuntimeError::InvalidPayload(
-                "body_text and body_path are mutually exclusive",
-            ));
-        }
-
         let worker_paths = WorkerPaths::new(worktree_root.to_path_buf());
         let new_root = worker_paths.mailbox_new(direction);
         fs::create_dir_all(&new_root)?;
@@ -47,7 +42,7 @@ impl RuntimeFs {
             fs::remove_dir_all(&temp_dir)?;
         }
 
-        fs::create_dir_all(temp_dir.join(ARTIFACTS_DIR_NAME))?;
+        fs::create_dir_all(&temp_dir)?;
 
         let envelope = BundleEnvelope {
             protocol: PROTOCOL_VERSION,
@@ -60,12 +55,12 @@ impl RuntimeFs {
             head_commit,
         };
         Self::write_toml(&temp_dir.join(ENVELOPE_FILE_NAME), &envelope)?;
-        self.write_bundle_body(
-            &temp_dir.join(BODY_FILE_NAME),
-            payload.body_text,
-            payload.body_path,
-        )?;
-        self.move_artifacts(&temp_dir.join(ARTIFACTS_DIR_NAME), payload.artifacts)?;
+
+        // Mailbox bundles always contain a body.md, even if empty.
+        let written = BundleWriter::write(&temp_dir, payload)?;
+        if written.body_path.is_none() {
+            fs::write(temp_dir.join(BODY_FILE_NAME), "")?;
+        }
 
         fs::rename(&temp_dir, &final_dir)?;
 
@@ -173,39 +168,6 @@ impl RuntimeFs {
         Ok(Sequence(max + 1))
     }
 
-    fn write_bundle_body(
-        &self, target: &Path, body_text: Option<String>, body_path: Option<PathBuf>,
-    ) -> Result<(), RuntimeError> {
-        match (body_text, body_path) {
-            | (Some(text), None) => fs::write(target, text)?,
-            | (None, Some(path)) => move_file(&path, target)?,
-            | (None, None) => fs::write(target, "")?,
-            | (Some(_), Some(_)) => {
-                return Err(RuntimeError::InvalidPayload(
-                    "body_text and body_path are mutually exclusive",
-                ));
-            }
-        }
-        Ok(())
-    }
-
-    fn move_artifacts(
-        &self, target_dir: &Path, artifacts: Vec<PathBuf>,
-    ) -> Result<(), RuntimeError> {
-        let mut seen = BTreeSet::new();
-        for artifact in artifacts {
-            let Some(name) = artifact.file_name() else {
-                return Err(RuntimeError::InvalidPayload("artifact path must name a file"));
-            };
-            let name: OsString = name.to_owned();
-            if !seen.insert(name.clone()) {
-                return Err(RuntimeError::InvalidPayload("artifact names must be unique"));
-            }
-            move_file(&artifact, &target_dir.join(name))?;
-        }
-        Ok(())
-    }
-
     fn bundle_summary(&self, bundle_path: &Path, kind: &MessageKind) -> String {
         let body_path = bundle_path.join(BODY_FILE_NAME);
         if let Ok(body) = fs::read_to_string(body_path)
@@ -245,22 +207,5 @@ impl RuntimeFs {
     /// The acknowledgement file name for one sequence number.
     fn ack_file_name(sequence: Sequence) -> String {
         format!("{:04}.{}", sequence.0, ACK_EXTENSION)
-    }
-}
-
-/// Move a file into a runtime-managed location.
-fn move_file(source: &Path, target: &Path) -> Result<(), RuntimeError> {
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    match fs::rename(source, target) {
-        | Ok(()) => Ok(()),
-        | Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
-            fs::copy(source, target)?;
-            fs::remove_file(source)?;
-            Ok(())
-        }
-        | Err(error) => Err(RuntimeError::Io(error)),
     }
 }

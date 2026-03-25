@@ -229,9 +229,9 @@ pub enum RuntimeError {
     #[error("operation is not implemented yet: {0}")]
     Unimplemented(&'static str),
 
-    /// The caller supplied an invalid bundle payload.
-    #[error("invalid bundle payload: {0}")]
-    InvalidPayload(&'static str),
+    /// Bundle content layer failure.
+    #[error(transparent)]
+    Bundle(#[from] crate::bundle::BundleError),
 
     /// Version-control backend failure.
     #[error(transparent)]

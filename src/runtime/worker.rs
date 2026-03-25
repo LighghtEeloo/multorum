@@ -9,10 +9,12 @@ use std::sync::Arc;
 
 use crate::vcs::{CanonicalCommitHash, GitVcs, VersionControl};
 
+use crate::bundle::BundlePayload;
+
 use super::{
-    MailboxDirection, WorkerPaths,
-    bundle::{AckRef, BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
+    WorkerPaths,
     error::{Result, RuntimeError},
+    mailbox::{AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence},
     project::CurrentProject,
     state::{MailboxMessageView, WorkerContractView, WorkerState, WorkerStatus},
     storage::{RuntimeFs, can_submit_from_state},

@@ -1,16 +1,11 @@
-//! Typed mailbox bundle and message metadata.
+//! Mailbox protocol types for orchestrator-worker communication.
 //!
-//! Message bundles are the unit of orchestrator-worker communication in
-//! Multorum. The filesystem layout is authoritative; these types capture
-//! the stable metadata that both the runtime services and transport
-//! adapters share. Mailbox routing (`MailboxDirection`) and
-//! acknowledgement references (`AckRef`) live here alongside bundle
-//! types because they are tightly coupled to the message protocol.
-//!
-//! Path-backed payload inputs transfer ownership into Multorum. When a
-//! bundle is published successfully, the runtime moves the referenced
-//! body file and artifact files into the bundle directory under
-//! `.multorum/` instead of copying them.
+//! The mailbox protocol uses directory bundles (see [`crate::bundle`]) as
+//! its transport unit, extending each bundle with an `envelope.toml` that
+//! carries routing metadata. Types in this module describe the protocol
+//! envelope, message classification, sequencing, acknowledgement, and
+//! routing direction. The general bundle payload type lives in
+//! [`crate::bundle::BundlePayload`].
 
 use std::path::PathBuf;
 
@@ -28,7 +23,7 @@ use super::worker_id::WorkerId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Sequence(pub u64);
 
-/// Kind of message bundle recognized by Multorum.
+/// Kind of message bundle recognized by the mailbox protocol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MessageKind {
@@ -60,7 +55,7 @@ impl MessageKind {
     }
 }
 
-/// Stable reference to a published bundle.
+/// Stable reference to a published mailbox bundle.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MessageRef {
     /// Worker that owns the mailbox where the bundle was published.
@@ -71,30 +66,6 @@ pub struct MessageRef {
     pub sequence: Sequence,
 }
 
-/// User-supplied content to place into a bundle.
-///
-/// `body_text` and `body_path` are mutually exclusive.
-///
-/// Path-backed fields are consumed on successful publication. Multorum
-/// moves those files into its managed `.multorum/` bundle storage so the
-/// runtime, not the caller, becomes responsible for retaining them.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct BundlePayload {
-    /// Inline Markdown content for `body.md`.
-    pub body_text: Option<String>,
-    /// Existing file to move into `body.md`.
-    pub body_path: Option<PathBuf>,
-    /// Existing files to move into `artifacts/`.
-    pub artifacts: Vec<PathBuf>,
-}
-
-impl BundlePayload {
-    /// Return `true` if the payload carries no body or artifacts.
-    pub fn is_empty(&self) -> bool {
-        self.body_text.is_none() && self.body_path.is_none() && self.artifacts.is_empty()
-    }
-}
-
 /// Reply metadata for bundles that answer an earlier message.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ReplyReference {
@@ -102,7 +73,10 @@ pub struct ReplyReference {
     pub in_reply_to: Option<Sequence>,
 }
 
-/// Envelope persisted in `envelope.toml`.
+/// Envelope persisted in `envelope.toml` inside a mailbox bundle.
+///
+/// The envelope is the only file Multorum interprets inside a mailbox
+/// bundle. `body.md` and `artifacts/` are opaque payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BundleEnvelope {
     /// Mailbox protocol version.
