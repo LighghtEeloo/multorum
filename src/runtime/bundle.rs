@@ -1,9 +1,11 @@
-//! Typed mailbox bundle metadata.
+//! Typed mailbox bundle and message metadata.
 //!
 //! Message bundles are the unit of orchestrator-worker communication in
 //! Multorum. The filesystem layout is authoritative; these types capture
 //! the stable metadata that both the runtime services and transport
-//! adapters share.
+//! adapters share. Mailbox routing (`MailboxDirection`) and
+//! acknowledgement references (`AckRef`) live here alongside bundle
+//! types because they are tightly coupled to the message protocol.
 //!
 //! Path-backed payload inputs transfer ownership into Multorum. When a
 //! bundle is published successfully, the runtime moves the referenced
@@ -17,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
-use super::worker::WorkerId;
+use super::worker_id::WorkerId;
 
 /// Monotonic per-mailbox sequence number.
 ///
@@ -40,6 +42,22 @@ pub enum MessageKind {
     Revise,
     /// Worker submission of a completed commit.
     Commit,
+}
+
+impl MessageKind {
+    /// The storage slug for bundle directory names.
+    ///
+    /// Note: Mailbox bundles use stable directory names so they can be
+    /// inspected directly from disk and safely referenced by tests.
+    pub(crate) fn slug(self) -> &'static str {
+        match self {
+            | Self::Task => "task",
+            | Self::Report => "report",
+            | Self::Resolve => "resolve",
+            | Self::Revise => "revise",
+            | Self::Commit => "commit",
+        }
+    }
 }
 
 /// Stable reference to a published bundle.
@@ -112,4 +130,23 @@ pub struct PublishedBundle {
     pub message: MessageRef,
     /// Filesystem path to the published bundle directory.
     pub bundle_path: PathBuf,
+}
+
+/// Direction of a mailbox relative to the worker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MailboxDirection {
+    /// Messages authored by the orchestrator and consumed by the worker.
+    Inbox,
+    /// Messages authored by the worker and consumed by the orchestrator.
+    Outbox,
+}
+
+/// Acknowledgement reference for a consumed mailbox bundle.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AckRef {
+    /// Message being acknowledged.
+    pub message: MessageRef,
+    /// Acknowledged sequence number.
+    pub sequence: Sequence,
 }

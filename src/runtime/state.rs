@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
-use super::worker::WorkerId;
-use super::{Sequence, bundle::MessageKind, mailbox::MailboxDirection};
+use super::worker_id::WorkerId;
+use super::bundle::{MailboxDirection, MessageKind, Sequence};
 
 /// Worker lifecycle state as projected by Multorum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -279,4 +279,18 @@ pub struct MailboxMessageView {
     pub summary: String,
     /// Absolute path to the bundle directory.
     pub bundle_path: PathBuf,
+}
+
+/// Ordered transcript view for a worker interaction history.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TranscriptView {
+    /// Messages in logical transcript order.
+    pub messages: Vec<MailboxMessageView>,
+}
+
+impl TranscriptView {
+    /// Construct an empty transcript.
+    pub fn empty() -> Self {
+        Self { messages: Vec::new() }
+    }
 }

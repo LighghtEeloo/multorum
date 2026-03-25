@@ -12,8 +12,7 @@ use std::path::{Path, PathBuf};
 use crate::runtime::{
     BundleEnvelope, BundlePayload, MailboxDirection, MailboxMessageView, MessageKind,
     PublishedBundle, ReplyReference, RuntimeError, WorkerPaths,
-    bundle::{MessageRef, Sequence},
-    mailbox::AckRef,
+    bundle::{AckRef, MessageRef, Sequence},
 };
 use crate::vcs::CanonicalCommitHash;
 

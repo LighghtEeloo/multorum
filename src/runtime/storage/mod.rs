@@ -19,7 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::schema::rulebook::{CheckName, CheckPolicy, CompiledRulebook};
 use crate::runtime::{
-    MessageKind, MultorumPaths, RuntimeError, WorkerId, WorkerPaths, WorkerState,
+    MultorumPaths, RuntimeError, WorkerId, WorkerPaths, WorkerState,
 };
 use crate::vcs::{GitVcs, VersionControl};
 
@@ -99,22 +99,6 @@ impl RuntimeFs {
             stderr.trim().to_owned()
         };
         Err(RuntimeError::CheckFailed(format!("{name}: {details}")))
-    }
-}
-
-impl MessageKind {
-    /// The storage slug for bundle directory names.
-    ///
-    /// Note: Mailbox bundles use stable directory names so they can be
-    /// inspected directly from disk and safely referenced by tests.
-    pub(crate) fn slug(self) -> &'static str {
-        match self {
-            | Self::Task => "task",
-            | Self::Report => "report",
-            | Self::Resolve => "resolve",
-            | Self::Revise => "revise",
-            | Self::Commit => "commit",
-        }
     }
 }
 

@@ -13,9 +13,8 @@ use crate::vcs::{CanonicalCommitHash, VersionControl};
 
 use super::{
     MailboxDirection,
-    bundle::{BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
+    bundle::{AckRef, BundlePayload, MessageKind, PublishedBundle, ReplyReference, Sequence},
     error::{Result, RuntimeError},
-    mailbox::AckRef,
     project::CurrentProject,
     state::{
         ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,
@@ -26,7 +25,7 @@ use super::{
         ActiveRulebookRecord, RuntimeFs, WorkerRecord, is_live_worker_state, timestamp_now,
         validate_skip_request,
     },
-    worker::WorkerId,
+    worker_id::WorkerId,
 };
 
 /// Request to create one worker from a compiled perspective.
