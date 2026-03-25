@@ -11,7 +11,7 @@ fn cli_create_accepts_optional_worker_id() {
         "create",
         "AuthImplementor",
         "--worker-id",
-        "custom_worker_7",
+        "custom-worker-7",
         "--overwriting-worktree",
     ])
     .unwrap();
@@ -21,7 +21,7 @@ fn cli_create_accepts_optional_worker_id() {
             command: WorkerCommand::Create { perspective, worker_id, overwriting_worktree, .. },
         }) => {
             assert_eq!(perspective.as_str(), "AuthImplementor");
-            assert_eq!(worker_id.unwrap().as_str(), "custom_worker_7");
+            assert_eq!(worker_id.unwrap().as_str(), "custom-worker-7");
             assert!(overwriting_worktree);
         }
         | command => panic!("unexpected command: {command:?}"),
@@ -69,7 +69,7 @@ fn cli_merge_accepts_worker_id_and_skip_checks() {
         "multorum",
         "worker",
         "merge",
-        "custom_worker_7",
+        "custom-worker-7",
         "--skip-check",
         "unit",
     ])
@@ -79,7 +79,7 @@ fn cli_merge_accepts_worker_id_and_skip_checks() {
         | Command::Runtime(RuntimeCommand::Worker {
             command: WorkerCommand::Merge { worker_id, skip_checks, .. },
         }) => {
-            assert_eq!(worker_id.as_str(), "custom_worker_7");
+            assert_eq!(worker_id.as_str(), "custom-worker-7");
             assert_eq!(skip_checks, vec!["unit"]);
         }
         | command => panic!("unexpected command: {command:?}"),

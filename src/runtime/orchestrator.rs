@@ -309,7 +309,7 @@ impl FsOrchestratorService {
     }
 
     fn allocate_worker_id(&self, perspective: &PerspectiveName) -> Result<WorkerId> {
-        let prefix = format!("{}-", perspective.as_str());
+        let prefix = format!("{}-", camel_to_kebab(perspective.as_str()));
         let next = self
             .fs
             .list_worker_records()?
@@ -889,4 +889,19 @@ fn boundary_conflict(
     }
 
     None
+}
+
+/// Convert an `UpperCamelCase` name to `kebab-case`.
+///
+/// Inserts a hyphen before each uppercase letter (except the first)
+/// and lowercases the entire result.
+fn camel_to_kebab(name: &str) -> String {
+    let mut result = String::with_capacity(name.len() + 4);
+    for (i, ch) in name.char_indices() {
+        if ch.is_ascii_uppercase() && i > 0 {
+            result.push('-');
+        }
+        result.push(ch.to_ascii_lowercase());
+    }
+    result
 }

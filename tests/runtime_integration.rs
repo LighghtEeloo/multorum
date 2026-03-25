@@ -256,7 +256,7 @@ fn same_perspective_can_spawn_multiple_workers_and_close_the_group_on_integratio
 #[test]
 fn create_worker_uses_explicit_worker_id_when_requested() {
     let (_repo, orchestrator, _) = setup_repo();
-    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+    let worker_id: multorum::runtime::WorkerId = "custom-worker-7".parse().unwrap();
 
     let provision = orchestrator
         .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
@@ -270,7 +270,7 @@ fn create_worker_uses_explicit_worker_id_when_requested() {
 #[test]
 fn create_worker_rejects_duplicate_explicit_worker_id() {
     let (_repo, orchestrator, _) = setup_repo();
-    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+    let worker_id: multorum::runtime::WorkerId = "custom-worker-7".parse().unwrap();
 
     orchestrator
         .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
@@ -285,7 +285,7 @@ fn create_worker_rejects_duplicate_explicit_worker_id() {
 #[test]
 fn create_worker_rejects_reused_explicit_worker_id_while_discarded_workspace_exists() {
     let (_repo, orchestrator, _) = setup_repo();
-    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+    let worker_id: multorum::runtime::WorkerId = "custom-worker-7".parse().unwrap();
 
     let first = orchestrator
         .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
@@ -307,7 +307,7 @@ fn create_worker_rejects_reused_explicit_worker_id_while_discarded_workspace_exi
 #[test]
 fn create_worker_reuses_explicit_worker_id_after_discard_when_overwriting() {
     let (_repo, orchestrator, _) = setup_repo();
-    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+    let worker_id: multorum::runtime::WorkerId = "custom-worker-7".parse().unwrap();
 
     let first = orchestrator
         .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
@@ -333,7 +333,7 @@ fn create_worker_reuses_explicit_worker_id_after_discard_when_overwriting() {
 #[test]
 fn create_worker_rejects_reused_explicit_worker_id_while_merged_workspace_exists() {
     let (_repo, orchestrator, _) = setup_repo();
-    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+    let worker_id: multorum::runtime::WorkerId = "custom-worker-7".parse().unwrap();
 
     let first = orchestrator
         .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
@@ -361,7 +361,7 @@ fn create_worker_rejects_reused_explicit_worker_id_while_merged_workspace_exists
 #[test]
 fn create_worker_reuses_explicit_worker_id_after_merge_when_overwriting() {
     let (_repo, orchestrator, _) = setup_repo();
-    let worker_id: multorum::runtime::WorkerId = "custom_worker_7".parse().unwrap();
+    let worker_id: multorum::runtime::WorkerId = "custom-worker-7".parse().unwrap();
 
     let first = orchestrator
         .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))

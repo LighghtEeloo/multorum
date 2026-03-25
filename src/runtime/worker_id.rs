@@ -9,10 +9,14 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// A validated runtime worker identifier.
+/// A validated runtime worker identifier in kebab-case.
 ///
-/// Worker ids are path-safe ASCII strings. They may contain ASCII
-/// letters, digits, `-`, and `_`.
+/// ## Invariants
+///
+/// - Non-empty.
+/// - Starts with a lowercase ASCII letter (`a`–`z`).
+/// - Contains only lowercase ASCII letters, digits, and hyphens.
+/// - Does not end with a hyphen.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct WorkerId(String);
 
@@ -25,15 +29,19 @@ impl WorkerId {
         }
 
         let first = value.chars().next().expect("checked empty worker id");
-        if !first.is_ascii_alphanumeric() {
+        if !first.is_ascii_lowercase() {
             return Err(WorkerIdError::InvalidStart { id: value });
         }
 
         for (pos, ch) in value.char_indices() {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+            if ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' {
                 continue;
             }
             return Err(WorkerIdError::InvalidChar { id: value, ch, pos });
+        }
+
+        if value.ends_with('-') {
+            return Err(WorkerIdError::TrailingHyphen { id: value });
         }
 
         Ok(Self(value))
@@ -66,11 +74,15 @@ pub enum WorkerIdError {
     #[error("worker id is empty")]
     Empty,
 
-    /// The first character is not ASCII alphanumeric.
-    #[error("worker id `{id}` must start with an ASCII letter or digit")]
+    /// The first character is not a lowercase ASCII letter.
+    #[error("worker id `{id}` must start with a lowercase ASCII letter")]
     InvalidStart { id: String },
 
-    /// The id contained an unsupported character.
-    #[error("worker id `{id}` contains invalid character `{ch}` at byte {pos}")]
+    /// The id contained a character outside the kebab-case alphabet.
+    #[error("worker id `{id}` contains invalid character `{ch}` at byte {pos}; only lowercase letters, digits, and hyphens are allowed")]
     InvalidChar { id: String, ch: char, pos: usize },
+
+    /// The id ends with a hyphen.
+    #[error("worker id `{id}` must not end with a hyphen")]
+    TrailingHyphen { id: String },
 }
