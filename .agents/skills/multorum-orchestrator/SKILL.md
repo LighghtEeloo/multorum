@@ -13,7 +13,7 @@ Coordinate the system from the canonical workspace root. Treat Multorum as react
 - Decompose tasks so active workers do not depend on each other's unpublished output.
 - Respect the safety property at the bidding-group level: a file may be written by exactly one active bidding group or read by many, never both.
 - Treat the read set as a stability contract and the write set as an absolute ownership boundary.
-- Treat new files, missing permissions, and cross-perspective edits as orchestrator work. Update the rulebook, install it, and create a fresh worker instead of telling a worker to proceed anyway.
+- Treat new files, missing permissions, and cross-perspective edits as orchestrator work. Update the canonical workspace and rulebook, install the rulebook, then decide whether the blocked bidding group should be forwarded or discarded.
 - Remember that workers are addressed by `worker_id`, not by perspective name. Multiple workers from the same perspective form one bidding group, and at most one of them may merge.
 
 ## Treat The Filesystem Runtime As Canonical
@@ -41,6 +41,7 @@ multorum serve orchestrator
 - `rulebook_install`
 - `rulebook_uninstall`
 - `list_perspectives`
+- `forward_perspective`
 - `list_workers`
 - `get_worker`
 - `read_worker_outbox`
@@ -72,6 +73,7 @@ multorum rulebook validate
 multorum rulebook install
 multorum rulebook uninstall
 multorum perspective list
+multorum perspective forward <perspective>
 multorum worker create <perspective> [--worker-id <worker>] [--overwriting-worktree] [--body task.md] [--artifact FILE ...]
 multorum worker list
 multorum worker show <worker-id>
@@ -93,7 +95,8 @@ multorum status
 4. Create one worker per perspective by default. Create multiple workers from the same perspective only when you intentionally want a bidding group evaluating the same boundary from the same pinned snapshot.
 5. Attach an initial task bundle when the worker needs nontrivial instructions or evidence files.
 6. Read worker outbox traffic, acknowledge each consumed bundle, and review the worker detail plus any attached artifacts before deciding whether to resolve, revise, discard, delete, or merge.
-7. Merge only from `COMMITTED`, and skip checks only when the rulebook marks them `skippable` and the worker submitted evidence you trust.
+7. When a blocked perspective needs a new file or newer pinned base, install the updated rulebook and use `multorum perspective forward <perspective>` only if every live worker in that bidding group is `BLOCKED`.
+8. Merge only from `COMMITTED`, and skip checks only when the rulebook marks them `skippable` and the worker submitted evidence you trust.
 
 ## Write Better Worker Tasks
 
@@ -104,13 +107,14 @@ Each initial task or follow-up bundle should state:
 - the acceptance checks the worker should run or attach as evidence
 - the situations that require an immediate `report` instead of improvisation
 
-Do not ask a worker to create new files unless the active rulebook already declares them. Do not rely on "figure out the right place" when the change may cross perspective boundaries.
+Do not ask a worker to create new files unless the active rulebook already declares them. When a blocked worker reports that a new file is needed, update the canonical workspace and rulebook first, install the rulebook, and forward that perspective only if the whole live bidding group is blocked. Do not rely on "figure out the right place" when the change may cross perspective boundaries.
 When attaching a task body, evidence log, or other artifact by path, do not plan to reuse the original path after publication unless you created a separate copy yourself.
 
 ## Resolve, Revise, Merge, And Delete Correctly
 
 - Use `read_worker_outbox` or `multorum worker outbox` to inspect worker-authored `report` and `commit` bundles before taking follow-up action.
 - Acknowledge each consumed worker bundle with `ack_worker_outbox_message` or `multorum worker ack`. This records orchestrator receipt only; it does not change the worker lifecycle state.
+- Use `forward_perspective` only for a live bidding group whose workers are all `BLOCKED`. Forwarding preserves progress only from the `head_commit` recorded in each worker's latest blocking report, rejects dirty or drifted worktrees, and leaves the workers blocked until you send `resolve`.
 - Use `resolve` only for a blocked worker. Answer the blocker directly and include `--reply-to` or the MCP reply reference when responding to a specific report.
 - Use `revise` only for a committed worker. State what changed in your evaluation, what must be corrected, and what evidence should accompany the next submission.
 - Use `discard` when the task should be abandoned rather than repaired.
@@ -125,6 +129,7 @@ multorum rulebook validate
 multorum worker create AuthImplementor --body task.md --artifact spec.md
 multorum worker outbox auth-implementor-1 --after 6
 multorum worker ack auth-implementor-1 7
+multorum perspective forward AuthImplementor
 multorum worker resolve auth-implementor-1 --reply-to 7 --body resolve.md
 multorum worker revise auth-implementor-1 --reply-to 12 --body revise.md --artifact failing-test.log
 multorum worker merge auth-implementor-1 --skip-check test

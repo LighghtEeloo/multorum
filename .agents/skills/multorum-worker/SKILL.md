@@ -5,7 +5,7 @@ description: "Execute work inside one Multorum worker worktree while respecting 
 
 # Multorum Worker
 
-Operate inside one provisioned worker worktree. Treat the worker contract as immutable for the duration of the session and escalate any mismatch between the assigned task and the declared boundary.
+Operate inside one provisioned worker worktree. Treat the current worker contract as authoritative and escalate any mismatch between the assigned task and the declared boundary.
 
 ## Hold The Worker Contract
 
@@ -15,6 +15,7 @@ Operate inside one provisioned worker worktree. Treat the worker contract as imm
 - Never edit files outside the write set, even if the change looks trivial or obviously correct.
 - Never coordinate with other workers directly. All judgment flows through the orchestrator.
 - Remember that the runtime identity is the `worker_id` from `contract.toml`, even when multiple workers share the same perspective in one bidding group.
+- If a blocker may require `multorum perspective forward`, commit your current safe progress first and include that commit as `--head-commit` in the `report`. Forwarding preserves progress only from that recorded commit.
 
 ## Use The Worker Runtime Surface Directly
 
@@ -68,7 +69,7 @@ multorum local commit --head-commit <commit> [--body summary.md] [--artifact FIL
 2. Read the inbox before starting work and acknowledge each consumed message.
 3. Execute only the assigned task within the declared write boundary.
 4. Gather evidence while working: build output, test logs, or other artifacts the orchestrator can review.
-5. Send a `report` as soon as confident completion becomes impossible or unsafe.
+5. Send a `report` as soon as confident completion becomes impossible or unsafe. If you need your current progress preserved across a possible forward, commit it first and report that commit with `--head-commit`.
 6. Send a `commit` only after creating a real code commit and preparing a concise summary plus any evidence artifacts.
 
 If you need to keep a local copy of an attachment, duplicate it before publication. The published path itself is transferred to Multorum storage.
@@ -84,7 +85,7 @@ Send `report` for:
 - cross-perspective changes
 - evidence that needs orchestrator judgment before integration
 
-A good report body states what blocked you, what you observed, what you think the safe options are, and what exact decision the orchestrator needs to make.
+A good report body states what blocked you, what you observed, what you think the safe options are, and what exact decision the orchestrator needs to make. When the blocker may require `multorum perspective forward`, include the committed `--head-commit` you want preserved.
 
 ## Submit Better Commits
 
@@ -100,13 +101,13 @@ Example CLI shapes:
 ```bash
 multorum local inbox --after 7
 multorum local ack 8
-multorum local report --reply-to 8 --body blocker.md --artifact failing-output.log
+multorum local report --head-commit abc1234 --reply-to 8 --body blocker.md --artifact failing-output.log
 multorum local commit --head-commit abc1234 --body summary.md --artifact test.log
 ```
 
 ## Respect The State Machine
 
 - Work only while ACTIVE.
-- After `report`, treat the worker as blocked until a `resolve` message arrives and is acknowledged.
+- After `report`, treat the worker as blocked until a `resolve` message arrives and is acknowledged. The orchestrator may forward the whole blocked bidding group to a newer pinned base before that resolve arrives.
 - After `commit`, treat the worktree as frozen until the orchestrator revises, merges, or discards it.
 - Do not keep editing after submission unless the orchestrator explicitly sends a revision request.
