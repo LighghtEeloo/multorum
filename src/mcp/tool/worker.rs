@@ -26,6 +26,11 @@ const REPORT_INPUTS: &[ToolInputDescriptor] = &[
         ToolInputType::Integer,
     ),
     ToolInputDescriptor::optional(
+        "body_text",
+        "Optional inline Markdown content written into the report body.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
         "body",
         "Optional Markdown file to move into the report body.",
         ToolInputType::String,
@@ -41,6 +46,11 @@ const COMMIT_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor::required(
         "head_commit",
         "Git commit hash submitted by the worker.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
+        "body_text",
+        "Optional inline Markdown content written into the commit bundle body.",
         ToolInputType::String,
     ),
     ToolInputDescriptor::optional(

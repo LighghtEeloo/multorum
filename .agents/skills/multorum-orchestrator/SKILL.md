@@ -36,7 +36,9 @@ Some MCP projections remain intentionally unimplemented. Do not assume a resourc
 
 ## Prefer The Exposed Surfaces
 
-Prefer orchestrator MCP when it exists because it gives typed worker-management tools and read-only runtime projections. Fall back to the CLI when MCP is unavailable or shell automation is simpler.
+Use the CLI as the default surface for canonical-workspace work: editing the rulebook, committing and installing it, forwarding perspectives, inspecting Git state, and reading `.multorum/` directly. Those operations already live in the shell and filesystem, so the CLI keeps the workflow explicit.
+
+Use orchestrator MCP when it materially helps with typed worker-management calls or read-only runtime snapshots. Fall back to the CLI whenever the MCP projection is missing or the shell shape is clearer.
 
 When you publish a bundle with a body path or artifact path, treat those paths as transferred ownership. Successful publication moves the files into Multorum-managed `.multorum/` storage instead of copying them.
 
@@ -125,6 +127,7 @@ When attaching a task body, evidence log, or other artifact by path, do not plan
 ## Resolve, Revise, Merge, And Delete Correctly
 
 - Use `read_worker_outbox` or `multorum worker outbox` to inspect worker-authored `report` and `commit` bundles before taking follow-up action.
+- Treat `body.md` as the primary human summary for `report` and `commit` bundles. If a worker submits an empty body without a clear reason, treat the submission as incomplete and revise or resolve accordingly.
 - Acknowledge each consumed worker bundle with `ack_worker_outbox_message` or `multorum worker ack`. This records orchestrator receipt only; it does not change the worker lifecycle state.
 - Use `forward_perspective` only for a live bidding group whose workers are all `BLOCKED`. Forwarding preserves progress only from the `head_commit` recorded in each worker's latest blocking report, rejects dirty or drifted worktrees, and leaves the workers blocked until you send `resolve`.
 - Use `resolve` only for a blocked worker. Answer the blocker directly and include `--reply-to` or the MCP reply reference when responding to a specific report.

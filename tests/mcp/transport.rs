@@ -722,6 +722,29 @@ fn worker_send_report() {
 }
 
 #[test]
+fn worker_send_report_accepts_inline_body_text() {
+    let (_dir, svc) = setup_repo();
+    let (_, worktree) = create_worker_runtime(&svc);
+    let worker_svc = FsWorkerService::new(&worktree).unwrap();
+
+    let inbox = worker_svc.read_inbox(None).unwrap();
+    for msg in &inbox {
+        worker_svc.ack_inbox(msg.sequence).unwrap();
+    }
+
+    let handler = WorkerHandler::new(worker_svc);
+    let result = handler
+        .dispatch(
+            "send_report",
+            json_args(json!({"body_text": "Blocked on design question.\nNeed orchestrator input."})),
+        )
+        .unwrap();
+    assert_tool_success(&result);
+    let body = fs::read_to_string(worktree.join(".multorum/outbox/new/0001-report/body.md")).unwrap();
+    assert!(body.contains("Blocked on design question."));
+}
+
+#[test]
 fn worker_send_commit() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
@@ -735,6 +758,32 @@ fn worker_send_commit() {
 
     let result = handler.dispatch("send_commit", json_args(json!({"head_commit": head}))).unwrap();
     assert_tool_success(&result);
+}
+
+#[test]
+fn worker_send_commit_accepts_inline_body_text() {
+    let (_dir, svc) = setup_repo();
+    let (_, worktree) = create_worker_runtime(&svc);
+    let worker_svc = FsWorkerService::new(&worktree).unwrap();
+    let handler = WorkerHandler::new(worker_svc);
+
+    fs::write(worktree.join("src/owned.rs"), "pub fn owned() -> i32 { 7 }\n").unwrap();
+    git(&worktree, &["add", "src/owned.rs"]);
+    git(&worktree, &["commit", "-m", "incr: update owned"]);
+    let head = git(&worktree, &["rev-parse", "HEAD"]);
+
+    let result = handler
+        .dispatch(
+            "send_commit",
+            json_args(json!({
+                "head_commit": head,
+                "body_text": "Implemented the requested owned.rs update.\nNo known limitations."
+            })),
+        )
+        .unwrap();
+    assert_tool_success(&result);
+    let body = fs::read_to_string(worktree.join(".multorum/outbox/new/0001-commit/body.md")).unwrap();
+    assert!(body.contains("Implemented the requested owned.rs update."));
 }
 
 #[test]

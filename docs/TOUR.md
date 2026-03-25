@@ -57,7 +57,7 @@ The main workspace owns the orchestrator control plane under `.multorum/orchestr
 - `inbox/` and `outbox/` mailboxes
 - runtime-managed artifacts
 
-All orchestrator-worker communication is file-based. Messages are directory bundles with an `envelope.toml`, an optional `body.md`, and optional artifacts. Publication is atomic, acknowledgements are separate, and workers never communicate directly with each other.
+All orchestrator-worker communication is file-based. Messages are directory bundles with an `envelope.toml`, a `body.md` file (present even when empty), and optional artifacts. Publication is atomic, acknowledgements are separate, and workers never communicate directly with each other.
 
 Workers move through a small lifecycle:
 

@@ -51,6 +51,11 @@ const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
         ToolInputType::Boolean,
     ),
     ToolInputDescriptor::optional(
+        "body_text",
+        "Optional inline Markdown content written into the seeded task bundle body.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
         "body",
         "Optional Markdown file to move into the seeded task bundle body.",
         ToolInputType::String,
@@ -80,6 +85,11 @@ const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
         ToolInputType::Integer,
     ),
     ToolInputDescriptor::optional(
+        "body_text",
+        "Optional inline Markdown content written into the bundle body.",
+        ToolInputType::String,
+    ),
+    ToolInputDescriptor::optional(
         "body",
         "Optional Markdown file to move into the bundle body.",
         ToolInputType::String,
@@ -107,6 +117,11 @@ const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
         "skip_checks",
         "Optional project-defined checks to skip based on trusted worker evidence.",
         ToolInputType::StringList,
+    ),
+    ToolInputDescriptor::optional(
+        "body_text",
+        "Optional inline Markdown content written into the audit rationale body.",
+        ToolInputType::String,
     ),
     ToolInputDescriptor::optional(
         "body",

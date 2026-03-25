@@ -27,6 +27,8 @@ The worker CLI and MCP server are real filesystem-backed frontends over that run
 
 The worker role needs inbox and contract access, so MCP is the preferred interface when available.
 
+When publishing through MCP, prefer `body_text` for the human-readable report or commit summary. Use `body` only when you already have a Markdown file on disk that should become `body.md`.
+
 When you publish a report or commit with a body path or artifact path, treat that path as consumed. Multorum moves the file into its `.multorum/` runtime storage on successful publication instead of copying it.
 
 Start the worker MCP server from inside the managed worker worktree with:
@@ -70,7 +72,7 @@ multorum local commit --head-commit <commit> [--body summary.md] [--artifact FIL
 3. Execute only the assigned task within the declared write boundary.
 4. Gather evidence while working: build output, test logs, or other artifacts the orchestrator can review.
 5. Send a `report` as soon as confident completion becomes impossible or unsafe. If you need your current progress preserved across a possible forward, commit it first and report that commit with `--head-commit`.
-6. Send a `commit` only after creating a real code commit and preparing a concise summary plus any evidence artifacts.
+6. Send a `commit` only after creating a real code commit and preparing a concise non-empty summary plus any evidence artifacts.
 
 If you need to keep a local copy of an attachment, duplicate it before publication. The published path itself is transferred to Multorum storage.
 
@@ -87,6 +89,8 @@ Send `report` for:
 
 A good report body states what blocked you, what you observed, what you think the safe options are, and what exact decision the orchestrator needs to make. When the blocker may require `multorum perspective forward`, include the committed `--head-commit` you want preserved.
 
+An empty body is the exception, not the default. If you are using MCP, send that explanation as `body_text` unless you specifically need to hand off a file by path.
+
 ## Submit Better Commits
 
 Before `send_commit` or `multorum local commit`:
@@ -94,7 +98,7 @@ Before `send_commit` or `multorum local commit`:
 - ensure the diff touches only write-set files
 - ensure the commit hash you submit is the one that contains the intended work
 - attach logs or artifacts for checks the orchestrator may choose to trust
-- summarize any known limitations instead of hiding them
+- summarize any known limitations instead of hiding them in a non-empty body
 
 Example CLI shapes:
 
