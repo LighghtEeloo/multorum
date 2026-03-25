@@ -9,12 +9,24 @@ Coordinate the system from the canonical workspace root. Treat Multorum as react
 
 ## Hold The Core Invariants
 
-- Keep the topology star-shaped. Communicate with workers only through Multorum; never route work between workers directly.
+- Keep the topology star-shaped. Communicate with workers only through Multorum; never route work between workers directly. Workers do not communicate with each other. If a worker requests cross-worker coordination, decline and handle the dependency through orchestrator decisions and mailbox flows.
 - Decompose tasks so active workers do not depend on each other's unpublished output.
 - Respect the safety property at the bidding-group level: a file may be written by exactly one active bidding group or read by many, never both.
 - Treat the read set as a stability contract and the write set as an absolute ownership boundary.
 - Treat new files, missing permissions, and cross-perspective edits as orchestrator work. Update the canonical workspace and rulebook, install the rulebook, then decide whether the blocked bidding group should be forwarded or discarded.
 - Remember that workers are addressed by `worker_id`, not by perspective name. Multiple workers from the same perspective form one bidding group, and at most one of them may merge.
+
+## Edit The Rulebook Directly
+
+The orchestrator owns `.multorum/rulebook.toml` and should edit it directly in the canonical workspace. This is the normal way to add files to perspectives, define new perspectives, adjust boundaries, or configure checks. The workflow is always:
+
+1. Edit `.multorum/rulebook.toml` in the canonical workspace.
+2. Commit the change (along with any new source files the rulebook references).
+3. Run `multorum rulebook install` to activate the committed rulebook.
+
+Editing the file on disk alone does nothing. The rulebook is activated from the committed `HEAD`, not from the working tree. Until the edit is committed and installed, the previous active rulebook remains in force and all workers continue under their pinned snapshots.
+
+After install, active workers' read and write set boundaries are refreshed to match the new rulebook, but their pinned code snapshot does not move. To update a bidding group's code snapshot, use `multorum perspective forward <perspective>` explicitly.
 
 ## Treat The Filesystem Runtime As Canonical
 
@@ -137,3 +149,70 @@ multorum worker delete auth-implementor-1
 ```
 
 Use `--skip-check` only for checks that the rulebook marks as skippable and only after deciding the worker's evidence is trustworthy.
+
+## Handle Boundary And Lifecycle Situations
+
+### Blocked Worker Needs A New File Or Expanded Boundary
+
+Workers cannot create new files or edit outside their write set. When a worker reports this kind of blocker, the orchestrator must act:
+
+1. Edit `.multorum/rulebook.toml` to add the file to the perspective's write set (and create the file in the canonical workspace if it does not yet exist).
+2. Commit the rulebook and file changes.
+3. Run `multorum rulebook install`.
+4. Run `multorum perspective forward <perspective>` for the whole bidding group (not just one worker). Every live worker in that bidding group must be `BLOCKED` for forwarding to succeed.
+5. Run `multorum worker resolve <worker-id>` to unblock the worker.
+
+Never tell a worker to create files ad hoc in its worktree or to patch files outside its write set. If the real fix is in another perspective's territory, either adjust the rulebook, create a worker from the correct perspective, or re-scope the task.
+
+### Forwarding A Bidding Group To A Newer Base
+
+`multorum rulebook install` activates the committed rulebook and refreshes live workers' declared boundaries, but it does not move their pinned code snapshot. To bring workers onto the newer base:
+
+- Every live worker in the bidding group must be `BLOCKED`.
+- Run `multorum perspective forward <perspective>`. This applies to the whole bidding group, not individual workers.
+- Forwarding preserves each worker's progress from the `head_commit` recorded in their latest blocking report.
+- If a worker's blocking report lacks `head_commit`, forwarding is rejected. Resolve the worker with a message asking for a new report that includes the committed `head_commit`, then retry the forward.
+
+You must forward an existing live bidding group before creating additional same-perspective workers from a newer active rulebook. Multorum rejects creation when the live group is pinned to an older base.
+
+### Bidding Group Completion
+
+Only one worker from a bidding group may be merged. After merging one, discard the remaining workers in that group. Do not merge multiple alternatives from the same bidding group.
+
+### Discard Versus Delete
+
+- `discard` finalizes a worker without merging and preserves the worktree for inspection.
+- `delete` removes both the worker state file and the Git worktree.
+- Delete is only valid after a worker reaches `MERGED` or `DISCARDED`.
+- Use discard first if you want to inspect the worktree, then delete when cleanup is desired.
+
+### Reusing A Finalized Worker Id
+
+To create a new worker reusing an id that belonged to a finalized worker, pass `--overwriting-worktree`:
+
+```bash
+multorum worker create <perspective> --worker-id <worker-id> --overwriting-worktree
+```
+
+The old finalized state does not carry over to the new worker.
+
+### Committing Directly In The Canonical Workspace
+
+While workers are active, the orchestrator must respect the exclusion set formed by active workers' read and write sets. A file inside an active group's read set must remain stable while that group is active. Do not commit changes to those files directly. Either wait, discard conflicting workers, or evolve the rulebook and worker snapshots through the supported flow (edit rulebook, commit, install, forward).
+
+### Revise Versus Resolve
+
+- `resolve` is for `BLOCKED` workers. It unblocks them and optionally answers a specific report.
+- `revise` is for `COMMITTED` workers. It returns them to `ACTIVE` and tells them what to fix.
+- Do not use `resolve` on a committed worker or `revise` on a blocked worker.
+
+### Merge Is Based On The Submitted Commit
+
+Merge uses the `head_commit` the worker submitted through `multorum local commit --head-commit <commit>`, not the ambient worktree state. If the worktree is dirty but the submitted commit is correct, the merge candidate is still the submitted commit. If the submitted commit is not the desired result, use `revise` rather than guessing from the worktree.
+
+### Skipping Merge Checks
+
+- Only project-defined checks marked `skippable` in the rulebook may be skipped via `--skip-check`.
+- The mandatory write-set scope check is never skippable.
+- The orchestrator decides whether a worker's submitted evidence is sufficient to justify skipping.
+- Workers cannot skip checks unilaterally.
