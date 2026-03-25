@@ -22,6 +22,7 @@ fn orchestrator_tool_names_stable() {
             "create_worker",
             "delete_worker",
             "discard_worker",
+            "forward_perspective",
             "get_status",
             "get_worker",
             "list_perspectives",

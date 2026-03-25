@@ -9,7 +9,8 @@ use serde_json::json;
 use multorum::mcp::transport::orchestrator::OrchestratorHandler;
 use multorum::mcp::transport::worker::WorkerHandler;
 use multorum::runtime::{
-    BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, WorkerService,
+    BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService,
+    WorkerService,
 };
 
 use crate::support::repo::{git, setup_repo};
@@ -32,7 +33,7 @@ fn orchestrator_server_info() {
 
 #[test]
 fn orchestrator_tool_descriptor_count() {
-    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 16);
+    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 17);
 }
 
 #[test]
@@ -70,6 +71,18 @@ fn orchestrator_list_perspectives() {
     let arr = perspectives.as_array().unwrap();
     assert_eq!(arr.len(), 1);
     assert_eq!(arr[0]["name"], "AuthImplementor");
+}
+
+#[test]
+fn orchestrator_forward_perspective_requires_blocked_worker() {
+    let (_dir, svc) = setup_repo();
+    svc.create_worker(CreateWorker::new(perspective())).unwrap();
+    let handler = OrchestratorHandler::new(svc);
+    let result = handler
+        .dispatch("forward_perspective", json_args(json!({"perspective": "AuthImplementor"})))
+        .unwrap();
+    assert_tool_error(&result);
+    assert_eq!(tool_json(&result)["code"], "check_failed");
 }
 
 #[test]

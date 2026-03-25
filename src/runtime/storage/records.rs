@@ -31,7 +31,8 @@ pub(crate) struct ActiveRulebookRecord {
 /// `base_commit` pins the worker's code snapshot. The materialized
 /// read/write-set files remain the authoritative worker boundary and may
 /// be expanded by a later compatible rulebook install without changing
-/// `base_commit`.
+/// `base_commit`. The base pin changes only when the orchestrator
+/// explicitly forwards the whole bidding group for this perspective.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct WorkerRecord {
     /// Unique worker identity.

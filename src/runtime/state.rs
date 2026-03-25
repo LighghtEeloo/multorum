@@ -120,6 +120,23 @@ pub struct CreateResult {
     pub seeded_task_path: Option<PathBuf>,
 }
 
+/// Result of forwarding one live bidding group to the active rulebook commit.
+///
+/// Note: This is a group-scoped operation. Every live worker for the
+/// perspective moves together or the command fails without persisting
+/// the new base snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PerspectiveForwardResult {
+    /// Perspective whose live bidding group moved forward.
+    pub perspective: PerspectiveName,
+    /// Live workers forwarded together.
+    pub worker_ids: Vec<WorkerId>,
+    /// Base commit previously pinned by the live bidding group.
+    pub previous_base_commit: CanonicalCommitHash,
+    /// Active rulebook commit adopted by the live bidding group.
+    pub active_base_commit: CanonicalCommitHash,
+}
+
 /// Result of discarding a worker.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DiscardResult {
@@ -227,7 +244,9 @@ pub struct WorkerDetail {
     /// Canonical base commit pinning the worker's code snapshot.
     ///
     /// Note: A compatible `rulebook install` may expand the materialized
-    /// read/write-set files for this worker without changing `base_commit`.
+    /// read/write-set files for this worker without changing
+    /// `base_commit`. The pin changes only when the orchestrator
+    /// forwards the whole bidding group for the worker's perspective.
     pub base_commit: CanonicalCommitHash,
     /// Canonical submitted worker head commit when present.
     pub submitted_head_commit: Option<CanonicalCommitHash>,
@@ -248,7 +267,9 @@ pub struct WorkerStatus {
 ///
 /// `base_commit` pins the worker's code snapshot. The referenced
 /// read/write-set files are the authoritative materialized boundary and
-/// may be refreshed by a compatible `rulebook install`.
+/// may be refreshed by a compatible `rulebook install`. The
+/// `base_commit` itself changes only when the orchestrator explicitly
+/// forwards the whole bidding group to the active rulebook commit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkerContractView {
     /// Worker identity.

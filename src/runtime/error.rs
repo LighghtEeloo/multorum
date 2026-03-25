@@ -155,6 +155,84 @@ pub enum RuntimeError {
         perspective: PerspectiveName,
     },
 
+    /// Live workers for one perspective no longer agree on the pinned
+    /// base commit.
+    #[error("live workers for perspective `{perspective}` no longer share one pinned base commit")]
+    BiddingGroupBaseMismatch {
+        /// Perspective whose live workers diverged in pinned base.
+        perspective: PerspectiveName,
+    },
+
+    /// Forwarding requires every live worker in the bidding group to be blocked.
+    #[error(
+        "cannot forward perspective `{perspective}` because not every live worker is BLOCKED: {workers}",
+        workers = format_worker_states(workers)
+    )]
+    PerspectiveForwardRequiresBlocked {
+        /// Perspective whose live workers failed the blocked-only check.
+        perspective: PerspectiveName,
+        /// Live workers whose states prevent forwarding.
+        workers: Vec<(WorkerId, WorkerState)>,
+    },
+
+    /// The target perspective has no live bidding group to forward.
+    #[error("cannot forward perspective `{perspective}` because it has no live workers")]
+    PerspectiveForwardMissingGroup {
+        /// Perspective without a live bidding group.
+        perspective: PerspectiveName,
+    },
+
+    /// A blocked worker had no report bundle to anchor forwarding.
+    #[error(
+        "cannot forward worker `{worker_id}` (`{perspective}`) because its blocking report is missing"
+    )]
+    PerspectiveForwardMissingReport {
+        /// Worker whose blocking report could not be found.
+        worker_id: WorkerId,
+        /// Perspective held by the worker.
+        perspective: PerspectiveName,
+    },
+
+    /// A blocked worker did not attach the commit that should be replayed.
+    #[error(
+        "cannot forward worker `{worker_id}` (`{perspective}`) because its blocking report did not include `head_commit`"
+    )]
+    PerspectiveForwardMissingReportedHead {
+        /// Worker whose blocking report omitted the replay head.
+        worker_id: WorkerId,
+        /// Perspective held by the worker.
+        perspective: PerspectiveName,
+    },
+
+    /// A blocked worker drifted away from the commit recorded in its blocker report.
+    #[error(
+        "cannot forward worker `{worker_id}` (`{perspective}`) because its current head `{current_head_commit}` no longer matches the blocking report head `{reported_head_commit}`"
+    )]
+    PerspectiveForwardHeadMismatch {
+        /// Worker whose current head drifted after reporting.
+        worker_id: WorkerId,
+        /// Perspective held by the worker.
+        perspective: PerspectiveName,
+        /// Commit recorded in the latest blocking report.
+        reported_head_commit: CanonicalCommitHash,
+        /// Commit currently checked out in the worker worktree.
+        current_head_commit: CanonicalCommitHash,
+    },
+
+    /// A same-perspective live bidding group must be forwarded before
+    /// adding another worker from the active rulebook snapshot.
+    #[error(
+        "cannot create worker for perspective `{perspective}` because its live bidding group is still pinned to `{live_base_commit}` while the active rulebook is pinned to `{active_base_commit}`; run `multorum perspective forward {perspective}` first"
+    )]
+    PerspectiveRequiresForwardBeforeCreate {
+        /// Perspective whose live group is still pinned to an older base.
+        perspective: PerspectiveName,
+        /// Active rulebook commit used for new worker creation.
+        active_base_commit: CanonicalCommitHash,
+        /// Base commit still held by the live bidding group.
+        live_base_commit: CanonicalCommitHash,
+    },
+
     /// A pre-merge or lifecycle check failed.
     #[error("check failed: {0}")]
     CheckFailed(String),
@@ -283,6 +361,14 @@ fn format_perspectives(perspectives: &[PerspectiveName]) -> String {
 
 fn format_paths(paths: &[PathBuf]) -> String {
     paths.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", ")
+}
+
+fn format_worker_states(workers: &[(WorkerId, WorkerState)]) -> String {
+    workers
+        .iter()
+        .map(|(worker_id, state)| format!("{worker_id}:{}", worker_state_name(*state)))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 #[cfg(test)]

@@ -63,13 +63,15 @@ A perspective is a named role in the rulebook. It declares:
 - a write set: the files a worker from this role may modify
 - a read set: the files that must remain stable while this role is active
 
-The write set is a closed list of existing files. Workers may not create files outside it. The read set is not a visibility filter — workers may read any file in the repository. The read set exists to tell Multorum which files must remain untouched by other concurrent work, and to tell the worker what the orchestrator considers stable context.
+The write set is a closed list of existing files. Workers may not create files outside it. When a blocked worker discovers that the task really needs a new file, the orchestrator must update the canonical workspace and the rulebook, install that rulebook, and then explicitly forward the whole blocked bidding group to the new pinned snapshot before resolving the blocker. The read set is not a visibility filter — workers may read any file in the repository. The read set exists to tell Multorum which files must remain untouched by other concurrent work, and to tell the worker what the orchestrator considers stable context.
 
 A worker is a runtime instantiation of a perspective. Perspectives are static policy. Workers are ephemeral executions with state.
 
 ### Bidding Groups
 
 If the orchestrator creates multiple workers from the same perspective against the same pinned snapshot, those workers form a bidding group. All workers in a bidding group share the same perspective, pinned base commit, compiled read set, and compiled write set.
+
+If the active rulebook later moves forward, the live bidding group does not follow automatically. The orchestrator must issue an explicit perspective-forward operation to move that group to the new pinned base. Until that happens, Multorum rejects creation of additional same-perspective workers from the newer active rulebook commit.
 
 Only one worker from a bidding group may be merged. Once one member is merged, the remaining members are discarded.
 
@@ -212,11 +214,27 @@ Install enforces two conditions:
 
 This design keeps the runtime exclusion set, conflict checks, and worker-local guidance aligned with the active rulebook. If Multorum accepted an expanded perspective but left live workers on stale boundary files, the installed policy and the runtime enforcement surface would diverge.
 
+`rulebook install` never repins a live worker's code snapshot. Snapshot movement is a separate explicit step because it can replay worker-authored commits onto a newer base.
+
 **Conflict-freedom.** Every candidate perspective in the target rulebook must satisfy the conflict-free invariant against every active bidding group whose name differs from the candidate. Same-name pairs are exempt — their compatibility is established by the continuity condition.
 
 If both conditions hold, the install succeeds and Multorum pins the `HEAD` commit as the active rulebook. On failure, Multorum rejects the install and reports the blocking perspectives.
 
 `rulebook uninstall` deactivates the active rulebook. It is rejected when any live bidding group still depends on the active rulebook.
+
+### Perspective Forward
+
+`multorum perspective forward <perspective>` moves one live bidding group from its old pinned base commit to the current active rulebook commit.
+
+The operation is intentionally narrow:
+
+- it addresses the whole live bidding group for one perspective, never one worker in isolation
+- it is rejected unless every live worker in that bidding group is exactly `BLOCKED`
+- it preserves progress only from the `head_commit` recorded in each worker's latest blocking `report`
+- it rejects dirty or drifted worktrees rather than trying to invent recovery
+- it leaves every forwarded worker in `BLOCKED`; the orchestrator must still issue `resolve` afterward
+
+This keeps `rulebook install` as a policy update and `perspective forward` as the explicit snapshot move required for blocker-driven contract changes such as adding a new file.
 
 ---
 
@@ -352,6 +370,8 @@ create ─────────► ACTIVE ──────►┼───�
 Once one worker in a bidding group reaches `MERGED`, every sibling in that group becomes `DISCARDED`.
 
 `delete` is not a lifecycle transition. It removes the worktree and worker state file of a finalized worker.
+
+`perspective forward` is also not a lifecycle transition. It is a perspective-scoped runtime operation that repins a blocked bidding group while leaving worker states unchanged.
 
 ### Transitions
 
@@ -505,10 +525,11 @@ This section lists the instructions that the orchestrator and workers may issue,
 ### Perspective
 
 - `multorum perspective list` — List the compiled perspectives from the active rulebook.
+- `multorum perspective forward <perspective>` — Move the whole live bidding group for `perspective` to the active rulebook commit. Rejected unless every live worker in that bidding group is `BLOCKED`. Progress is preserved only from the `head_commit` recorded in each worker's latest blocking `report`. No lifecycle transition.
 
 ### Orchestrator Worker Commands
 
-- `multorum worker create <perspective>` — Compile the selected perspective boundary, check it against active bidding groups, create the worker worktree, and materialize the runtime surface. Transition: new worker enters `ACTIVE`.
+- `multorum worker create <perspective>` — Compile the selected perspective boundary, check it against active bidding groups, create the worker worktree, and materialize the runtime surface. Rejected if a live bidding group for the same perspective is still pinned to an older base commit and must be forwarded first. Transition: new worker enters `ACTIVE`.
 - `multorum worker list` — List active workers.
 - `multorum worker show <worker-id>` — Return one worker in detail.
 - `multorum worker outbox <worker-id> [--after <sequence>]` — List worker-authored bundles from that worker's outbox. No lifecycle transition.

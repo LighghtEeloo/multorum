@@ -23,8 +23,9 @@ use super::{
     project::CurrentProject,
     state::{
         ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,
-        MergeResult, OrchestratorStatus, PerspectiveSummary, RulebookInit, RulebookInstall,
-        RulebookUninstall, RulebookValidation, WorkerDetail, WorkerState, WorkerSummary,
+        MergeResult, OrchestratorStatus, PerspectiveForwardResult, PerspectiveSummary,
+        RulebookInit, RulebookInstall, RulebookUninstall, RulebookValidation, WorkerDetail,
+        WorkerState, WorkerSummary,
     },
     storage::{
         ActiveRulebookRecord, RuntimeFs, WorkerRecord, is_live_worker_state, timestamp_now,
@@ -130,6 +131,14 @@ pub trait OrchestratorService {
     /// if publication succeeds.
     fn create_worker(&self, request: CreateWorker) -> Result<CreateResult>;
 
+    /// Move one blocked bidding group to the active rulebook commit.
+    ///
+    /// Note: The whole live bidding group for `perspective` must be in
+    /// `BLOCKED`. Multorum preserves progress only from the commit
+    /// recorded in each worker's latest blocking report.
+    fn forward_perspective(&self, perspective: PerspectiveName)
+    -> Result<PerspectiveForwardResult>;
+
     /// Publish a `resolve` bundle to the worker inbox.
     ///
     /// Any path-backed payload files are moved into `.multorum/`
@@ -182,7 +191,16 @@ pub struct FsOrchestratorService {
 struct ActiveBiddingGroup {
     perspective: PerspectiveName,
     worker_ids: Vec<WorkerId>,
+    base_commit: CanonicalCommitHash,
     boundary: CompiledPerspective,
+}
+
+/// Forwarding checkpoint for one blocked worker.
+#[derive(Debug, Clone)]
+struct ForwardWorker {
+    record: WorkerRecord,
+    reported_head_commit: CanonicalCommitHash,
+    original_boundary: CompiledPerspective,
 }
 
 impl FsOrchestratorService {
@@ -320,14 +338,34 @@ impl FsOrchestratorService {
             let worker_paths = self.fs.worker_paths(&record.worker_id);
             let read = RuntimeFs::read_path_list(&worker_paths.read_set())?;
             let write = RuntimeFs::read_path_list(&worker_paths.write_set())?;
+            let boundary = CompiledPerspective::from_materialized_sets(read, write);
+            let group_workers = active_workers
+                .iter()
+                .filter(|worker| worker.perspective == record.perspective)
+                .cloned()
+                .collect::<Vec<_>>();
+            for worker in &group_workers {
+                if worker.base_commit != record.base_commit {
+                    return Err(RuntimeError::BiddingGroupBaseMismatch {
+                        perspective: record.perspective.clone(),
+                    });
+                }
+
+                let worker_paths = self.fs.worker_paths(&worker.worker_id);
+                let worker_read = RuntimeFs::read_path_list(&worker_paths.read_set())?;
+                let worker_write = RuntimeFs::read_path_list(&worker_paths.write_set())?;
+                if worker_read != *boundary.read() || worker_write != *boundary.write() {
+                    return Err(RuntimeError::BiddingGroupBoundaryMismatch {
+                        perspective: record.perspective.clone(),
+                    });
+                }
+            }
+
             groups.push(ActiveBiddingGroup {
                 perspective: record.perspective.clone(),
-                worker_ids: active_workers
-                    .iter()
-                    .filter(|worker| worker.perspective == record.perspective)
-                    .map(|worker| worker.worker_id.clone())
-                    .collect(),
-                boundary: CompiledPerspective::from_materialized_sets(read, write),
+                worker_ids: group_workers.iter().map(|worker| worker.worker_id.clone()).collect(),
+                base_commit: record.base_commit.clone(),
+                boundary,
             });
         }
         Ok(groups)
@@ -404,11 +442,19 @@ impl FsOrchestratorService {
 
     fn validate_create_boundary(
         &self, perspective: &PerspectiveName, candidate: &CompiledPerspective,
+        active_base_commit: &CanonicalCommitHash,
     ) -> Result<()> {
         let active_groups = self.active_bidding_groups()?;
         if let Some(existing_group) =
             active_groups.iter().find(|group| group.perspective == *perspective)
         {
+            if &existing_group.base_commit != active_base_commit {
+                return Err(RuntimeError::PerspectiveRequiresForwardBeforeCreate {
+                    perspective: perspective.clone(),
+                    active_base_commit: active_base_commit.clone(),
+                    live_base_commit: existing_group.base_commit.clone(),
+                });
+            }
             if existing_group.boundary.read() == candidate.read()
                 && existing_group.boundary.write() == candidate.write()
             {
@@ -502,6 +548,130 @@ impl FsOrchestratorService {
             expected,
             actual: record.state,
         })
+    }
+
+    fn load_forward_workers(&self, perspective: &PerspectiveName) -> Result<Vec<ForwardWorker>> {
+        let workers = self
+            .active_workers()?
+            .into_iter()
+            .filter(|record| record.perspective == *perspective)
+            .collect::<Vec<_>>();
+        if workers.is_empty() {
+            return Err(RuntimeError::PerspectiveForwardMissingGroup {
+                perspective: perspective.clone(),
+            });
+        }
+
+        let mut non_blocked = workers
+            .iter()
+            .filter(|record| record.state != WorkerState::Blocked)
+            .map(|record| (record.worker_id.clone(), record.state))
+            .collect::<Vec<_>>();
+        if !non_blocked.is_empty() {
+            non_blocked.sort_by(|left, right| left.0.cmp(&right.0));
+            return Err(RuntimeError::PerspectiveForwardRequiresBlocked {
+                perspective: perspective.clone(),
+                workers: non_blocked,
+            });
+        }
+
+        let mut prepared = Vec::new();
+        for record in workers {
+            let messages = self.fs.list_mailbox_messages(
+                &record.worktree_path,
+                &record.worker_id,
+                MailboxDirection::Outbox,
+                None,
+            )?;
+            let report = messages
+                .into_iter()
+                .rev()
+                .find(|message| message.kind == MessageKind::Report)
+                .ok_or_else(|| RuntimeError::PerspectiveForwardMissingReport {
+                    worker_id: record.worker_id.clone(),
+                    perspective: record.perspective.clone(),
+                })?;
+            let reported_head_commit = report.head_commit.ok_or_else(|| {
+                RuntimeError::PerspectiveForwardMissingReportedHead {
+                    worker_id: record.worker_id.clone(),
+                    perspective: record.perspective.clone(),
+                }
+            })?;
+
+            self.fs.vcs().ensure_clean_worktree(&record.worktree_path)?;
+            let current_head_commit = self.fs.vcs().head_commit(&record.worktree_path)?;
+            if current_head_commit != reported_head_commit {
+                return Err(RuntimeError::PerspectiveForwardHeadMismatch {
+                    worker_id: record.worker_id.clone(),
+                    perspective: record.perspective.clone(),
+                    reported_head_commit,
+                    current_head_commit,
+                });
+            }
+
+            let worker_paths = self.fs.worker_paths(&record.worker_id);
+            let read = RuntimeFs::read_path_list(&worker_paths.read_set())?;
+            let write = RuntimeFs::read_path_list(&worker_paths.write_set())?;
+            prepared.push(ForwardWorker {
+                record,
+                reported_head_commit: current_head_commit,
+                original_boundary: CompiledPerspective::from_materialized_sets(read, write),
+            });
+        }
+        prepared.sort_by(|left, right| left.record.worker_id.cmp(&right.record.worker_id));
+        Ok(prepared)
+    }
+
+    fn rollback_forward_worktrees(
+        &self, workers: &[ForwardWorker], forwarded_worker_ids: &BTreeSet<WorkerId>,
+    ) {
+        for worker in
+            workers.iter().filter(|worker| forwarded_worker_ids.contains(&worker.record.worker_id))
+        {
+            if let Err(error) = self
+                .fs
+                .vcs()
+                .checkout_detached(&worker.record.worktree_path, &worker.reported_head_commit)
+            {
+                tracing::error!(
+                    worker_id = %worker.record.worker_id,
+                    error = %error,
+                    "failed to roll back forwarded worker worktree"
+                );
+            }
+        }
+    }
+
+    fn restore_forward_metadata(
+        &self, workers: &[ForwardWorker], restored_worker_ids: &BTreeSet<WorkerId>,
+    ) {
+        for worker in
+            workers.iter().filter(|worker| restored_worker_ids.contains(&worker.record.worker_id))
+        {
+            if let Err(error) = self.fs.store_worker_record(&worker.record) {
+                tracing::error!(
+                    worker_id = %worker.record.worker_id,
+                    error = %error,
+                    "failed to restore worker record after forward error"
+                );
+            }
+            if let Err(error) = self.fs.refresh_worker_contract(&worker.record) {
+                tracing::error!(
+                    worker_id = %worker.record.worker_id,
+                    error = %error,
+                    "failed to restore worker contract after forward error"
+                );
+            }
+            if let Err(error) =
+                self.fs.refresh_worker_boundary(&worker.record, &worker.original_boundary)
+            {
+                tracing::error!(
+                    worker_id = %worker.record.worker_id,
+                    error = %error,
+                    "failed to restore worker boundary after forward error"
+                );
+            }
+        }
     }
 }
 
@@ -620,7 +790,7 @@ impl OrchestratorService for FsOrchestratorService {
             .perspectives()
             .get(&perspective)
             .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?;
-        self.validate_create_boundary(&perspective, compiled_perspective)?;
+        self.validate_create_boundary(&perspective, compiled_perspective, &active.base_commit)?;
 
         let (worker_id, previous_finalized_record) =
             self.resolve_create_worker_id(&perspective, worker_id)?;
@@ -698,6 +868,90 @@ impl OrchestratorService for FsOrchestratorService {
         );
 
         Ok(result)
+    }
+
+    fn forward_perspective(
+        &self, perspective: PerspectiveName,
+    ) -> Result<PerspectiveForwardResult> {
+        let (active, compiled) = self.fs.load_active_compiled_rulebook()?;
+        let target = compiled
+            .perspectives()
+            .get(&perspective)
+            .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?
+            .clone();
+        let workers = self.load_forward_workers(&perspective)?;
+        let previous_base_commit =
+            workers.first().map(|worker| worker.record.base_commit.clone()).ok_or_else(|| {
+                RuntimeError::PerspectiveForwardMissingGroup { perspective: perspective.clone() }
+            })?;
+        let worker_ids =
+            workers.iter().map(|worker| worker.record.worker_id.clone()).collect::<Vec<_>>();
+
+        if previous_base_commit == active.base_commit {
+            return Ok(PerspectiveForwardResult {
+                perspective,
+                worker_ids,
+                previous_base_commit,
+                active_base_commit: active.base_commit,
+            });
+        }
+
+        let mut forwarded_worker_ids = BTreeSet::new();
+        for worker in &workers {
+            if let Err(error) = self.fs.vcs().forward_worktree(
+                &worker.record.worktree_path,
+                &worker.record.base_commit,
+                &active.base_commit,
+            ) {
+                self.rollback_forward_worktrees(&workers, &forwarded_worker_ids);
+                return Err(RuntimeError::from(error));
+            }
+            forwarded_worker_ids.insert(worker.record.worker_id.clone());
+        }
+
+        let mut restored_worker_ids = BTreeSet::new();
+        for worker in &workers {
+            let mut updated = worker.record.clone();
+            updated.base_commit = active.base_commit.clone();
+            updated.submitted_head_commit = None;
+            if let Err(error) = self.fs.store_worker_record(&updated) {
+                self.rollback_forward_worktrees(&workers, &forwarded_worker_ids);
+                self.restore_forward_metadata(&workers, &restored_worker_ids);
+                return Err(error);
+            }
+            if let Err(error) = self.fs.refresh_worker_contract(&updated) {
+                self.rollback_forward_worktrees(&workers, &forwarded_worker_ids);
+                self.restore_forward_metadata(&workers, &restored_worker_ids);
+                return Err(error);
+            }
+            if let Err(error) = self.fs.refresh_worker_boundary(&updated, &target) {
+                self.rollback_forward_worktrees(&workers, &forwarded_worker_ids);
+                self.restore_forward_metadata(&workers, &restored_worker_ids);
+                return Err(error);
+            }
+            restored_worker_ids.insert(updated.worker_id.clone());
+        }
+
+        if let Err(error) = self.fs.rewrite_exclusion_set() {
+            self.rollback_forward_worktrees(&workers, &forwarded_worker_ids);
+            self.restore_forward_metadata(&workers, &restored_worker_ids);
+            return Err(error);
+        }
+
+        tracing::info!(
+            perspective = %perspective,
+            worker_count = worker_ids.len(),
+            previous_base_commit = %previous_base_commit,
+            active_base_commit = %active.base_commit,
+            "forwarded blocked bidding group to active rulebook commit"
+        );
+
+        Ok(PerspectiveForwardResult {
+            perspective,
+            worker_ids,
+            previous_base_commit,
+            active_base_commit: active.base_commit,
+        })
     }
 
     fn resolve_worker(
@@ -965,4 +1219,194 @@ fn camel_to_kebab(name: &str) -> String {
         result.push(ch.to_ascii_lowercase());
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+    use std::process::Command;
+
+    use tempfile::TempDir;
+
+    use crate::bundle::BundlePayload;
+    use crate::runtime::{FsWorkerService, ReplyReference, WorkerContractView, WorkerService};
+
+    use super::*;
+
+    fn perspective() -> PerspectiveName {
+        PerspectiveName::new("AuthImplementor").unwrap()
+    }
+
+    fn initial_rulebook() -> &'static str {
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other"
+            write = "Owned"
+
+            [check]
+            pipeline = []
+        "#
+    }
+
+    fn expanded_rulebook() -> &'static str {
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            NewOwned.path = "src/new.rs"
+            Other.path = "src/other.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other"
+            write = "Owned | NewOwned"
+
+            [check]
+            pipeline = []
+        "#
+    }
+
+    fn git(root: &Path, args: &[&str]) -> String {
+        let output = Command::new("git").args(args).current_dir(root).output().unwrap();
+        if !output.status.success() {
+            panic!("git {:?} failed: {}", args, String::from_utf8_lossy(&output.stderr));
+        }
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    }
+
+    fn setup_repo() -> (TempDir, FsOrchestratorService) {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("src")).unwrap();
+        fs::create_dir_all(dir.path().join(".multorum")).unwrap();
+        fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
+        fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
+        fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
+        fs::write(dir.path().join(".multorum/rulebook.toml"), initial_rulebook()).unwrap();
+
+        git(dir.path(), &["init"]);
+        git(dir.path(), &["config", "user.name", "Multorum Test"]);
+        git(dir.path(), &["config", "user.email", "multorum@test.invalid"]);
+        git(dir.path(), &["add", "."]);
+        git(dir.path(), &["commit", "-m", "feat: initialize runtime fixture"]);
+
+        let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
+        orchestrator.rulebook_install().unwrap();
+        (dir, orchestrator)
+    }
+
+    fn expand_rulebook(dir: &TempDir, orchestrator: &FsOrchestratorService) -> CanonicalCommitHash {
+        fs::write(dir.path().join("src/new.rs"), "pub fn new_owned() -> i32 { 3 }\n").unwrap();
+        fs::write(dir.path().join(".multorum/rulebook.toml"), expanded_rulebook()).unwrap();
+        git(dir.path(), &["add", "src/new.rs", ".multorum/rulebook.toml"]);
+        git(dir.path(), &["commit", "-m", "incr: expand perspective write set"]);
+        orchestrator.rulebook_install().unwrap().active_commit
+    }
+
+    fn worker_service(worktree_root: &Path) -> FsWorkerService {
+        FsWorkerService::new(worktree_root).unwrap()
+    }
+
+    #[test]
+    fn forward_perspective_replays_blocked_worker_and_updates_runtime_state() {
+        let (dir, orchestrator) = setup_repo();
+        let worker = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+        let worker_service = worker_service(&worker.worktree_path);
+
+        fs::write(worker.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 11 }\n")
+            .unwrap();
+        git(&worker.worktree_path, &["add", "src/owned.rs"]);
+        git(&worker.worktree_path, &["commit", "-m", "incr: update owned worker code"]);
+        let reported_head = git(&worker.worktree_path, &["rev-parse", "HEAD"]);
+        worker_service
+            .send_report(
+                Some(reported_head.clone()),
+                ReplyReference::default(),
+                BundlePayload::default(),
+            )
+            .unwrap();
+
+        let active_commit = expand_rulebook(&dir, &orchestrator);
+        let result = orchestrator.forward_perspective(perspective()).unwrap();
+
+        assert_eq!(result.worker_ids, vec![worker.worker_id.clone()]);
+        assert_eq!(result.active_base_commit, active_commit);
+        assert_ne!(result.previous_base_commit, result.active_base_commit);
+
+        let worker_detail = orchestrator.get_worker(worker.worker_id.clone()).unwrap();
+        assert_eq!(worker_detail.base_commit, active_commit);
+        assert_eq!(worker_detail.state, WorkerState::Blocked);
+
+        let contract: WorkerContractView = worker_service.contract().unwrap();
+        assert_eq!(contract.base_commit, active_commit);
+
+        let forwarded_head = git(&worker.worktree_path, &["rev-parse", "HEAD"]);
+        assert_ne!(forwarded_head, reported_head);
+
+        let changed_files = git(
+            &worker.worktree_path,
+            &["diff", "--name-only", &format!("{}..HEAD", active_commit)],
+        );
+        assert_eq!(changed_files, "src/owned.rs");
+
+        let write_set =
+            fs::read_to_string(worker.worktree_path.join(".multorum/write-set.txt")).unwrap();
+        assert!(write_set.lines().any(|line| line == "src/new.rs"));
+    }
+
+    #[test]
+    fn forward_perspective_rejects_active_workers() {
+        let (dir, orchestrator) = setup_repo();
+        let worker = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+        let _active_commit = expand_rulebook(&dir, &orchestrator);
+
+        let error = orchestrator.forward_perspective(perspective()).unwrap_err();
+        assert!(matches!(
+            error,
+            RuntimeError::PerspectiveForwardRequiresBlocked { ref workers, .. }
+                if workers == &vec![(worker.worker_id, WorkerState::Active)]
+        ));
+    }
+
+    #[test]
+    fn forward_perspective_requires_reported_head_commit() {
+        let (dir, orchestrator) = setup_repo();
+        let worker = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+        worker_service(&worker.worktree_path)
+            .send_report(None, ReplyReference::default(), BundlePayload::default())
+            .unwrap();
+        let _active_commit = expand_rulebook(&dir, &orchestrator);
+
+        let error = orchestrator.forward_perspective(perspective()).unwrap_err();
+        assert!(matches!(
+            error,
+            RuntimeError::PerspectiveForwardMissingReportedHead { worker_id, .. }
+                if worker_id == worker.worker_id
+        ));
+    }
+
+    #[test]
+    fn create_worker_rejects_same_perspective_until_group_is_forwarded() {
+        let (dir, orchestrator) = setup_repo();
+        let worker = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+        let worker_detail = orchestrator.get_worker(worker.worker_id.clone()).unwrap();
+        worker_service(&worker.worktree_path)
+            .send_report(None, ReplyReference::default(), BundlePayload::default())
+            .unwrap();
+        let active_commit = expand_rulebook(&dir, &orchestrator);
+
+        let error = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap_err();
+        assert!(matches!(
+            error,
+            RuntimeError::PerspectiveRequiresForwardBeforeCreate {
+                ref perspective,
+                ref active_base_commit,
+                ref live_base_commit,
+            } if perspective == &worker.perspective
+                && active_base_commit == &active_commit
+                && live_base_commit == &worker_detail.base_commit
+        ));
+    }
 }

@@ -159,7 +159,8 @@ impl RuntimeFs {
     /// The contract file pins worker identity and base snapshot. The
     /// referenced read/write-set files remain separately materialized so
     /// `rulebook install` may expand them for a live worker without
-    /// rewriting the stable contract metadata.
+    /// rewriting the stable contract metadata. The contract file itself
+    /// changes only when a whole bidding group is explicitly forwarded.
     pub(crate) fn load_worker_contract(
         &self, worktree_root: &Path,
     ) -> Result<WorkerContractView, RuntimeError> {
@@ -182,14 +183,7 @@ impl RuntimeFs {
         fs::create_dir_all(worker_paths.outbox_ack())?;
         fs::create_dir_all(worker_paths.artifacts())?;
 
-        let contract = WorkerContractView {
-            worker_id: record.worker_id.clone(),
-            perspective: record.perspective.clone(),
-            base_commit: record.base_commit.clone(),
-            read_set_path: worker_paths.read_set(),
-            write_set_path: worker_paths.write_set(),
-        };
-        Self::write_toml(&worker_paths.contract(), &contract)?;
+        self.write_worker_contract(record)?;
         self.materialize_worker_boundary(record, perspective)?;
 
         self.vcs().install_worker_runtime_support(worker_paths.worktree_root())?;
@@ -204,6 +198,14 @@ impl RuntimeFs {
         &self, record: &WorkerRecord, perspective: &CompiledPerspective,
     ) -> Result<(), RuntimeError> {
         self.materialize_worker_boundary(record, perspective)
+    }
+
+    /// Refresh the worker contract after one explicit base-forwarding
+    /// operation.
+    pub(crate) fn refresh_worker_contract(
+        &self, record: &WorkerRecord,
+    ) -> Result<(), RuntimeError> {
+        self.write_worker_contract(record)
     }
 
     pub(crate) fn read_toml<T>(path: &Path) -> Result<T, RuntimeError>
@@ -231,6 +233,18 @@ impl RuntimeFs {
             writeln!(file, "{}", entry.display())?;
         }
         Ok(())
+    }
+
+    fn write_worker_contract(&self, record: &WorkerRecord) -> Result<(), RuntimeError> {
+        let worker_paths = WorkerPaths::new(record.worktree_path.clone());
+        let contract = WorkerContractView {
+            worker_id: record.worker_id.clone(),
+            perspective: record.perspective.clone(),
+            base_commit: record.base_commit.clone(),
+            read_set_path: worker_paths.read_set(),
+            write_set_path: worker_paths.write_set(),
+        };
+        Self::write_toml(&worker_paths.contract(), &contract)
     }
 
     fn materialize_worker_boundary(

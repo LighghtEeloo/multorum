@@ -35,6 +35,9 @@ pub trait WorkerService {
     ///
     /// Any path-backed payload files are moved into `.multorum/`
     /// storage if publication succeeds.
+    ///
+    /// Note: A later perspective-forward operation can preserve worker
+    /// progress only from the `head_commit` recorded here.
     fn send_report(
         &self, head_commit: Option<String>, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;

@@ -72,6 +72,13 @@ const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     },
 ];
 
+const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor {
+    name: "perspective",
+    description: "Perspective whose blocked bidding group should move to the active rulebook commit.",
+    kind: ToolInputType::String,
+    required: true,
+}];
+
 const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor {
         name: "worker_id",
@@ -160,6 +167,11 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
             name: "list_perspectives",
             description: "List compiled perspectives from the active rulebook.",
             inputs: &[],
+        },
+        ToolDescriptor {
+            name: "forward_perspective",
+            description: "Move one blocked bidding group to the active rulebook commit.",
+            inputs: FORWARD_PERSPECTIVE_INPUTS,
         },
         ToolDescriptor {
             name: "list_workers",

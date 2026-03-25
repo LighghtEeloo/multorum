@@ -67,9 +67,26 @@ pub trait VersionControl: std::fmt::Debug + Send + Sync {
     /// unrelated tracked modifications.
     fn ensure_clean_workspace(&self, workspace_root: &Path) -> Result<()>;
 
+    /// Refuse worker forwarding when the worktree carries staged,
+    /// unstaged, or untracked changes.
+    fn ensure_clean_worktree(&self, worktree_root: &Path) -> Result<()>;
+
     /// Integrate one submitted worker commit into the canonical
     /// workspace.
     fn integrate_commit(&self, workspace_root: &Path, commit: &CanonicalCommitHash) -> Result<()>;
+
+    /// Move a detached worktree head to a specific commit without
+    /// changing persisted runtime metadata.
+    fn checkout_detached(&self, worktree_root: &Path, commit: &CanonicalCommitHash) -> Result<()>;
+
+    /// Replay the current detached worktree commit range from
+    /// `from_base` onto `to_base`.
+    ///
+    /// Implementations should leave the worktree detached at the
+    /// replayed head and return that new canonical commit hash.
+    fn forward_worktree(
+        &self, worktree_root: &Path, from_base: &CanonicalCommitHash, to_base: &CanonicalCommitHash,
+    ) -> Result<CanonicalCommitHash>;
 
     /// Install backend-local ignore rules and mutation guards inside a
     /// worker worktree created during worker creation.

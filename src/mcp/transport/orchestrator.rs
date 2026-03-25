@@ -49,6 +49,10 @@ impl OrchestratorHandler {
             | "rulebook_install" => dispatch_tool(self.service.rulebook_install()),
             | "rulebook_uninstall" => dispatch_tool(self.service.rulebook_uninstall()),
             | "list_perspectives" => dispatch_tool(self.service.list_perspectives()),
+            | "forward_perspective" => {
+                let perspective = parse_perspective(required_str(&args, "perspective")?)?;
+                dispatch_tool(self.service.forward_perspective(perspective))
+            }
             | "list_workers" => dispatch_tool(self.service.list_workers()),
             | "get_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;

@@ -279,6 +279,22 @@ mod tests {
     }
 
     #[test]
+    fn forward_perspective_tool_schema_uses_string_perspective() {
+        let descriptor = crate::mcp::tool::orchestrator::descriptors()
+            .into_iter()
+            .find(|descriptor| descriptor.name == "forward_perspective")
+            .expect("forward_perspective descriptor should exist");
+
+        let schema = input_schema(descriptor.inputs);
+        let properties = schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("tool schema should expose properties");
+
+        assert_eq!(properties["perspective"]["type"], "string");
+    }
+
+    #[test]
     fn worker_tool_schema_uses_integer_fields() {
         let descriptor = crate::mcp::tool::worker::descriptors()
             .into_iter()

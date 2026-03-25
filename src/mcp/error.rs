@@ -82,6 +82,13 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::ActivePerspectiveIncompatible { .. } => McpErrorCode::RulebookConflict,
             | RuntimeError::ConflictWithActiveBiddingGroup { .. }
             | RuntimeError::BiddingGroupBoundaryMismatch { .. }
+            | RuntimeError::BiddingGroupBaseMismatch { .. }
+            | RuntimeError::PerspectiveForwardRequiresBlocked { .. }
+            | RuntimeError::PerspectiveForwardMissingGroup { .. }
+            | RuntimeError::PerspectiveForwardMissingReport { .. }
+            | RuntimeError::PerspectiveForwardMissingReportedHead { .. }
+            | RuntimeError::PerspectiveForwardHeadMismatch { .. }
+            | RuntimeError::PerspectiveRequiresForwardBeforeCreate { .. }
             | RuntimeError::CheckFailed(_) => McpErrorCode::CheckFailed,
             | RuntimeError::WriteSetViolation { .. } => McpErrorCode::WriteSetViolation,
             | RuntimeError::MailboxConflict => McpErrorCode::MailboxConflict,

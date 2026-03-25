@@ -49,6 +49,21 @@ impl GitVcs {
         })
     }
 
+    fn dirty_paths(&self, repo_root: &Path, include_untracked: bool) -> Result<Vec<String>> {
+        let mut command = self.git_command(repo_root);
+        command.arg("status").arg("--porcelain");
+        if !include_untracked {
+            command.arg("--untracked-files=no");
+        }
+        let output = self.run_command(command, "read workspace status")?;
+        Ok(output
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+            .collect())
+    }
+
     /// Return whether Git still tracks `worktree_root` as one of the
     /// repository's attached worktrees.
     ///
@@ -258,26 +273,62 @@ impl VersionControl for GitVcs {
     }
 
     fn ensure_clean_workspace(&self, workspace_root: &Path) -> Result<()> {
-        let mut command = self.git_command(workspace_root);
-        command.arg("status").arg("--porcelain").arg("--untracked-files=no");
-        let output = self.run_command(command, "read workspace status")?;
-        if output.trim().is_empty() {
+        let changed_paths = self.dirty_paths(workspace_root, false)?;
+        if changed_paths.is_empty() {
             return Ok(());
         }
+        Err(VcsError::DirtyWorkspace { changed_paths: changed_paths.join(", ") })
+    }
 
-        let changed_paths = output
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .collect::<Vec<_>>()
-            .join(", ");
-        Err(VcsError::DirtyWorkspace { changed_paths })
+    fn ensure_clean_worktree(&self, worktree_root: &Path) -> Result<()> {
+        let changed_paths = self.dirty_paths(worktree_root, true)?;
+        if changed_paths.is_empty() {
+            return Ok(());
+        }
+        Err(VcsError::DirtyWorkspace { changed_paths: changed_paths.join(", ") })
     }
 
     fn integrate_commit(&self, workspace_root: &Path, commit: &CanonicalCommitHash) -> Result<()> {
         let mut command = self.git_command(workspace_root);
         command.arg("cherry-pick").arg(commit.as_str());
         self.run_command(command, "integrate submitted commit").map(|_| ())
+    }
+
+    fn checkout_detached(&self, worktree_root: &Path, commit: &CanonicalCommitHash) -> Result<()> {
+        let mut command = self.git_command(worktree_root);
+        command.arg("checkout").arg("--detach").arg(commit.as_str());
+        self.run_command(command, "checkout detached worker commit").map(|_| ())
+    }
+
+    fn forward_worktree(
+        &self, worktree_root: &Path, from_base: &CanonicalCommitHash, to_base: &CanonicalCommitHash,
+    ) -> Result<CanonicalCommitHash> {
+        let current_head = self.head_commit(worktree_root)?;
+        if current_head == *to_base {
+            return Ok(current_head);
+        }
+
+        if current_head == *from_base {
+            self.checkout_detached(worktree_root, to_base)?;
+            return self.head_commit(worktree_root);
+        }
+
+        let mut command = self.git_command(worktree_root);
+        command
+            .arg("rebase")
+            .arg("--onto")
+            .arg(to_base.as_str())
+            .arg(from_base.as_str())
+            .arg("HEAD");
+        let result = self.run_command(command, "forward worker worktree to active rulebook commit");
+        if let Err(error) = result {
+            let mut abort = self.git_command(worktree_root);
+            abort.arg("rebase").arg("--abort");
+            let _ = self.run_command(abort, "abort failed worker rebase");
+            return Err(error);
+        }
+
+        self.head_commit(worktree_root)
     }
 
     fn install_worker_runtime_support(&self, worktree_root: &Path) -> Result<()> {

@@ -257,6 +257,12 @@ pub enum UtilCommand {
 pub enum PerspectiveCommand {
     /// List compiled perspectives from the active rulebook.
     List,
+
+    /// Forward one blocked bidding group to the active rulebook commit.
+    Forward {
+        /// Perspective whose live bidding group should move forward.
+        perspective: PerspectiveName,
+    },
 }
 
 /// Orchestrator-side worker commands.
@@ -571,6 +577,10 @@ impl PerspectiveCommand {
         match self {
             | Self::List => {
                 let result = services.orchestrator()?.list_perspectives()?;
+                println!("{result:#?}");
+            }
+            | Self::Forward { perspective } => {
+                let result = services.orchestrator()?.forward_perspective(perspective)?;
                 println!("{result:#?}");
             }
         }
