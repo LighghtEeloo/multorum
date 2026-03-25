@@ -27,7 +27,9 @@ use super::{
         RulebookInit, RulebookInstall, RulebookUninstall, RulebookValidation, WorkerDetail,
         WorkerState, WorkerSummary,
     },
-    storage::{ActiveRulebookRecord, RuntimeFs, WorkerRecord, timestamp_now, validate_skip_request},
+    storage::{
+        ActiveRulebookRecord, RuntimeFs, WorkerRecord, timestamp_now, validate_skip_request,
+    },
     worker_id::WorkerId,
 };
 
