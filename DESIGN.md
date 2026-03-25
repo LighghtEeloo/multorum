@@ -557,6 +557,21 @@ This section lists the instructions that the orchestrator and workers may issue,
 
 - `multorum util completion <shell>` — Emit shell completions to stdout. Supported shells: `bash`, `zsh`, `fish`, `elvish`, `powershell`.
 
+After running the command, source the output in your shell profile to enable tab completion.
+
+```bash
+# bash
+source <(multorum util completion bash)
+
+# zsh
+autoload -U compinit
+compinit
+source <(multorum util completion zsh)
+
+# fish
+multorum util completion fish | source
+```
+
 ### MCP Server
 
 - `multorum serve orchestrator` — Start the orchestrator MCP server on stdio from the workspace root.
