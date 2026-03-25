@@ -73,11 +73,8 @@ pub fn setup_multi_perspective_repo() -> (TempDir, FsOrchestratorService) {
     fs::write(dir.path().join("src/data.rs"), "pub fn data() -> i32 { 3 }\n").unwrap();
     fs::write(dir.path().join("src/data_ref.rs"), "pub fn data_ref() -> i32 { 4 }\n").unwrap();
     fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
-    fs::write(
-        dir.path().join(".multorum/rulebook.toml"),
-        multi_perspective_rulebook_toml(),
-    )
-    .unwrap();
+    fs::write(dir.path().join(".multorum/rulebook.toml"), multi_perspective_rulebook_toml())
+        .unwrap();
 
     git(dir.path(), &["init"]);
     git(dir.path(), &["config", "user.name", "Multorum Test"]);

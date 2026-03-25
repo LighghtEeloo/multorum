@@ -19,6 +19,7 @@ use super::{
     args_or_empty, dispatch_tool, extract_payload, extract_reply, list_resource_templates_result,
     list_resources_result, list_tools_result, optional_str, optional_u64, required_str,
     required_u64, resource_success, runtime_to_resource_error, server_info,
+    validate_tool_arguments,
 };
 
 /// MCP server handler for the worker surface.
@@ -43,6 +44,7 @@ impl WorkerHandler {
     pub fn dispatch(
         &self, name: &str, args: serde_json::Map<String, serde_json::Value>,
     ) -> Result<CallToolResult, ErrorData> {
+        validate_tool_arguments(name, &args, &crate::mcp::tool::worker::descriptors())?;
         match name {
             | "get_contract" => dispatch_tool(self.service.contract()),
             | "read_inbox" => {

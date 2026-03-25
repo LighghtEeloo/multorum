@@ -75,6 +75,7 @@ fn input_schema(inputs: &[ToolInputDescriptor]) -> Arc<serde_json::Map<String, V
     let mut schema = serde_json::Map::new();
     schema.insert("type".into(), Value::String("object".into()));
     schema.insert("properties".into(), Value::Object(properties));
+    schema.insert("additionalProperties".into(), Value::Bool(false));
     if !required.is_empty() {
         schema.insert("required".into(), Value::Array(required));
     }
@@ -260,6 +261,76 @@ fn args_or_empty(args: Option<serde_json::Map<String, Value>>) -> serde_json::Ma
     args.unwrap_or_default()
 }
 
+/// Validate one tool argument object against the declared MCP descriptor.
+///
+/// This keeps the MCP dispatch contract aligned with the CLI contract:
+/// unknown fields are rejected and provided fields must match their typed
+/// schema entry even when optional.
+fn validate_tool_arguments(
+    tool: &str, args: &serde_json::Map<String, Value>, descriptors: &[ToolDescriptor],
+) -> Result<(), rmcp::ErrorData> {
+    let descriptor = descriptors
+        .iter()
+        .find(|descriptor| descriptor.name == tool)
+        .ok_or_else(|| rmcp::ErrorData::invalid_params(format!("unknown tool: {tool}"), None))?;
+
+    for key in args.keys() {
+        let known = descriptor.inputs.iter().any(|input| input.name == key.as_str());
+        if !known {
+            return Err(rmcp::ErrorData::invalid_params(
+                format!("unknown field for {tool}: {key}"),
+                None,
+            ));
+        }
+    }
+
+    for input in descriptor.inputs {
+        let Some(value) = args.get(input.name) else {
+            if input.required {
+                return Err(rmcp::ErrorData::invalid_params(
+                    format!("missing required field: {}", input.name),
+                    None,
+                ));
+            }
+            continue;
+        };
+        if !value_matches_input(value, input.kind) {
+            return Err(rmcp::ErrorData::invalid_params(
+                format!(
+                    "invalid field type for `{}`: expected {}",
+                    input.name,
+                    expected_type_label(input.kind)
+                ),
+                None,
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Return whether a JSON value matches one declared tool input type.
+fn value_matches_input(value: &Value, kind: ToolInputType) -> bool {
+    match kind {
+        | ToolInputType::String => value.is_string(),
+        | ToolInputType::Integer => value.is_u64(),
+        | ToolInputType::Boolean => value.is_boolean(),
+        | ToolInputType::StringList => {
+            value.as_array().is_some_and(|items| items.iter().all(Value::is_string))
+        }
+    }
+}
+
+/// Return a user-facing expected type label for one input descriptor type.
+fn expected_type_label(kind: ToolInputType) -> &'static str {
+    match kind {
+        | ToolInputType::String => "string",
+        | ToolInputType::Integer => "non-negative integer",
+        | ToolInputType::Boolean => "boolean",
+        | ToolInputType::StringList => "array of strings",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
@@ -283,6 +354,7 @@ mod tests {
         assert_eq!(properties["overwriting_worktree"]["type"], "boolean");
         assert_eq!(properties["artifacts"]["type"], "array");
         assert_eq!(properties["artifacts"]["items"]["type"], "string");
+        assert_eq!(schema["additionalProperties"], false);
     }
 
     #[test]

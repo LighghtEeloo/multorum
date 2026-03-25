@@ -10,7 +10,7 @@ use multorum::mcp::transport::worker::WorkerHandler;
 use multorum::runtime::FsWorkerService;
 
 use crate::support::repo::setup_repo;
-use crate::support::result::{assert_tool_success, json_args};
+use crate::support::result::json_args;
 use crate::support::worker::create_worker_runtime;
 
 // ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ fn negative_where_u64_expected() {
 }
 
 // ---------------------------------------------------------------------------
-// Optional field type mismatches (silently ignored)
+// Optional field type mismatches
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -84,15 +84,11 @@ fn string_where_boolean_expected() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
 
-    // `overwriting_worktree` is optional boolean; a string should be treated as
-    // absent (optional_bool returns None for non-bool values).
     let result = handler.dispatch(
         "create_worker",
         json_args(json!({"perspective": "AuthImplementor", "overwriting_worktree": "yes"})),
     );
-    // Should still succeed — the bad optional is just ignored.
-    let result = result.unwrap();
-    assert_tool_success(&result);
+    assert!(result.is_err(), "optional boolean with wrong type should be a protocol error");
 }
 
 #[test]
@@ -109,12 +105,10 @@ fn string_list_with_non_strings() {
         )
         .unwrap();
 
-    // `skip_checks` is StringList; non-string items should be filtered out.
+    // `skip_checks` is StringList; non-string items should be rejected.
     let result = handler
         .dispatch("merge_worker", json_args(json!({"worker_id": "w1", "skip_checks": [1, true]})));
-    // merge_worker will fail for business-logic reasons (not committed), but
-    // the argument parsing itself should not cause a protocol error.
-    assert!(result.is_ok(), "non-string items in StringList should not cause protocol error");
+    assert!(result.is_err(), "non-string items in StringList should be a protocol error");
 }
 
 // ---------------------------------------------------------------------------
@@ -122,13 +116,12 @@ fn string_list_with_non_strings() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn extra_unknown_fields_ignored() {
+fn extra_unknown_fields_rejected() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
 
     let result = handler.dispatch("get_status", json_args(json!({"bonus": 123, "extra": "field"})));
-    let result = result.unwrap();
-    assert_tool_success(&result);
+    assert!(result.is_err(), "unknown fields should be a protocol error");
 }
 
 #[test]
