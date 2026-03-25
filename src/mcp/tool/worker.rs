@@ -69,7 +69,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
     vec![
         ToolDescriptor {
             name: "get_contract",
-            description: "Load the immutable worker contract.",
+            description: "Load the worker contract view.",
             inputs: &[],
         },
         ToolDescriptor {

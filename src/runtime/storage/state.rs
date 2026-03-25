@@ -154,7 +154,12 @@ impl RuntimeFs {
         Ok(workers)
     }
 
-    /// Load the immutable worker contract from a worker worktree.
+    /// Load the worker contract view from a worker worktree.
+    ///
+    /// The contract file pins worker identity and base snapshot. The
+    /// referenced read/write-set files remain separately materialized so
+    /// `rulebook install` may expand them for a live worker without
+    /// rewriting the stable contract metadata.
     pub(crate) fn load_worker_contract(
         &self, worktree_root: &Path,
     ) -> Result<WorkerContractView, RuntimeError> {
@@ -185,11 +190,20 @@ impl RuntimeFs {
             write_set_path: worker_paths.write_set(),
         };
         Self::write_toml(&worker_paths.contract(), &contract)?;
-        Self::write_path_list(&worker_paths.read_set(), perspective.read())?;
-        Self::write_path_list(&worker_paths.write_set(), perspective.write())?;
+        self.materialize_worker_boundary(record, perspective)?;
 
         self.vcs().install_worker_runtime_support(worker_paths.worktree_root())?;
         Ok(())
+    }
+
+    /// Refresh the materialized boundary for one live worker.
+    ///
+    /// This rewrites only the read/write-set files. The worker keeps its
+    /// pinned base snapshot and runtime identity.
+    pub(crate) fn refresh_worker_boundary(
+        &self, record: &WorkerRecord, perspective: &CompiledPerspective,
+    ) -> Result<(), RuntimeError> {
+        self.materialize_worker_boundary(record, perspective)
     }
 
     pub(crate) fn read_toml<T>(path: &Path) -> Result<T, RuntimeError>
@@ -216,6 +230,22 @@ impl RuntimeFs {
         for entry in paths {
             writeln!(file, "{}", entry.display())?;
         }
+        Ok(())
+    }
+
+    fn materialize_worker_boundary(
+        &self, record: &WorkerRecord, perspective: &CompiledPerspective,
+    ) -> Result<(), RuntimeError> {
+        let worker_paths = WorkerPaths::new(record.worktree_path.clone());
+        Self::write_path_list(&worker_paths.read_set(), perspective.read())?;
+        Self::write_path_list(&worker_paths.write_set(), perspective.write())?;
+        tracing::trace!(
+            worker_id = %record.worker_id,
+            perspective = %record.perspective,
+            read_count = perspective.read().len(),
+            write_count = perspective.write().len(),
+            "materialized worker boundary"
+        );
         Ok(())
     }
 

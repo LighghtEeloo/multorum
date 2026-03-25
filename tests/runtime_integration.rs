@@ -960,6 +960,128 @@ fn install_allows_expanded_read_set() {
 }
 
 #[test]
+fn install_refreshes_live_bidding_group_boundaries_after_expansion() {
+    let (repo, orchestrator, _) = setup_repo_with_rulebook(
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+            ExtraRead.path = "src/extra-read.rs"
+            ExtraWrite.path = "src/extra-write.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other"
+            write = "Owned"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+    fs::write(repo.path().join("src/extra-read.rs"), "pub fn extra_read() {}\n").unwrap();
+    fs::write(repo.path().join("src/extra-write.rs"), "pub fn extra_write() {}\n").unwrap();
+    git(repo.path(), &["add", "src/extra-read.rs", "src/extra-write.rs"]);
+    git(repo.path(), &["commit", "-m", "feat: add extra boundary files"]);
+    orchestrator.rulebook_install().unwrap();
+
+    let first = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let second = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    commit_new_rulebook(
+        repo.path(),
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+            ExtraRead.path = "src/extra-read.rs"
+            ExtraWrite.path = "src/extra-write.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other | ExtraRead"
+            write = "Owned | ExtraWrite"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+
+    orchestrator.rulebook_install().unwrap();
+
+    for worktree in [&first.worktree_path, &second.worktree_path] {
+        let worker = FsWorkerService::new(worktree).unwrap();
+        let contract = worker.contract().unwrap();
+        assert_eq!(
+            read_worker_path_list(&contract.read_set_path),
+            BTreeSet::from([PathBuf::from("src/extra-read.rs"), PathBuf::from("src/other.rs")])
+        );
+        assert_eq!(
+            read_worker_path_list(&contract.write_set_path),
+            BTreeSet::from([PathBuf::from("src/extra-write.rs"), PathBuf::from("src/owned.rs")])
+        );
+    }
+
+    let status = orchestrator.status().unwrap();
+    assert_eq!(status.active_perspectives.len(), 1);
+    assert_eq!(status.active_perspectives[0].read_count, 2);
+    assert_eq!(status.active_perspectives[0].write_count, 2);
+
+    let exclusion = read_exclusion_set(repo.path());
+    assert!(exclusion.contains(&PathBuf::from("src/extra-read.rs")));
+    assert!(exclusion.contains(&PathBuf::from("src/extra-write.rs")));
+}
+
+#[test]
+fn install_rejects_conflict_introduced_by_expanded_live_boundary() {
+    let (repo, orchestrator, _) = setup_repo_with_rulebook(
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+            Extra.path = "src/extra.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other"
+            write = "Owned"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+    fs::write(repo.path().join("src/extra.rs"), "pub fn extra() {}\n").unwrap();
+    git(repo.path(), &["add", "src/extra.rs"]);
+    git(repo.path(), &["commit", "-m", "feat: add extra file"]);
+    orchestrator.rulebook_install().unwrap();
+    orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    commit_new_rulebook(
+        repo.path(),
+        r#"
+            [fileset]
+            Owned.path = "src/owned.rs"
+            Other.path = "src/other.rs"
+            Extra.path = "src/extra.rs"
+
+            [perspective.AuthImplementor]
+            read = "Other | Extra"
+            write = "Owned"
+
+            [perspective.Conflicting]
+            read = "Other"
+            write = "Extra"
+
+            [check]
+            pipeline = []
+        "#,
+    );
+
+    let error = orchestrator.rulebook_install().unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::RulebookConflict { blocking_perspectives, .. }
+            if blocking_perspectives == vec![perspective()]
+    ));
+}
+
+#[test]
 fn install_rejects_new_perspective_conflicting_with_active_group() {
     let (repo, orchestrator, _) = setup_repo();
     orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
@@ -1002,6 +1124,18 @@ fn read_exclusion_set(dir: &Path) -> BTreeSet<PathBuf> {
         .collect()
 }
 
+fn read_worker_path_list(path: &Path) -> BTreeSet<PathBuf> {
+    if !path.exists() {
+        return BTreeSet::new();
+    }
+    fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
 #[test]
 fn exclusion_set_tracks_active_worker_boundaries() {
     let (dir, orchestrator, _head) = setup_repo();
@@ -1026,9 +1160,7 @@ fn discard_worker_accepts_blocked_state_and_clears_exclusion_set() {
     let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&result.worktree_path).unwrap();
 
-    worker
-        .send_report(None, ReplyReference::default(), BundlePayload::default())
-        .unwrap();
+    worker.send_report(None, ReplyReference::default(), BundlePayload::default()).unwrap();
     assert_eq!(worker.status().unwrap().state, WorkerState::Blocked);
     assert!(!read_exclusion_set(dir.path()).is_empty());
 

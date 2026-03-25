@@ -208,7 +208,9 @@ The orchestrator evolves the rulebook through normal commits. Multorum never fol
 
 Install enforces two conditions:
 
-**Continuity.** Every active bidding group must remain representable in the target rulebook. For each active group with perspective name P, the target rulebook must define P with a compiled boundary that is a superset of (or equal to) the group's materialized boundary — both read and write sets independently. Boundary expansion is permitted: the live workers keep their frozen contract, and the added files only take effect for future workers. Boundary reduction is rejected, because it would break the contract that live workers were created under.
+**Continuity.** Every active bidding group must remain representable in the target rulebook. For each active group with perspective name P, the target rulebook must define P with a compiled boundary that is a superset of (or equal to) the group's materialized boundary — both read and write sets independently. Boundary expansion is permitted and takes effect immediately for the live group: Multorum rewrites each live worker's `read-set.txt` and `write-set.txt` to the expanded boundary while keeping the worker's base snapshot pinned. Boundary reduction is rejected, because it would break the contract that live workers were created under.
+
+This design keeps the runtime exclusion set, conflict checks, and worker-local guidance aligned with the active rulebook. If Multorum accepted an expanded perspective but left live workers on stale boundary files, the installed policy and the runtime enforcement surface would diverge.
 
 **Conflict-freedom.** Every candidate perspective in the target rulebook must satisfy the conflict-free invariant against every active bidding group whose name differs from the candidate. Same-name pairs are exempt — their compatibility is established by the continuity condition.
 
@@ -519,7 +521,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 
 ### Worker-Local Commands
 
-- `multorum local contract` — Load the immutable worker contract for the current worktree.
+- `multorum local contract` — Load the worker contract for the current worktree.
 - `multorum local status` — Return the projected status for the current worktree.
 - `multorum local inbox [--after <sequence>]` — List inbox messages for the current worker. No lifecycle transition.
 - `multorum local ack <sequence>` — Acknowledge one inbox message. Acknowledging `task`, `resolve`, or `revise` transitions the worker into `ACTIVE`.

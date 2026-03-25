@@ -10,7 +10,10 @@ use std::sync::Arc;
 
 use crate::{
     bundle::BundlePayload,
-    schema::perspective::{CompiledPerspective, PerspectiveName},
+    schema::{
+        perspective::{CompiledPerspective, PerspectiveName},
+        rulebook::CompiledRulebook,
+    },
     vcs::{CanonicalCommitHash, VersionControl},
 };
 
@@ -214,40 +217,18 @@ impl FsOrchestratorService {
     /// exist in the target with a boundary that is a superset of (or
     /// equal to) the group's materialized boundary.
     ///
+    /// Note: Compatible installs refresh each live worker's
+    /// `read-set.txt` and `write-set.txt` to the target boundary while
+    /// keeping the worker's base snapshot pinned. Conflict validation
+    /// therefore must reason about the post-install boundary, not the
+    /// stale pre-install projection.
+    ///
     /// **Conflict-freedom** — every candidate perspective must satisfy
     /// the conflict-free invariant against every active group whose
     /// name differs from the candidate.
     fn validate_rulebook_commit(&self, commit: &CanonicalCommitHash) -> Result<RulebookValidation> {
         let compiled = self.fs.load_compiled_rulebook(commit)?;
-        let active_groups = self.active_bidding_groups()?;
-
-        // Continuity: each active group's perspective must still exist
-        // with a boundary that is a superset of the materialized one.
-        for active_group in &active_groups {
-            let Some(target) = compiled.perspectives().get(&active_group.perspective) else {
-                return Err(RuntimeError::ActivePerspectiveIncompatible {
-                    commit: commit.clone(),
-                    perspective: active_group.perspective.clone(),
-                    reason: "does not exist in the target rulebook",
-                });
-            };
-
-            if !target.write().is_superset(active_group.boundary.write()) {
-                return Err(RuntimeError::ActivePerspectiveIncompatible {
-                    commit: commit.clone(),
-                    perspective: active_group.perspective.clone(),
-                    reason: "has a reduced write set in the target rulebook",
-                });
-            }
-
-            if !target.read().is_superset(active_group.boundary.read()) {
-                return Err(RuntimeError::ActivePerspectiveIncompatible {
-                    commit: commit.clone(),
-                    perspective: active_group.perspective.clone(),
-                    reason: "has a reduced read set in the target rulebook",
-                });
-            }
-        }
+        let active_groups = self.effective_active_bidding_groups(&compiled, commit)?;
 
         // Conflict-freedom: each candidate must not conflict with any
         // active group of a different name.
@@ -275,6 +256,47 @@ impl FsOrchestratorService {
             ok: blocking_perspectives.is_empty(),
             blocking_perspectives: blocking_perspectives.into_iter().collect(),
         })
+    }
+
+    /// Resolve the effective active-group boundaries under one target rulebook.
+    ///
+    /// Boundary reductions remain invalid, but compatible installs adopt
+    /// the target boundary immediately for the live bidding group so the
+    /// runtime exclusion set and future conflict checks stay aligned.
+    fn effective_active_bidding_groups(
+        &self, compiled: &CompiledRulebook, commit: &CanonicalCommitHash,
+    ) -> Result<Vec<ActiveBiddingGroup>> {
+        let mut active_groups = self.active_bidding_groups()?;
+
+        for active_group in &mut active_groups {
+            let Some(target) = compiled.perspectives().get(&active_group.perspective) else {
+                return Err(RuntimeError::ActivePerspectiveIncompatible {
+                    commit: commit.clone(),
+                    perspective: active_group.perspective.clone(),
+                    reason: "does not exist in the target rulebook",
+                });
+            };
+
+            if !target.write().is_superset(active_group.boundary.write()) {
+                return Err(RuntimeError::ActivePerspectiveIncompatible {
+                    commit: commit.clone(),
+                    perspective: active_group.perspective.clone(),
+                    reason: "has a reduced write set in the target rulebook",
+                });
+            }
+
+            if !target.read().is_superset(active_group.boundary.read()) {
+                return Err(RuntimeError::ActivePerspectiveIncompatible {
+                    commit: commit.clone(),
+                    perspective: active_group.perspective.clone(),
+                    reason: "has a reduced read set in the target rulebook",
+                });
+            }
+
+            active_group.boundary = target.clone();
+        }
+
+        Ok(active_groups)
     }
 
     fn active_workers(&self) -> Result<Vec<WorkerRecord>> {
@@ -309,6 +331,36 @@ impl FsOrchestratorService {
             });
         }
         Ok(groups)
+    }
+
+    /// Refresh live worker boundary files to match the installed rulebook.
+    ///
+    /// The worker keeps its pinned base commit. Only the materialized
+    /// read/write-set files change.
+    fn refresh_live_worker_boundaries(&self, compiled: &CompiledRulebook) -> Result<()> {
+        for record in self.active_workers()? {
+            let target = compiled
+                .perspectives()
+                .get(&record.perspective)
+                .ok_or_else(|| RuntimeError::UnknownPerspective(record.perspective.to_string()))?;
+            let worker_paths = self.fs.worker_paths(&record.worker_id);
+            let current_read = RuntimeFs::read_path_list(&worker_paths.read_set())?;
+            let current_write = RuntimeFs::read_path_list(&worker_paths.write_set())?;
+            if current_read == *target.read() && current_write == *target.write() {
+                continue;
+            }
+
+            self.fs.refresh_worker_boundary(&record, target)?;
+            tracing::info!(
+                worker_id = %record.worker_id,
+                perspective = %record.perspective,
+                read_count = target.read().len(),
+                write_count = target.write().len(),
+                "refreshed live worker boundary after rulebook install"
+            );
+        }
+
+        Ok(())
     }
 
     fn allocate_worker_id(&self, perspective: &PerspectiveName) -> Result<WorkerId> {
@@ -472,10 +524,12 @@ impl OrchestratorService for FsOrchestratorService {
                 blocking_perspectives: validation.blocking_perspectives,
             });
         }
+        let compiled = self.fs.load_compiled_rulebook(&commit)?;
 
         let record =
             ActiveRulebookRecord { base_commit: commit.clone(), activated_at: timestamp_now() };
         self.fs.store_active_rulebook(&record)?;
+        self.refresh_live_worker_boundaries(&compiled)?;
         self.fs.rewrite_exclusion_set()?;
         self.fs.vcs().install_orchestrator_hook(self.fs.workspace_root())?;
         tracing::info!(base_commit = %record.base_commit, "installed rulebook");

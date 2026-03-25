@@ -224,8 +224,10 @@ pub struct WorkerDetail {
     pub state: WorkerState,
     /// Absolute path to the managed worker worktree.
     pub worktree_path: PathBuf,
-    /// Canonical base commit pinning both the worker's code snapshot and
-    /// its governing rulebook.
+    /// Canonical base commit pinning the worker's code snapshot.
+    ///
+    /// Note: A compatible `rulebook install` may expand the materialized
+    /// read/write-set files for this worker without changing `base_commit`.
     pub base_commit: CanonicalCommitHash,
     /// Canonical submitted worker head commit when present.
     pub submitted_head_commit: Option<CanonicalCommitHash>,
@@ -244,19 +246,20 @@ pub struct WorkerStatus {
 
 /// Worker contract view exported to frontends.
 ///
-/// The worker's governing rulebook is the one committed at `base_commit`.
+/// `base_commit` pins the worker's code snapshot. The referenced
+/// read/write-set files are the authoritative materialized boundary and
+/// may be refreshed by a compatible `rulebook install`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkerContractView {
     /// Worker identity.
     pub worker_id: WorkerId,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
-    /// Canonical base commit pinning both the worker's code snapshot and
-    /// its governing rulebook.
+    /// Canonical base commit pinning the worker's code snapshot.
     pub base_commit: CanonicalCommitHash,
-    /// Path to the compiled read set file.
+    /// Path to the materialized read set file.
     pub read_set_path: PathBuf,
-    /// Path to the compiled write set file.
+    /// Path to the materialized write set file.
     pub write_set_path: PathBuf,
 }
 

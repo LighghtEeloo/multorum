@@ -28,9 +28,10 @@ pub(crate) struct ActiveRulebookRecord {
 
 /// Orchestrator-local projection for one live or historical worker.
 ///
-/// The worker's rulebook is the one committed at `base_commit`. There is
-/// no separate rulebook pin — the rulebook governing the worker is always
-/// the version present in the snapshot the worker was created from.
+/// `base_commit` pins the worker's code snapshot. The materialized
+/// read/write-set files remain the authoritative worker boundary and may
+/// be expanded by a later compatible rulebook install without changing
+/// `base_commit`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct WorkerRecord {
     /// Unique worker identity.
@@ -41,8 +42,7 @@ pub(crate) struct WorkerRecord {
     pub state: WorkerState,
     /// Absolute path to the managed worktree.
     pub worktree_path: PathBuf,
-    /// Canonical base commit pinning both the worker's code snapshot and
-    /// its governing rulebook.
+    /// Canonical base commit pinning the worker's code snapshot.
     pub base_commit: CanonicalCommitHash,
     /// Canonical submitted worker commit when the worker is in `COMMITTED`.
     pub submitted_head_commit: Option<CanonicalCommitHash>,

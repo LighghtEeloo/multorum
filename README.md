@@ -25,7 +25,7 @@ The rulebook at `.multorum/rulebook.toml` defines named *perspectives*. A perspe
 - a read set: stable context that concurrent work must not modify
 - a write set: the exact files that role may change
 
-When the orchestrator creates a worker from a perspective, Multorum creates a git worktree pinned to the active rulebook's base commit and materializes the compiled read and write sets into the worker-local runtime surface.
+When the orchestrator creates a worker from a perspective, Multorum creates a git worktree pinned to the active rulebook's base commit and materializes the compiled read and write sets into the worker-local runtime surface. A later compatible `rulebook install` may expand those materialized boundary files for live workers while keeping their base snapshot pinned.
 
 If the orchestrator wants multiple attempts at the same role, it can create multiple workers from the same perspective. Those workers form a *bidding group*: they share the same base snapshot and scope, and at most one of them may ultimately merge.
 
@@ -45,7 +45,7 @@ This means:
 
 Workers are allowed to read the full codebase. The read set is guidance plus a stability guarantee, not a filesystem restriction.
 
-Workers may not create new files. The write set is a closed list of existing paths compiled at worker creation time. If new files are needed, the orchestrator must change the rulebook and create a fresh worker.
+Workers may not create new files. The write set is a closed list of existing paths materialized into `write-set.txt`. A compatible `rulebook install` may expand that list for live workers, but Multorum never invents files inside an existing pinned snapshot.
 
 ## Runtime Shape
 

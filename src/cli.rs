@@ -145,7 +145,11 @@ pub struct BundlePayloadArgs {
 impl BundlePayloadArgs {
     /// Convert CLI payload arguments into runtime bundle payload.
     pub fn into_runtime(self) -> crate::bundle::BundlePayload {
-        crate::bundle::BundlePayload { body_text: None, body_path: self.body, artifacts: self.artifacts }
+        crate::bundle::BundlePayload {
+            body_text: None,
+            body_path: self.body,
+            artifacts: self.artifacts,
+        }
     }
 }
 
@@ -366,7 +370,7 @@ pub enum WorkerCommand {
 /// Worker-local commands.
 #[derive(Debug, Subcommand)]
 pub enum LocalCommand {
-    /// Load the immutable worker contract for the current worktree.
+    /// Load the worker contract for the current worktree.
     Contract,
 
     /// Return the projected worker status for the current worktree.

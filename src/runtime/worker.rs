@@ -22,7 +22,7 @@ use super::{
 
 /// Typed operations available to a worker frontend.
 pub trait WorkerService {
-    /// Load the immutable worker contract.
+    /// Load the worker contract view.
     fn contract(&self) -> Result<WorkerContractView>;
 
     /// Read inbox messages after the provided sequence number.
