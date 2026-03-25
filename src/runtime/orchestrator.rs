@@ -566,8 +566,8 @@ impl OrchestratorService for FsOrchestratorService {
 
         let (worker_id, previous_finalized_record) =
             self.resolve_create_worker_id(&perspective, worker_id)?;
-        if let Some(record) = previous_finalized_record.as_ref() {
-            if record.worktree_path.exists() {
+        if let Some(record) = previous_finalized_record.as_ref()
+            && record.worktree_path.exists() {
                 if !overwriting_worktree {
                     return Err(RuntimeError::ExistingWorkerWorkspace {
                         worker_id: record.worker_id.clone(),
@@ -577,7 +577,6 @@ impl OrchestratorService for FsOrchestratorService {
                 }
                 self.cleanup_workspace_before_create(record)?;
             }
-        }
         let worktree_path = self.fs.worker_paths(&worker_id).worktree_root().to_path_buf();
         self.fs.vcs().create_worktree(
             self.fs.workspace_root(),
