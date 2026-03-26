@@ -73,14 +73,56 @@ pub struct ReplyReference {
     pub in_reply_to: Option<Sequence>,
 }
 
+/// Mailbox protocol version tag.
+///
+/// Stored internally as an integer but serialized as `"multorum/v{n}"`
+/// so the wire format is self-describing and forward-compatible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ProtocolVersion(pub u32);
+
+impl ProtocolVersion {
+    /// Prefix used in the serialized representation.
+    const PREFIX: &str = "multorum/v";
+}
+
+impl std::fmt::Display for ProtocolVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", Self::PREFIX, self.0)
+    }
+}
+
+impl Serialize for ProtocolVersion {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for ProtocolVersion {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        let version_str = s.strip_prefix(Self::PREFIX).ok_or_else(|| {
+            serde::de::Error::custom(format!(
+                "protocol version must start with {:?}, got {s:?}",
+                Self::PREFIX,
+            ))
+        })?;
+        let version: u32 = version_str.parse().map_err(|_| {
+            serde::de::Error::custom(format!(
+                "protocol version number must be a non-negative integer, got {version_str:?}",
+            ))
+        })?;
+        Ok(Self(version))
+    }
+}
+
 /// Envelope persisted in `envelope.toml` inside a mailbox bundle.
 ///
 /// The envelope is the only file Multorum interprets inside a mailbox
 /// bundle. `body.md` and `artifacts/` are opaque payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BundleEnvelope {
-    /// Mailbox protocol version.
-    pub protocol: u32,
+    /// Mailbox protocol version, serialized as `"multorum/v1"`.
+    pub protocol: ProtocolVersion,
     /// Active worker identity.
     pub worker_id: WorkerId,
     /// Perspective instantiated by the worker.

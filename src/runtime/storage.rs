@@ -22,8 +22,8 @@ use crate::runtime::{
     AuditEntry, MailboxMessageView, MultorumPaths, RulebookInit, RuntimeError, WorkerContractView,
     WorkerId, WorkerPaths,
     mailbox::{
-        AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, PublishedBundle,
-        ReplyReference, Sequence,
+        AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, ProtocolVersion,
+        PublishedBundle, ReplyReference, Sequence,
     },
 };
 use crate::schema::rulebook::{
@@ -188,7 +188,7 @@ pub(crate) struct AckRecord {
 // ---------------------------------------------------------------------------
 
 /// Protocol version written into persisted mailbox envelopes.
-const PROTOCOL_VERSION: u32 = 1;
+const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion(1);
 
 /// Canonical mailbox envelope file name within one bundle directory.
 const ENVELOPE_FILE_NAME: &str = "envelope.toml";
