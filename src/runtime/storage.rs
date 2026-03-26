@@ -13,7 +13,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use super::timestamp::Timestamp;
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -179,8 +179,8 @@ impl StateFile {
 pub(crate) struct AckRecord {
     /// The acknowledged mailbox sequence number.
     pub(crate) sequence: Sequence,
-    /// Monotonic timestamp recorded when the acknowledgement was written.
-    pub(crate) acknowledged_at: String,
+    /// Timestamp recorded when the acknowledgement was written.
+    pub(crate) acknowledged_at: Timestamp,
 }
 
 // ---------------------------------------------------------------------------
@@ -519,7 +519,7 @@ impl RuntimeFs {
             changed_files: changed_files.iter().cloned().collect(),
             ran_checks: ran_checks.to_vec(),
             skipped_checks: skipped_checks.to_vec(),
-            merged_at: timestamp_now(),
+            merged_at: Timestamp::now(),
             rationale_body,
             rationale_artifacts,
         };
@@ -577,7 +577,7 @@ impl RuntimeFs {
             perspective: perspective.clone(),
             kind,
             sequence,
-            created_at: timestamp_now(),
+            created_at: Timestamp::now(),
             in_reply_to: reply.in_reply_to,
             head_commit,
         };
@@ -637,7 +637,7 @@ impl RuntimeFs {
                 direction,
                 kind: envelope.kind,
                 sequence: envelope.sequence,
-                created_at: envelope.created_at.clone(),
+                created_at: envelope.created_at,
                 acknowledged,
                 head_commit: envelope.head_commit.clone(),
                 summary: self.bundle_summary(&bundle_path, &envelope.kind),
@@ -664,7 +664,7 @@ impl RuntimeFs {
             return Err(RuntimeError::AlreadyAcknowledged);
         }
 
-        let ack = AckRecord { sequence, acknowledged_at: timestamp_now() };
+        let ack = AckRecord { sequence, acknowledged_at: Timestamp::now() };
         let mut file = OpenOptions::new().write(true).create_new(true).open(&ack_path)?;
         file.write_all(toml::to_string(&ack)?.as_bytes())?;
 
@@ -762,9 +762,3 @@ pub(super) fn validate_skip_request(
     Ok(accepted)
 }
 
-/// Return a monotonic string timestamp.
-pub(crate) fn timestamp_now() -> String {
-    let now =
-        SystemTime::now().duration_since(UNIX_EPOCH).expect("system clock is after unix epoch");
-    format!("{}.{}", now.as_secs(), now.subsec_nanos())
-}

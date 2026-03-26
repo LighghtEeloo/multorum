@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
+use super::timestamp::Timestamp;
 use super::worker_id::WorkerId;
 
 /// Monotonic per-mailbox sequence number.
@@ -132,7 +133,7 @@ pub struct BundleEnvelope {
     /// Monotonic mailbox-local sequence number.
     pub sequence: Sequence,
     /// Timestamp recorded by the publisher.
-    pub created_at: String,
+    pub created_at: Timestamp,
     /// Optional answered message sequence number.
     pub in_reply_to: Option<Sequence>,
     /// Optional canonical commit hash relevant to the message.

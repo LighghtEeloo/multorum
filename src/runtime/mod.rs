@@ -12,6 +12,7 @@ pub mod orchestrator;
 pub mod paths;
 pub(crate) mod project;
 pub mod state;
+pub mod timestamp;
 pub mod worker;
 pub mod worker_id;
 
@@ -29,5 +30,6 @@ pub use state::{
     PerspectiveForwardResult, PerspectiveSummary, PerspectiveValidation, RulebookInit,
     TranscriptView, WorkerContractView, WorkerDetail, WorkerState, WorkerStatus, WorkerSummary,
 };
+pub use timestamp::Timestamp;
 pub use worker::{FsWorkerService, WorkerService};
 pub use worker_id::{WorkerId, WorkerIdError};

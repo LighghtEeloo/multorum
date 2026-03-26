@@ -12,6 +12,7 @@ use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
 use super::mailbox::{MailboxDirection, MessageKind, Sequence};
+use super::timestamp::Timestamp;
 use super::worker_id::WorkerId;
 
 /// Worker lifecycle state as projected by Multorum.
@@ -233,7 +234,7 @@ pub struct AuditEntry {
     /// Checks skipped due to trusted evidence.
     pub skipped_checks: Vec<String>,
     /// Timestamp when the merge was recorded.
-    pub merged_at: String,
+    pub merged_at: Timestamp,
     /// Orchestrator-supplied rationale body, if any.
     pub rationale_body: Option<PathBuf>,
     /// Orchestrator-supplied rationale artifacts, if any.
@@ -322,7 +323,7 @@ pub struct MailboxMessageView {
     /// Mailbox-local sequence number.
     pub sequence: Sequence,
     /// Publisher-provided timestamp.
-    pub created_at: String,
+    pub created_at: Timestamp,
     /// Whether the message has been acknowledged.
     pub acknowledged: bool,
     /// Optional canonical commit hash attached to the message.
