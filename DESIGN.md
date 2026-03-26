@@ -293,6 +293,14 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
 - `worker delete` removes the worker entry. If the group has no remaining members, the group entry is removed.
 - `perspective forward` updates the group's base commit and recompiled boundary, and rewrites each forwarded worker's `read-set.txt` and `write-set.txt` to match.
 
+Workers also update their own entries directly:
+
+- Acknowledging a `task`, `resolve`, or `revise` inbox message transitions the worker's entry to `ACTIVE`.
+- `local report` transitions the worker's entry to `BLOCKED`.
+- `local commit` transitions the worker's entry to `COMMITTED` and records the submitted head commit.
+
+The orchestrator writes only the terminal states `MERGED` and `DISCARDED`. Once an entry reaches either terminal state, the worker must treat it as read-only.
+
 `exclusion-set.txt` is a flat projection of `state.toml`: the union of all read and write sets from groups that still carry a boundary. A pre-commit hook in the canonical workspace reads it and rejects commits that touch any listed file. Multorum regenerates it whenever `state.toml` changes. When no groups carry a boundary the file is empty.
 
 `audit/` records the decision trail for merged workers. Each entry is written atomically when `merge` succeeds and contains the worker, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The rationale is a bundle — a `body.md` and optional `artifacts/` — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. When the orchestrator supplies rationale, Multorum writes it as a bundle subdirectory alongside the TOML record. Audit entries are append-only; Multorum never modifies or deletes them.
@@ -358,7 +366,7 @@ create ─────────► ACTIVE ──────►┼───�
 - `MERGED`: the commit passed the merge pipeline and was integrated
 - `DISCARDED`: the worker was finalized without merge
 
-The `resolve` and `revise` arcs in the diagram are labeled by the inbox message kind. The orchestrator publishes the message; the state transition fires when the worker acknowledges it via `local ack`.
+All non-terminal state transitions belong to the worker: it writes `BLOCKED` when it issues `local report`, `COMMITTED` when it issues `local commit`, and `ACTIVE` when it `local ack` a `task`, `resolve`, or `revise` inbox message. The orchestrator's part in the resolve and revise arcs is to publish the inbox message; the transition fires only when the worker acknowledges it. The orchestrator writes a worker's state only to finalize: `MERGED` via `worker merge` and `DISCARDED` via `worker discard`. A worker must not update its entry once finalized.
 
 The orchestrator may also issue `hint` while a worker is `ACTIVE`. A hint is advisory rather than transitional: it carries new information or asks the worker to take a follow-up action such as reporting a blocker, but publishing or acknowledging the hint does not change lifecycle state on its own.
 
