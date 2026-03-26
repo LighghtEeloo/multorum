@@ -98,7 +98,7 @@ fn rulebook_init_creates_default_committed_files() {
     assert_eq!(fs::read_to_string(&init.rulebook_path).unwrap(), Rulebook::default_template());
     assert_eq!(fs::read_to_string(&init.gitignore_path).unwrap(), "orchestrator/\ntr/\n");
     assert!(init.multorum_root.join("orchestrator").is_dir());
-    assert!(init.multorum_root.join("orchestrator/audit").is_dir());
+    assert!(init.multorum_root.join("audit").is_dir());
     assert!(init.multorum_root.join("orchestrator/state.toml").is_file());
     assert!(init.multorum_root.join("orchestrator/exclusion-set.txt").is_file());
     assert_eq!(fs::read_to_string(init.multorum_root.join("orchestrator/state.toml")).unwrap(), "");
@@ -134,7 +134,7 @@ fn rulebook_init_repairs_runtime_surface_without_overwriting_existing_rulebook()
         fs::read_to_string(dir.path().join(".multorum/.gitignore")).unwrap(),
         "orchestrator/\ntr/\n"
     );
-    assert!(dir.path().join(".multorum/orchestrator/audit").is_dir());
+    assert!(dir.path().join(".multorum/audit").is_dir());
     assert_eq!(
         fs::read_to_string(dir.path().join(".multorum/orchestrator/state.toml")).unwrap(),
         ""
@@ -942,7 +942,7 @@ fn merge_writes_audit_entry() {
         .path()
         .canonicalize()
         .unwrap()
-        .join(format!(".multorum/orchestrator/audit/{}.toml", result.worker_id.as_str()));
+        .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()));
     assert!(audit_toml_path.exists(), "audit entry TOML missing");
     let entry: toml::Value =
         toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
@@ -957,7 +957,7 @@ fn merge_writes_audit_entry() {
         .path()
         .canonicalize()
         .unwrap()
-        .join(format!(".multorum/orchestrator/audit/{}/body.md", result.worker_id.as_str()));
+        .join(format!(".multorum/audit/{}/body.md", result.worker_id.as_str()));
     assert!(body_path.exists(), "audit rationale body missing");
     assert!(fs::read_to_string(&body_path).unwrap().contains("improved logic"));
 }
@@ -981,7 +981,7 @@ fn merge_writes_audit_entry_without_rationale() {
         .path()
         .canonicalize()
         .unwrap()
-        .join(format!(".multorum/orchestrator/audit/{}.toml", result.worker_id.as_str()));
+        .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()));
     assert!(audit_toml_path.exists(), "audit entry TOML missing");
     let entry: toml::Value =
         toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
@@ -1029,7 +1029,7 @@ fn merge_rejects_invalid_audit_payload_without_integrating_the_worker_commit() {
     assert!(rationale_body.exists(), "invalid audit payload must not be consumed");
     assert!(
         !dir.path()
-            .join(format!(".multorum/orchestrator/audit/{}.toml", result.worker_id.as_str()))
+            .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()))
             .exists(),
         "audit entry must not be visible after merge rejection"
     );
@@ -1079,7 +1079,7 @@ fn merge_rejects_duplicate_audit_artifact_names_without_integrating_the_worker_c
     assert!(artifact_b.exists(), "duplicate artifact validation must not consume sources");
     assert!(
         !dir.path()
-            .join(format!(".multorum/orchestrator/audit/{}.toml", result.worker_id.as_str()))
+            .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()))
             .exists(),
         "audit entry must not be visible after merge rejection"
     );

@@ -52,6 +52,19 @@ impl MultorumPaths {
         OrchestratorPaths::new(self.multorum_root().join("orchestrator"))
     }
 
+    /// Audit log directory.
+    ///
+    /// Audit entries are append-only project history.
+    /// Lives at `.multorum/audit/` and is tracked by version control.
+    pub fn audit(&self) -> PathBuf {
+        self.multorum_root().join("audit")
+    }
+
+    /// Audit entry for one merged worker.
+    pub fn audit_entry(&self, worker_id: &WorkerId) -> PathBuf {
+        self.audit().join(format!("{}.toml", worker_id.as_str()))
+    }
+
     /// Path helper for the managed worker worktree.
     ///
     /// Note: The on-disk directory is abbreviated to `tr/` because the
@@ -92,16 +105,6 @@ impl OrchestratorPaths {
     /// per-worker state files.
     pub fn state(&self) -> PathBuf {
         self.root.join("state.toml")
-    }
-
-    /// Audit log directory.
-    pub fn audit(&self) -> PathBuf {
-        self.root.join("audit")
-    }
-
-    /// Audit entry for one merged worker.
-    pub fn audit_entry(&self, worker_id: &WorkerId) -> PathBuf {
-        self.audit().join(format!("{}.toml", worker_id.as_str()))
     }
 
     /// Materialized orchestrator exclusion set.

@@ -247,6 +247,7 @@ A Multorum project adds a `.multorum/` directory at the repository root:
   .multorum/
     .gitignore          # committed - ignores runtime directories
     rulebook.toml       # committed - file sets, perspectives, check pipeline
+    audit/              # committed - append-only merge audit trail
     orchestrator/       # gitignored - orchestrator-local control plane
     tr/                 # gitignored - managed worker worktrees
   src/
@@ -254,7 +255,7 @@ A Multorum project adds a `.multorum/` directory at the repository root:
   ...
 ```
 
-The project commits only `.multorum/rulebook.toml` and `.multorum/.gitignore`. Everything else under `.multorum/` is runtime state that does not travel with the repository.
+The project commits `.multorum/rulebook.toml`, `.multorum/.gitignore`, and the contents of `.multorum/audit/`. Everything else under `.multorum/` is runtime state that does not travel with the repository.
 
 `.multorum/.gitignore` contains:
 
@@ -275,11 +276,6 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
 .multorum/orchestrator/
   state.toml             # bidding groups, workers, and compiled boundaries
   exclusion-set.txt      # materialized orchestrator exclusion set
-  audit/                 # merge audit trail
-    <worker>.toml     # per-worker TOML metadata record
-    <worker>/         # optional rationale bundle
-      body.md
-      artifacts/
 ```
 
 `state.toml` is the orchestrator's single runtime state file. It records every bidding group and every worker within it. Each group entry carries the perspective name, base commit, and compiled boundary (read and write sets as concrete file lists). Each worker entry within a group carries the worker, lifecycle state, and submitted head commit where applicable.
@@ -303,7 +299,21 @@ The orchestrator writes only the terminal states `MERGED` and `DISCARDED`. Once 
 
 `exclusion-set.txt` is a flat projection of `state.toml`: the union of all read and write sets from groups that still carry a boundary. A pre-commit hook in the canonical workspace reads it and rejects commits that touch any listed file. Multorum regenerates it whenever `state.toml` changes. When no groups carry a boundary the file is empty.
 
-`audit/` records the decision trail for merged workers. Each entry is written atomically when `merge` succeeds and contains the worker, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The rationale is a bundle — a `body.md` and optional `artifacts/` — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. When the orchestrator supplies rationale, Multorum writes it as a bundle subdirectory alongside the TOML record. Audit entries are append-only; Multorum never modifies or deletes them.
+### Audit Trail
+
+The merge audit trail lives under `.multorum/audit/`, a sibling of `orchestrator/` and `tr/`:
+
+```text
+.multorum/audit/
+  <worker>.toml        # per-worker TOML metadata record
+  <worker>/            # optional rationale bundle
+    body.md
+    artifacts/
+```
+
+Audit entries are committed project history. They sit outside the `orchestrator/` subtree and travel with the repository.
+
+Each entry is written atomically when `merge` succeeds and contains the worker, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The rationale is a bundle — a `body.md` and optional `artifacts/` — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. When the orchestrator supplies rationale, Multorum writes it as a bundle subdirectory alongside the TOML record. Audit entries are append-only; Multorum never modifies or deletes them.
 
 ### Git Worktrees
 
@@ -470,7 +480,7 @@ Workers may submit evidence with their reports or commits to support the case fo
 
 ### Audit
 
-After a successful merge, Multorum writes an audit entry to `.multorum/orchestrator/audit/<worker>.toml`. The entry records the worker, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is a bundle attached to the `merge` command via `--body`, `--body-path`, and `--artifact` flags. When supplied, Multorum writes the rationale as a bundle directory (see [Bundles](#bundles)) alongside the TOML record under the same audit directory.
+After a successful merge, Multorum writes an audit entry to `.multorum/audit/<worker>.toml`. The entry records the worker, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is a bundle attached to the `merge` command via `--body`, `--body-path`, and `--artifact` flags. When supplied, Multorum writes the rationale as a bundle directory (see [Bundles](#bundles)) alongside the TOML record under the same audit directory.
 
 ---
 

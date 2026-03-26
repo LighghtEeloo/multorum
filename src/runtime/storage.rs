@@ -426,7 +426,7 @@ impl RuntimeFs {
 
         fs::create_dir_all(&multorum_root)?;
         fs::create_dir_all(orchestrator_paths.root())?;
-        fs::create_dir_all(orchestrator_paths.audit())?;
+        fs::create_dir_all(self.paths.audit())?;
         fs::create_dir_all(multorum_root.join("tr"))?;
 
         self.ensure_multorum_gitignore()?;
@@ -633,8 +633,8 @@ impl RuntimeFs {
     ) -> Result<StagedMergeArtifacts, RuntimeError> {
         payload.validate()?;
 
+        fs::create_dir_all(self.paths.audit())?;
         let orchestrator_paths = self.paths.orchestrator();
-        fs::create_dir_all(orchestrator_paths.audit())?;
         let staging_nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock is after unix epoch")
@@ -653,7 +653,7 @@ impl RuntimeFs {
         let exclusion = Self::collect_exclusion_set(updated_state);
         Self::write_path_list(&staged_exclusion_path, &exclusion)?;
 
-        let final_bundle_root = orchestrator_paths.audit().join(worker.worker_id.as_str());
+        let final_bundle_root = self.paths.audit().join(worker.worker_id.as_str());
         let mut rationale_body = None;
         let mut rationale_artifacts = Vec::new();
         let mut promotions = Vec::new();
@@ -695,7 +695,7 @@ impl RuntimeFs {
 
         promotions.push(PreparedPromotion::new(
             staged_audit_entry,
-            orchestrator_paths.audit_entry(&worker.worker_id),
+            self.paths.audit_entry(&worker.worker_id),
             &staging_root,
             "backup-audit-entry.toml",
         ));
