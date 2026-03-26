@@ -9,8 +9,8 @@ pub enum McpErrorCode {
     UnknownPerspective,
     /// Unknown worker identifier.
     UnknownWorker,
-    /// Requested worker id is already allocated.
-    WorkerIdExists,
+    /// Requested worker is already allocated.
+    WorkerExists,
     /// Invalid state transition for the requested operation.
     InvalidState,
     /// Message bundle not found.
@@ -39,7 +39,7 @@ impl McpErrorCode {
         match self {
             | Self::UnknownPerspective => "unknown_perspective",
             | Self::UnknownWorker => "unknown_worker",
-            | Self::WorkerIdExists => "worker_id_exists",
+            | Self::WorkerExists => "worker_exists",
             | Self::InvalidState => "invalid_state",
             | Self::MessageNotFound => "message_not_found",
             | Self::AlreadyAcknowledged => "already_acknowledged",
@@ -73,7 +73,7 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::RulebookExists(_) => McpErrorCode::InvalidState,
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,
             | RuntimeError::UnknownWorker(_) => McpErrorCode::UnknownWorker,
-            | RuntimeError::WorkerIdExists(_) => McpErrorCode::WorkerIdExists,
+            | RuntimeError::WorkerExists(_) => McpErrorCode::WorkerExists,
             | RuntimeError::ExistingWorkerWorkspace { .. } => McpErrorCode::InvalidState,
             | RuntimeError::InvalidState { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,

@@ -297,7 +297,7 @@ fn create_worker_rejects_duplicate_explicit_worker_id() {
     let error = orchestrator
         .create_worker(CreateWorker::new(perspective()).with_worker_id(worker_id.clone()))
         .unwrap_err();
-    assert!(matches!(error, RuntimeError::WorkerIdExists(actual) if actual == worker_id));
+    assert!(matches!(error, RuntimeError::WorkerExists(actual) if actual == worker_id));
 }
 
 #[test]
@@ -541,7 +541,7 @@ fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() 
         .as_array()
         .unwrap()
         .iter()
-        .find(|w| w["worker_id"].as_str() == Some(provision.worker_id.as_str()))
+        .find(|w| w["worker"].as_str() == Some(provision.worker_id.as_str()))
         .unwrap();
     assert_eq!(worker_entry["submitted_head_commit"].as_str(), Some(head_commit.as_str()));
 
@@ -878,7 +878,7 @@ fn merge_writes_audit_entry() {
     assert!(audit_toml_path.exists(), "audit entry TOML missing");
     let entry: toml::Value =
         toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
-    assert_eq!(entry["worker_id"].as_str().unwrap(), result.worker_id.as_str());
+    assert_eq!(entry["worker"].as_str().unwrap(), result.worker_id.as_str());
     assert_eq!(entry["perspective"].as_str().unwrap(), "AuthImplementor");
     let changed = entry["changed_files"].as_array().unwrap();
     assert_eq!(changed.len(), 1);

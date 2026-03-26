@@ -61,9 +61,9 @@ pub enum RuntimeError {
     #[error("unknown worker: {0}")]
     UnknownWorker(String),
 
-    /// The requested worker id is already held by a live worker.
-    #[error("worker id already belongs to a live worker: {0}")]
-    WorkerIdExists(WorkerId),
+    /// The requested worker is already held by a live worker.
+    #[error("worker already belongs to a live worker: {0}")]
+    WorkerExists(WorkerId),
 
     /// A finalized worker still has a preserved workspace at the
     /// managed path for the requested id.

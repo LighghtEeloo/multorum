@@ -147,11 +147,11 @@ fn orchestrator_create_worker_with_explicit_id() {
     let result = handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "custom-1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "custom-1"})),
         )
         .unwrap();
     assert_tool_success(&result);
-    assert_eq!(tool_json(&result)["worker_id"], "custom-1");
+    assert_eq!(tool_json(&result)["worker"], "custom-1");
 }
 
 #[test]
@@ -162,15 +162,15 @@ fn orchestrator_get_worker() {
     let create = handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
     assert_tool_success(&create);
 
-    let result = handler.dispatch("get_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
+    let result = handler.dispatch("get_worker", json_args(json!({"worker": "w1"}))).unwrap();
     assert_tool_success(&result);
     let detail = tool_json(&result);
-    assert_eq!(detail["worker_id"], "w1");
+    assert_eq!(detail["worker"], "w1");
     assert_eq!(detail["state"], "ACTIVE");
 }
 
@@ -182,7 +182,7 @@ fn orchestrator_read_worker_outbox() {
     let create = handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
@@ -199,7 +199,7 @@ fn orchestrator_read_worker_outbox() {
         .unwrap();
 
     let result =
-        handler.dispatch("read_worker_outbox", json_args(json!({"worker_id": "w1"}))).unwrap();
+        handler.dispatch("read_worker_outbox", json_args(json!({"worker": "w1"}))).unwrap();
     assert_tool_success(&result);
     let outbox = tool_json(&result);
     let messages = outbox.as_array().unwrap();
@@ -215,7 +215,7 @@ fn orchestrator_ack_worker_outbox_message() {
     let create = handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
@@ -232,13 +232,13 @@ fn orchestrator_ack_worker_outbox_message() {
         .unwrap();
 
     let outbox =
-        handler.dispatch("read_worker_outbox", json_args(json!({"worker_id": "w1"}))).unwrap();
+        handler.dispatch("read_worker_outbox", json_args(json!({"worker": "w1"}))).unwrap();
     let sequence = tool_json(&outbox).as_array().unwrap()[0]["sequence"].as_u64().unwrap();
 
     let result = handler
         .dispatch(
             "ack_worker_outbox_message",
-            json_args(json!({"worker_id": "w1", "sequence": sequence})),
+            json_args(json!({"worker": "w1", "sequence": sequence})),
         )
         .unwrap();
     assert_tool_success(&result);
@@ -266,11 +266,11 @@ fn orchestrator_discard_worker() {
     handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
 
-    let result = handler.dispatch("discard_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
+    let result = handler.dispatch("discard_worker", json_args(json!({"worker": "w1"}))).unwrap();
     assert_tool_success(&result);
 }
 
@@ -282,12 +282,12 @@ fn orchestrator_delete_worker_after_discard() {
     handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
-    handler.dispatch("discard_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
+    handler.dispatch("discard_worker", json_args(json!({"worker": "w1"}))).unwrap();
 
-    let result = handler.dispatch("delete_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
+    let result = handler.dispatch("delete_worker", json_args(json!({"worker": "w1"}))).unwrap();
     assert_tool_success(&result);
     let json = tool_json(&result);
     assert!(json["deleted_workspace"].as_bool().unwrap());
@@ -301,7 +301,7 @@ fn orchestrator_resolve_worker() {
     let create = handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
@@ -323,7 +323,7 @@ fn orchestrator_resolve_worker() {
         .dispatch(
             "resolve_worker",
             json_args(json!({
-                "worker_id": "w1",
+                "worker": "w1",
                 "body": resolve_body.to_str().unwrap(),
             })),
         )
@@ -340,7 +340,7 @@ fn orchestrator_revise_worker() {
     let create = handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
@@ -358,7 +358,7 @@ fn orchestrator_revise_worker() {
         .dispatch(
             "revise_worker",
             json_args(json!({
-                "worker_id": "w1",
+                "worker": "w1",
                 "body": revise_body.to_str().unwrap(),
             })),
         )
@@ -375,7 +375,7 @@ fn orchestrator_merge_worker() {
     let create = handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
@@ -387,7 +387,7 @@ fn orchestrator_merge_worker() {
     let head = git(Path::new(&worktree), &["rev-parse", "HEAD"]);
     worker_svc.send_commit(head, BundlePayload::default()).unwrap();
 
-    let result = handler.dispatch("merge_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
+    let result = handler.dispatch("merge_worker", json_args(json!({"worker": "w1"}))).unwrap();
     assert_tool_success(&result);
     let merge = tool_json(&result);
     assert_eq!(merge["state"], "MERGED");
@@ -418,7 +418,7 @@ fn orchestrator_nonexistent_worker_returns_tool_error() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
     let result =
-        handler.dispatch("get_worker", json_args(json!({"worker_id": "does-not-exist"}))).unwrap();
+        handler.dispatch("get_worker", json_args(json!({"worker": "does-not-exist"}))).unwrap();
     assert_tool_error(&result);
     let err = tool_json(&result);
     assert_eq!(err["code"], "unknown_worker");
@@ -441,11 +441,11 @@ fn orchestrator_delete_active_worker_returns_tool_error() {
     handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
 
-    let result = handler.dispatch("delete_worker", json_args(json!({"worker_id": "w1"}))).unwrap();
+    let result = handler.dispatch("delete_worker", json_args(json!({"worker": "w1"}))).unwrap();
     assert_tool_error(&result);
     let err = tool_json(&result);
     assert_eq!(err["code"], "invalid_state");
@@ -490,13 +490,13 @@ fn orchestrator_resource_worker_detail() {
     handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
 
     let result = handler.read("multorum://orchestrator/workers/w1").unwrap();
     let detail = resource_json(&result);
-    assert_eq!(detail["worker_id"], "w1");
+    assert_eq!(detail["worker"], "w1");
     assert_eq!(detail["state"], "ACTIVE");
 }
 
@@ -508,7 +508,7 @@ fn orchestrator_resource_unimplemented_returns_error() {
     handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
 
@@ -527,7 +527,7 @@ fn orchestrator_resource_worker_outbox() {
     let create = handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
@@ -923,7 +923,7 @@ fn full_workflow_create_commit_merge_via_mcp() {
     let create = orch
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "mcp-w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "mcp-w1"})),
         )
         .unwrap();
     assert_tool_success(&create);
@@ -950,7 +950,7 @@ fn full_workflow_create_commit_merge_via_mcp() {
     let status = worker.dispatch("get_status", empty_args()).unwrap();
     assert_eq!(tool_json(&status)["state"], "COMMITTED");
 
-    let merge = orch.dispatch("merge_worker", json_args(json!({"worker_id": "mcp-w1"}))).unwrap();
+    let merge = orch.dispatch("merge_worker", json_args(json!({"worker": "mcp-w1"}))).unwrap();
     assert_tool_success(&merge);
     assert_eq!(tool_json(&merge)["state"], "MERGED");
 

@@ -24,7 +24,7 @@ What should the orchestrator do?
 - Those canonical changes must be committed before activation.
 - The orchestrator must run `multorum rulebook install`.
 - The orchestrator must run `multorum perspective forward <perspective>` for the whole blocked bidding group, not just one worker.
-- The orchestrator must then send `multorum worker resolve <worker-id>`.
+- The orchestrator must then send `multorum worker resolve <worker>`.
 - The answer should not suggest direct ad hoc file creation inside the blocked worker worktree.
 
 ## 2. Worker Needs To Edit A File Outside Its Write Set
@@ -83,8 +83,8 @@ What is the difference between `discard` and `delete`, and in what order should 
 
 **A correct answer should include**
 
-- `multorum worker discard <worker-id>` finalizes the worker without merging and preserves the workspace.
-- `multorum worker delete <worker-id>` removes the finalized workspace and worker state file.
+- `multorum worker discard <worker>` finalizes the worker without merging and preserves the workspace.
+- `multorum worker delete <worker>` removes the finalized workspace and worker state file.
 - Delete is allowed only after the worker is finalized as `MERGED` or `DISCARDED`.
 - The answer should distinguish lifecycle finalization from filesystem cleanup.
 
@@ -128,7 +128,7 @@ What command should the orchestrator use, and what state transition matters next
 
 **A correct answer should include**
 
-- The orchestrator should send `multorum worker revise <worker-id>`.
+- The orchestrator should send `multorum worker revise <worker>`.
 - The worker becomes `ACTIVE` again when it acknowledges that inbox message.
 - The answer should not use `resolve`, which is for `BLOCKED` workers rather than `COMMITTED` ones.
 
@@ -197,14 +197,14 @@ Is that correct?
 
 **Scenario**
 
-The orchestrator wants to create a new worker using an explicit worker id that previously belonged to a finalized worker.
+The orchestrator wants to create a new worker using an explicit worker that previously belonged to a finalized worker.
 
 What should the skill know about that reuse?
 
 **A correct answer should include**
 
-- Reuse is only valid for a finalized worker id.
-- The orchestrator should use `multorum worker create <perspective> --worker-id <worker-id> --overwriting-worktree` when intentionally replacing the old finalized workspace.
+- Reuse is only valid for a finalized worker.
+- The orchestrator should use `multorum worker create <perspective> --worker <worker> --overwriting-worktree` when intentionally replacing the old finalized workspace.
 - The answer should not treat old finalized state as if it automatically stays attached to the new worker.
 
 ## 14. Minimal Command-Sequence Challenge
@@ -220,5 +220,5 @@ Write the minimum safe sequence of orchestrator actions.
 - Commit the canonical workspace and rulebook changes that add the file and assign it correctly.
 - Run `multorum rulebook install`.
 - Run `multorum perspective forward AuthImplementor`.
-- Run `multorum worker resolve <worker-id>`.
+- Run `multorum worker resolve <worker>`.
 - The sequence should not omit the commit, install, or forward steps.

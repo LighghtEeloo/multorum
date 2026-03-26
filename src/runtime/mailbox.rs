@@ -60,6 +60,7 @@ impl MessageKind {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MessageRef {
     /// Worker that owns the mailbox where the bundle was published.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Kind of published bundle.
     pub kind: MessageKind,
@@ -125,6 +126,7 @@ pub struct BundleEnvelope {
     /// Mailbox protocol version, serialized as `"multorum/v1"`.
     pub protocol: ProtocolVersion,
     /// Active worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,

@@ -31,7 +31,7 @@ async fn bidding_group_sibling_discarded_on_merge() {
     let create_a = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "bg-a",
+            "worker": "bg-a",
         }))))
         .await
         .unwrap();
@@ -41,7 +41,7 @@ async fn bidding_group_sibling_discarded_on_merge() {
     let create_b = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "bg-b",
+            "worker": "bg-b",
         }))))
         .await
         .unwrap();
@@ -69,7 +69,7 @@ async fn bidding_group_sibling_discarded_on_merge() {
     let merge = orch
         .call_tool(
             CallToolRequestParams::new("merge_worker")
-                .with_arguments(json_args(json!({"worker_id": "bg-a"}))),
+                .with_arguments(json_args(json!({"worker": "bg-a"}))),
         )
         .await
         .unwrap();
@@ -80,7 +80,7 @@ async fn bidding_group_sibling_discarded_on_merge() {
     let detail_b = orch
         .call_tool(
             CallToolRequestParams::new("get_worker")
-                .with_arguments(json_args(json!({"worker_id": "bg-b"}))),
+                .with_arguments(json_args(json!({"worker": "bg-b"}))),
         )
         .await
         .unwrap();
@@ -111,7 +111,7 @@ async fn different_perspectives_independent_on_merge() {
     let create_auth = orch
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "auth-w"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "auth-w"})),
         )
         .unwrap();
     assert_tool_success(&create_auth);
@@ -120,7 +120,7 @@ async fn different_perspectives_independent_on_merge() {
     let create_data = orch
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "DataImplementor", "worker_id": "data-w"})),
+            json_args(json!({"perspective": "DataImplementor", "worker": "data-w"})),
         )
         .unwrap();
     assert_tool_success(&create_data);
@@ -139,13 +139,13 @@ async fn different_perspectives_independent_on_merge() {
 
     // Merge auth worker.
     let merge_auth =
-        orch.dispatch("merge_worker", json_args(json!({"worker_id": "auth-w"}))).unwrap();
+        orch.dispatch("merge_worker", json_args(json!({"worker": "auth-w"}))).unwrap();
     assert_tool_success(&merge_auth);
     assert_eq!(tool_json(&merge_auth)["state"], "MERGED");
 
     // Data worker should still be ACTIVE (different perspective).
     let detail_data =
-        orch.dispatch("get_worker", json_args(json!({"worker_id": "data-w"}))).unwrap();
+        orch.dispatch("get_worker", json_args(json!({"worker": "data-w"}))).unwrap();
     assert_tool_success(&detail_data);
     assert_eq!(tool_json(&detail_data)["state"], "ACTIVE");
 
@@ -161,7 +161,7 @@ async fn different_perspectives_independent_on_merge() {
     assert_tool_success(&commit_data);
 
     let merge_data =
-        orch.dispatch("merge_worker", json_args(json!({"worker_id": "data-w"}))).unwrap();
+        orch.dispatch("merge_worker", json_args(json!({"worker": "data-w"}))).unwrap();
     assert_tool_success(&merge_data);
     assert_eq!(tool_json(&merge_data)["state"], "MERGED");
 
@@ -189,7 +189,7 @@ async fn blocker_report_resolve_then_commit() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "block-w",
+            "worker": "block-w",
         }))))
         .await
         .unwrap();
@@ -220,7 +220,7 @@ async fn blocker_report_resolve_then_commit() {
     let outbox = orch
         .call_tool(
             CallToolRequestParams::new("read_worker_outbox")
-                .with_arguments(json_args(json!({"worker_id": "block-w"}))),
+                .with_arguments(json_args(json!({"worker": "block-w"}))),
         )
         .await
         .unwrap();
@@ -235,7 +235,7 @@ async fn blocker_report_resolve_then_commit() {
     let ack = orch
         .call_tool(CallToolRequestParams::new("ack_worker_outbox_message").with_arguments(
             json_args(json!({
-                "worker_id": "block-w",
+                "worker": "block-w",
                 "sequence": report_seq,
             })),
         ))
@@ -248,7 +248,7 @@ async fn blocker_report_resolve_then_commit() {
     fs::write(&resolve_body, "Use the REST API documented at /docs/api.md.\n").unwrap();
     let resolve = orch
         .call_tool(CallToolRequestParams::new("resolve_worker").with_arguments(json_args(json!({
-            "worker_id": "block-w",
+            "worker": "block-w",
             "body": resolve_body.to_str().unwrap(),
         }))))
         .await
@@ -297,7 +297,7 @@ async fn blocker_report_resolve_then_commit() {
     let merge = orch
         .call_tool(
             CallToolRequestParams::new("merge_worker")
-                .with_arguments(json_args(json!({"worker_id": "block-w"}))),
+                .with_arguments(json_args(json!({"worker": "block-w"}))),
         )
         .await
         .unwrap();
@@ -320,7 +320,7 @@ async fn revise_cycle_resubmit_and_merge() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "rev-w",
+            "worker": "rev-w",
         }))))
         .await
         .unwrap();
@@ -354,7 +354,7 @@ async fn revise_cycle_resubmit_and_merge() {
     fs::write(&revise_body, "Return value should be 42.\n").unwrap();
     let revise = orch
         .call_tool(CallToolRequestParams::new("revise_worker").with_arguments(json_args(json!({
-            "worker_id": "rev-w",
+            "worker": "rev-w",
             "body": revise_body.to_str().unwrap(),
         }))))
         .await
@@ -402,7 +402,7 @@ async fn revise_cycle_resubmit_and_merge() {
     let merge = orch
         .call_tool(
             CallToolRequestParams::new("merge_worker")
-                .with_arguments(json_args(json!({"worker_id": "rev-w"}))),
+                .with_arguments(json_args(json!({"worker": "rev-w"}))),
         )
         .await
         .unwrap();
@@ -429,7 +429,7 @@ async fn merge_active_worker_rejected() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "st-w",
+            "worker": "st-w",
         }))))
         .await
         .unwrap();
@@ -438,7 +438,7 @@ async fn merge_active_worker_rejected() {
     let merge = orch
         .call_tool(
             CallToolRequestParams::new("merge_worker")
-                .with_arguments(json_args(json!({"worker_id": "st-w"}))),
+                .with_arguments(json_args(json!({"worker": "st-w"}))),
         )
         .await
         .unwrap();
@@ -455,7 +455,7 @@ async fn double_commit_rejected() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "dc-w",
+            "worker": "dc-w",
         }))))
         .await
         .unwrap();
@@ -506,7 +506,7 @@ async fn report_from_committed_worker_rejected() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "rpt-w",
+            "worker": "rpt-w",
         }))))
         .await
         .unwrap();
@@ -553,7 +553,7 @@ async fn resolve_active_worker_rejected() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "res-w",
+            "worker": "res-w",
         }))))
         .await
         .unwrap();
@@ -563,7 +563,7 @@ async fn resolve_active_worker_rejected() {
     fs::write(&resolve_body, "You should be blocked first.\n").unwrap();
     let resolve = orch
         .call_tool(CallToolRequestParams::new("resolve_worker").with_arguments(json_args(json!({
-            "worker_id": "res-w",
+            "worker": "res-w",
             "body": resolve_body.to_str().unwrap(),
         }))))
         .await
@@ -581,7 +581,7 @@ async fn revise_active_worker_rejected() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "reva-w",
+            "worker": "reva-w",
         }))))
         .await
         .unwrap();
@@ -591,7 +591,7 @@ async fn revise_active_worker_rejected() {
     fs::write(&revise_body, "Please redo.\n").unwrap();
     let revise = orch
         .call_tool(CallToolRequestParams::new("revise_worker").with_arguments(json_args(json!({
-            "worker_id": "reva-w",
+            "worker": "reva-w",
             "body": revise_body.to_str().unwrap(),
         }))))
         .await
@@ -609,7 +609,7 @@ async fn delete_active_worker_rejected() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "del-w",
+            "worker": "del-w",
         }))))
         .await
         .unwrap();
@@ -618,7 +618,7 @@ async fn delete_active_worker_rejected() {
     let delete = orch
         .call_tool(
             CallToolRequestParams::new("delete_worker")
-                .with_arguments(json_args(json!({"worker_id": "del-w"}))),
+                .with_arguments(json_args(json!({"worker": "del-w"}))),
         )
         .await
         .unwrap();
@@ -640,7 +640,7 @@ async fn write_set_violation_on_merge() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "ws-w",
+            "worker": "ws-w",
         }))))
         .await
         .unwrap();
@@ -672,7 +672,7 @@ async fn write_set_violation_on_merge() {
     let merge = orch
         .call_tool(
             CallToolRequestParams::new("merge_worker")
-                .with_arguments(json_args(json!({"worker_id": "ws-w"}))),
+                .with_arguments(json_args(json!({"worker": "ws-w"}))),
         )
         .await
         .unwrap();
@@ -693,7 +693,7 @@ async fn write_set_respected_merge_succeeds() {
     let create = orch
         .call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(json!({
             "perspective": "AuthImplementor",
-            "worker_id": "ws-ok",
+            "worker": "ws-ok",
         }))))
         .await
         .unwrap();
@@ -721,7 +721,7 @@ async fn write_set_respected_merge_succeeds() {
     let merge = orch
         .call_tool(
             CallToolRequestParams::new("merge_worker")
-                .with_arguments(json_args(json!({"worker_id": "ws-ok"}))),
+                .with_arguments(json_args(json!({"worker": "ws-ok"}))),
         )
         .await
         .unwrap();
@@ -788,7 +788,7 @@ async fn check_pipeline_failure_blocks_merge() {
     let create = orch
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "ck-w"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "ck-w"})),
         )
         .unwrap();
     assert_tool_success(&create);
@@ -805,7 +805,7 @@ async fn check_pipeline_failure_blocks_merge() {
     assert_tool_success(&commit);
 
     // Merge without skipping -- should fail.
-    let merge = orch.dispatch("merge_worker", json_args(json!({"worker_id": "ck-w"}))).unwrap();
+    let merge = orch.dispatch("merge_worker", json_args(json!({"worker": "ck-w"}))).unwrap();
     assert_tool_error_code(&merge, "check_failed");
 }
 
@@ -861,7 +861,7 @@ async fn check_pipeline_skip_succeeds() {
     let create = orch
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "sk-w"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "sk-w"})),
         )
         .unwrap();
     assert_tool_success(&create);
@@ -879,7 +879,7 @@ async fn check_pipeline_skip_succeeds() {
 
     // Merge with skip_checks = ["lint"] -- should succeed.
     let merge = orch
-        .dispatch("merge_worker", json_args(json!({"worker_id": "sk-w", "skip_checks": ["lint"]})))
+        .dispatch("merge_worker", json_args(json!({"worker": "sk-w", "skip_checks": ["lint"]})))
         .unwrap();
     assert_tool_success(&merge);
     let merge_json = tool_json(&merge);
@@ -903,7 +903,7 @@ async fn skip_non_skippable_check_rejected() {
     let create = orch
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "ns-w"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "ns-w"})),
         )
         .unwrap();
     assert_tool_success(&create);
@@ -921,7 +921,7 @@ async fn skip_non_skippable_check_rejected() {
 
     // "build" has policy=always in the multi-perspective fixture.
     let merge = orch
-        .dispatch("merge_worker", json_args(json!({"worker_id": "ns-w", "skip_checks": ["build"]})))
+        .dispatch("merge_worker", json_args(json!({"worker": "ns-w", "skip_checks": ["build"]})))
         .unwrap();
     assert_tool_error_code(&merge, "check_failed");
     let err_text = tool_text(&merge);
@@ -941,7 +941,7 @@ async fn check_pipeline_passing_reports_ran_checks() {
     let create = orch
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "rc-w"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "rc-w"})),
         )
         .unwrap();
     assert_tool_success(&create);
@@ -958,7 +958,7 @@ async fn check_pipeline_passing_reports_ran_checks() {
     assert_tool_success(&commit);
 
     // Both lint and build are `true` in the multi-perspective fixture.
-    let merge = orch.dispatch("merge_worker", json_args(json!({"worker_id": "rc-w"}))).unwrap();
+    let merge = orch.dispatch("merge_worker", json_args(json!({"worker": "rc-w"}))).unwrap();
     assert_tool_success(&merge);
     let merge_json = tool_json(&merge);
     assert_eq!(merge_json["state"], "MERGED");

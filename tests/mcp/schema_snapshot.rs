@@ -69,20 +69,20 @@ fn orchestrator_tool_input_schemas_stable() {
 
     // get_worker
     let (_, inputs) = schemas.iter().find(|(n, _)| *n == "get_worker").unwrap();
-    assert_eq!(inputs, &[("worker_id", ToolInputType::String, true)]);
+    assert_eq!(inputs, &[("worker", ToolInputType::String, true)]);
 
     // read_worker_outbox
     let (_, inputs) = schemas.iter().find(|(n, _)| *n == "read_worker_outbox").unwrap();
     assert_eq!(
         inputs,
-        &[("worker_id", ToolInputType::String, true), ("after", ToolInputType::Integer, false),]
+        &[("worker", ToolInputType::String, true), ("after", ToolInputType::Integer, false),]
     );
 
     // ack_worker_outbox_message
     let (_, inputs) = schemas.iter().find(|(n, _)| *n == "ack_worker_outbox_message").unwrap();
     assert_eq!(
         inputs,
-        &[("worker_id", ToolInputType::String, true), ("sequence", ToolInputType::Integer, true),]
+        &[("worker", ToolInputType::String, true), ("sequence", ToolInputType::Integer, true),]
     );
 
     // create_worker
@@ -91,7 +91,7 @@ fn orchestrator_tool_input_schemas_stable() {
         inputs,
         &[
             ("perspective", ToolInputType::String, true),
-            ("worker_id", ToolInputType::String, false),
+            ("worker", ToolInputType::String, false),
             ("overwriting_worktree", ToolInputType::Boolean, false),
             ("body_text", ToolInputType::String, false),
             ("body", ToolInputType::String, false),
@@ -105,7 +105,7 @@ fn orchestrator_tool_input_schemas_stable() {
         assert_eq!(
             inputs,
             &[
-                ("worker_id", ToolInputType::String, true),
+                ("worker", ToolInputType::String, true),
                 ("reply_to", ToolInputType::Integer, false),
                 ("body_text", ToolInputType::String, false),
                 ("body", ToolInputType::String, false),
@@ -118,7 +118,7 @@ fn orchestrator_tool_input_schemas_stable() {
     // discard_worker and delete_worker share the same schema.
     for name in ["discard_worker", "delete_worker"] {
         let (_, inputs) = schemas.iter().find(|(n, _)| *n == name).unwrap();
-        assert_eq!(inputs, &[("worker_id", ToolInputType::String, true)], "{name} schema mismatch");
+        assert_eq!(inputs, &[("worker", ToolInputType::String, true)], "{name} schema mismatch");
     }
 
     // merge_worker
@@ -126,7 +126,7 @@ fn orchestrator_tool_input_schemas_stable() {
     assert_eq!(
         inputs,
         &[
-            ("worker_id", ToolInputType::String, true),
+            ("worker", ToolInputType::String, true),
             ("skip_checks", ToolInputType::StringList, false),
             ("body_text", ToolInputType::String, false),
             ("body", ToolInputType::String, false),

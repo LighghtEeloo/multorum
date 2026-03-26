@@ -14,7 +14,7 @@ Coordinate the system from the canonical workspace root. Treat Multorum as react
 - Respect the safety property at the bidding-group level: a file may be written by exactly one active bidding group or read by many, never both.
 - Treat the read set as a stability contract and the write set as an absolute ownership boundary.
 - Treat new files, missing permissions, and cross-perspective edits as orchestrator work. Update the canonical workspace and rulebook, install the rulebook, then decide whether the blocked bidding group should be forwarded or discarded.
-- Remember that workers are addressed by `worker_id`, not by perspective name. Multiple workers from the same perspective form one bidding group, and at most one of them may merge.
+- Remember that workers are addressed by `worker`, not by perspective name. Multiple workers from the same perspective form one bidding group, and at most one of them may merge.
 
 ## Edit The Rulebook Directly
 
@@ -88,16 +88,16 @@ multorum rulebook install
 multorum rulebook uninstall
 multorum perspective list
 multorum perspective forward <perspective>
-multorum worker create <perspective> [--worker-id <worker>] [--overwriting-worktree] [--body task.md] [--artifact FILE ...]
+multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--body task.md] [--artifact FILE ...]
 multorum worker list
-multorum worker show <worker-id>
-multorum worker outbox <worker-id> [--after <sequence>]
-multorum worker ack <worker-id> <sequence>
-multorum worker resolve <worker-id> [--reply-to <sequence>] [--body resolve.md] [--artifact FILE ...]
-multorum worker revise <worker-id> [--reply-to <sequence>] [--body revise.md] [--artifact FILE ...]
-multorum worker discard <worker-id>
-multorum worker delete <worker-id>
-multorum worker merge <worker-id> [--skip-check <check> ...]
+multorum worker show <worker>
+multorum worker outbox <worker> [--after <sequence>]
+multorum worker ack <worker> <sequence>
+multorum worker resolve <worker> [--reply-to <sequence>] [--body resolve.md] [--artifact FILE ...]
+multorum worker revise <worker> [--reply-to <sequence>] [--body revise.md] [--artifact FILE ...]
+multorum worker discard <worker>
+multorum worker delete <worker>
+multorum worker merge <worker> [--skip-check <check> ...]
 multorum status
 ```
 
@@ -163,7 +163,7 @@ Workers cannot create new files or edit outside their write set. When a worker r
 2. Commit the rulebook and file changes.
 3. Run `multorum rulebook install`.
 4. Run `multorum perspective forward <perspective>` for the whole bidding group (not just one worker). Every live worker in that bidding group must be `BLOCKED` for forwarding to succeed.
-5. Run `multorum worker resolve <worker-id>` to unblock the worker.
+5. Run `multorum worker resolve <worker>` to unblock the worker.
 
 Never tell a worker to create files ad hoc in its worktree or to patch files outside its write set. If the real fix is in another perspective's territory, either adjust the rulebook, create a worker from the correct perspective, or re-scope the task.
 
@@ -194,7 +194,7 @@ Only one worker from a bidding group may be merged. After merging one, discard t
 To create a new worker reusing an id that belonged to a finalized worker, pass `--overwriting-worktree`:
 
 ```bash
-multorum worker create <perspective> --worker-id <worker-id> --overwriting-worktree
+multorum worker create <perspective> --worker <worker> --overwriting-worktree
 ```
 
 The old finalized state does not carry over to the new worker.

@@ -122,6 +122,7 @@ pub struct ActivePerspectiveSummary {
     /// Perspective identifier.
     pub perspective: PerspectiveName,
     /// Live workers currently instantiating this perspective.
+    #[serde(rename = "workers")]
     pub worker_ids: Vec<WorkerId>,
     /// Number of files in the materialized stable context.
     pub read_count: usize,
@@ -144,6 +145,7 @@ pub struct RulebookInit {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CreateResult {
     /// New worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
@@ -165,6 +167,7 @@ pub struct PerspectiveForwardResult {
     /// Perspective whose live bidding group moved forward.
     pub perspective: PerspectiveName,
     /// Live workers forwarded together.
+    #[serde(rename = "workers")]
     pub worker_ids: Vec<WorkerId>,
     /// Base commit previously pinned by the live bidding group.
     pub previous_base_commit: CanonicalCommitHash,
@@ -176,6 +179,7 @@ pub struct PerspectiveForwardResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DiscardResult {
     /// Discarded worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective held by the worker.
     pub perspective: PerspectiveName,
@@ -187,6 +191,7 @@ pub struct DiscardResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DeleteResult {
     /// Deleted worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective held by the worker.
     pub perspective: PerspectiveName,
@@ -202,6 +207,7 @@ pub struct DeleteResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MergeResult {
     /// Merged worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective held by the merged worker.
     pub perspective: PerspectiveName,
@@ -216,10 +222,11 @@ pub struct MergeResult {
 /// Persisted audit entry written after a successful merge.
 ///
 /// Each entry records the full merge context and the orchestrator's
-/// rationale. Stored under `.multorum/orchestrator/audit/<worker-id>.toml`.
+/// rationale. Stored under `.multorum/orchestrator/audit/<worker>.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditEntry {
     /// Merged worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective held by the merged worker.
     pub perspective: PerspectiveName,
@@ -254,6 +261,7 @@ pub struct OrchestratorStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkerSummary {
     /// Worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective held by the worker.
     pub perspective: PerspectiveName,
@@ -265,6 +273,7 @@ pub struct WorkerSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkerDetail {
     /// Worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective held by the worker.
     pub perspective: PerspectiveName,
@@ -282,6 +291,7 @@ pub struct WorkerDetail {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkerStatus {
     /// Worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective held by the worker.
     pub perspective: PerspectiveName,
@@ -298,6 +308,7 @@ pub struct WorkerStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkerContractView {
     /// Worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,
@@ -313,6 +324,7 @@ pub struct WorkerContractView {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MailboxMessageView {
     /// Worker identity that owns the mailbox.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Perspective instantiated by the worker.
     pub perspective: PerspectiveName,

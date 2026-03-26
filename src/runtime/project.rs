@@ -87,7 +87,7 @@ impl CurrentProject {
             }),
             | (None, true, false) => Err(RuntimeError::AmbiguousRuntimeRole {
                 repo_root,
-                details: "found a worker contract outside `.multorum/tr/<worker-id>`",
+                details: "found a worker contract outside `.multorum/tr/<worker>`",
             }),
             | (None, false, false) => Err(RuntimeError::UnmanagedProject(repo_root)),
         }

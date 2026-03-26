@@ -70,21 +70,21 @@ impl FromStr for WorkerId {
 /// Errors produced when constructing a [`WorkerId`].
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum WorkerIdError {
-    /// The worker id was empty.
-    #[error("worker id is empty")]
+    /// The worker was empty.
+    #[error("worker is empty")]
     Empty,
 
     /// The first character is not a lowercase ASCII letter.
-    #[error("worker id `{id}` must start with a lowercase ASCII letter")]
+    #[error("worker `{id}` must start with a lowercase ASCII letter")]
     InvalidStart { id: String },
 
     /// The id contained a character outside the kebab-case alphabet.
     #[error(
-        "worker id `{id}` contains invalid character `{ch}` at byte {pos}; only lowercase letters, digits, and hyphens are allowed"
+        "worker `{id}` contains invalid character `{ch}` at byte {pos}; only lowercase letters, digits, and hyphens are allowed"
     )]
     InvalidChar { id: String, ch: char, pos: usize },
 
     /// The id ends with a hyphen.
-    #[error("worker id `{id}` must not end with a hyphen")]
+    #[error("worker `{id}` must not end with a hyphen")]
     TrailingHyphen { id: String },
 }

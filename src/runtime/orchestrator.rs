@@ -213,7 +213,7 @@ impl FsOrchestratorService {
             for group in &state.groups {
                 if let Some(entry) = group.find_worker(&worker_id) {
                     if entry.state.is_live() {
-                        return Err(RuntimeError::WorkerIdExists(worker_id));
+                        return Err(RuntimeError::WorkerExists(worker_id));
                     }
                     return Ok((worker_id, Some(entry.clone())));
                 }

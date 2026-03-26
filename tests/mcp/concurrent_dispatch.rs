@@ -46,10 +46,10 @@ async fn concurrent_create_different_workers() {
     let (_dir, client) = orchestrator_duplex().await;
     let (w1, w2) = tokio::join!(
         client.call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(
-            json!({"perspective": "AuthImplementor", "worker_id": "cw1"})
+            json!({"perspective": "AuthImplementor", "worker": "cw1"})
         )),),
         client.call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(
-            json!({"perspective": "AuthImplementor", "worker_id": "cw2"})
+            json!({"perspective": "AuthImplementor", "worker": "cw2"})
         )),),
     );
     assert_tool_success(&w1.unwrap());

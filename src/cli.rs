@@ -289,13 +289,13 @@ pub enum WorkerCommand {
 
         /// Optional runtime worker identity chosen by the orchestrator.
         ///
-        /// When omitted, Multorum allocates the default perspective-based
-        /// worker id automatically.
-        #[arg(long = "worker-id", value_name = "WORKER")]
+        /// When omitted, Multorum allocates a default perspective-based
+        /// identity automatically.
+        #[arg(long = "worker", value_name = "WORKER")]
         worker_id: Option<WorkerId>,
 
         /// Replace an existing finalized workspace for the same
-        /// explicit worker id.
+        /// explicit worker.
         #[arg(long = "overwriting-worktree")]
         overwriting_worktree: bool,
 

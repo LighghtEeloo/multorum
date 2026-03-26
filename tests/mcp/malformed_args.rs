@@ -33,7 +33,7 @@ fn null_where_string_expected() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
 
-    let result = handler.dispatch("get_worker", json_args(json!({"worker_id": null})));
+    let result = handler.dispatch("get_worker", json_args(json!({"worker": null})));
     assert!(result.is_err(), "null for required string should be a protocol error");
 }
 
@@ -42,7 +42,7 @@ fn boolean_where_string_expected() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
 
-    let result = handler.dispatch("get_worker", json_args(json!({"worker_id": true})));
+    let result = handler.dispatch("get_worker", json_args(json!({"worker": true})));
     assert!(result.is_err(), "boolean for required string should be a protocol error");
 }
 
@@ -51,7 +51,7 @@ fn array_where_string_expected() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
 
-    let result = handler.dispatch("get_worker", json_args(json!({"worker_id": ["a"]})));
+    let result = handler.dispatch("get_worker", json_args(json!({"worker": ["a"]})));
     assert!(result.is_err(), "array for required string should be a protocol error");
 }
 
@@ -60,7 +60,7 @@ fn integer_where_string_expected() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
 
-    let result = handler.dispatch("get_worker", json_args(json!({"worker_id": 42})));
+    let result = handler.dispatch("get_worker", json_args(json!({"worker": 42})));
     assert!(result.is_err(), "integer for required string should be a protocol error");
 }
 
@@ -101,13 +101,13 @@ fn string_list_with_non_strings() {
     handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})),
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
         )
         .unwrap();
 
     // `skip_checks` is StringList; non-string items should be rejected.
     let result = handler
-        .dispatch("merge_worker", json_args(json!({"worker_id": "w1", "skip_checks": [1, true]})));
+        .dispatch("merge_worker", json_args(json!({"worker": "w1", "skip_checks": [1, true]})));
     assert!(result.is_err(), "non-string items in StringList should be a protocol error");
 }
 
@@ -125,12 +125,12 @@ fn extra_unknown_fields_rejected() {
 }
 
 #[test]
-fn empty_string_worker_id() {
+fn empty_string_worker() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
 
     // Empty string passes the required_str check but should fail WorkerId
     // parsing, producing a protocol error (invalid_params).
-    let result = handler.dispatch("get_worker", json_args(json!({"worker_id": ""})));
-    assert!(result.is_err(), "empty worker_id should be a protocol error");
+    let result = handler.dispatch("get_worker", json_args(json!({"worker": ""})));
+    assert!(result.is_err(), "empty worker should be a protocol error");
 }

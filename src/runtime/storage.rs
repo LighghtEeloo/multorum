@@ -39,7 +39,7 @@ use crate::vcs::{CanonicalCommitHash, GitVcs, VersionControl};
 ///
 /// This is the single source of truth for all bidding groups and workers.
 /// Each group entry carries the perspective name, base commit, and compiled
-/// boundary. Each worker entry within a group carries the worker id,
+/// boundary. Each worker entry within a group carries the worker,
 /// lifecycle state, and submitted head commit where applicable.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct StateFile {
@@ -102,6 +102,7 @@ impl BiddingGroupRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct WorkerEntry {
     /// Unique worker identity.
+    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Current lifecycle state.
     pub state: crate::runtime::WorkerState,

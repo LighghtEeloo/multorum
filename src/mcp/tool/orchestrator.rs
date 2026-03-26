@@ -3,14 +3,14 @@
 use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor, ToolInputType};
 
 const GET_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
-    "worker_id",
+    "worker",
     "Runtime worker identity to inspect.",
     ToolInputType::String,
 )];
 
 const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor::required(
-        "worker_id",
+        "worker",
         "Runtime worker identity whose outbox should be read.",
         ToolInputType::String,
     ),
@@ -23,7 +23,7 @@ const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
 
 const ACK_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor::required(
-        "worker_id",
+        "worker",
         "Runtime worker identity whose outbox owns the message.",
         ToolInputType::String,
     ),
@@ -41,13 +41,13 @@ const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
         ToolInputType::String,
     ),
     ToolInputDescriptor::optional(
-        "worker_id",
-        "Optional orchestrator-selected runtime worker identity. When omitted, Multorum allocates the default perspective-based worker id.",
+        "worker",
+        "Optional orchestrator-selected runtime worker identity. When omitted, Multorum allocates a default perspective-based identity.",
         ToolInputType::String,
     ),
     ToolInputDescriptor::optional(
         "overwriting_worktree",
-        "Optional flag to replace an existing finalized workspace for the same explicit worker id.",
+        "Optional flag to replace an existing finalized workspace for the same explicit worker.",
         ToolInputType::Boolean,
     ),
     ToolInputDescriptor::optional(
@@ -88,7 +88,7 @@ const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor
 
 const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor::required(
-        "worker_id",
+        "worker",
         "Runtime worker identity that owns the inbox.",
         ToolInputType::String,
     ),
@@ -115,14 +115,14 @@ const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
 ];
 
 const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
-    "worker_id",
+    "worker",
     "Runtime worker identity to act on.",
     ToolInputType::String,
 )];
 
 const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ToolInputDescriptor::required(
-        "worker_id",
+        "worker",
         "Runtime worker identity to merge.",
         ToolInputType::String,
     ),
@@ -178,7 +178,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "get_worker",
-            description: "Load one worker detail view by worker id.",
+            description: "Load one worker detail view.",
             inputs: GET_WORKER_INPUTS,
         },
         ToolDescriptor {

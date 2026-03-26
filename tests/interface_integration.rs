@@ -10,7 +10,7 @@ fn cli_create_accepts_optional_worker_id() {
         "worker",
         "create",
         "AuthImplementor",
-        "--worker-id",
+        "--worker",
         "custom-worker-7",
         "--overwriting-worktree",
     ])
@@ -38,9 +38,9 @@ fn orchestrator_mcp_create_descriptor_exposes_optional_worker_id() {
         .expect("missing create_worker tool descriptor");
 
     assert!(create.inputs.iter().any(|input| {
-        input.name == "worker_id"
+        input.name == "worker"
             && !input.required
-            && input.description.contains("default perspective-based worker id")
+            && input.description.contains("default perspective-based identity")
     }));
     assert!(create.inputs.iter().any(|input| {
         input.name == "overwriting_worktree"
@@ -59,7 +59,7 @@ fn orchestrator_mcp_delete_descriptor_requires_worker_id() {
         .expect("missing delete_worker tool descriptor");
 
     assert_eq!(delete.inputs.len(), 1);
-    assert_eq!(delete.inputs[0].name, "worker_id");
+    assert_eq!(delete.inputs[0].name, "worker");
     assert!(delete.inputs[0].required);
 }
 
@@ -96,6 +96,6 @@ fn orchestrator_mcp_merge_descriptor_uses_merge_name() {
         .expect("missing merge_worker tool descriptor");
 
     assert!(merge.inputs.iter().any(|input| {
-        input.name == "worker_id" && input.required && input.description.contains("merge")
+        input.name == "worker" && input.required && input.description.contains("merge")
     }));
 }

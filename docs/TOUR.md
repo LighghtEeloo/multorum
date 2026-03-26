@@ -66,7 +66,7 @@ Workers move through a small lifecycle:
 - `COMMITTED`: submission frozen pending orchestrator action
 - `MERGED` or `DISCARDED`: finalized outcomes; the workspace is preserved until an explicit delete
 
-Finalization and workspace deletion are separate actions. `merge` and `discard` change lifecycle state, while `delete` removes a finalized worker workspace. If the orchestrator reuses an explicit worker id after `MERGED` or `DISCARDED`, Multorum replaces the old finalized workspace with a fresh one for the new worker.
+Finalization and workspace deletion are separate actions. `merge` and `discard` change lifecycle state, while `delete` removes a finalized worker workspace. If the orchestrator reuses an explicit worker after `MERGED` or `DISCARDED`, Multorum replaces the old finalized workspace with a fresh one for the new worker.
 
 ## Merge
 

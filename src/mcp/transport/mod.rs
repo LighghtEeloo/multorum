@@ -184,7 +184,7 @@ fn runtime_to_resource_error(error: RuntimeError) -> rmcp::ErrorData {
             rmcp::ErrorData::resource_not_found(mcp.message, data)
         }
         | McpErrorCode::Internal => rmcp::ErrorData::internal_error(mcp.message, data),
-        | McpErrorCode::WorkerIdExists
+        | McpErrorCode::WorkerExists
         | McpErrorCode::InvalidState
         | McpErrorCode::AlreadyAcknowledged
         | McpErrorCode::BiddingGroupConflict

@@ -62,11 +62,11 @@ async fn orchestrator_wire_call_tool_get_status() {
 async fn orchestrator_wire_call_tool_with_args() {
     let (_dir, client) = orchestrator_duplex().await;
     let params = CallToolRequestParams::new("create_worker")
-        .with_arguments(json_args(json!({"perspective": "AuthImplementor", "worker_id": "w1"})));
+        .with_arguments(json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})));
     let result = client.call_tool(params).await.unwrap();
     assert_tool_success(&result);
     let created = tool_json(&result);
-    assert_eq!(created["worker_id"], "w1");
+    assert_eq!(created["worker"], "w1");
     assert_eq!(created["state"], "ACTIVE");
     client.cancel().await.unwrap();
 }
@@ -89,7 +89,7 @@ async fn orchestrator_wire_read_resource() {
 async fn orchestrator_wire_tool_error_propagates() {
     let (_dir, client) = orchestrator_duplex().await;
     let params = CallToolRequestParams::new("get_worker")
-        .with_arguments(json_args(json!({"worker_id": "does-not-exist"})));
+        .with_arguments(json_args(json!({"worker": "does-not-exist"})));
     let result = client.call_tool(params).await.unwrap();
     assert_tool_error(&result);
     let err = tool_json(&result);
@@ -138,7 +138,7 @@ async fn wire_full_workflow() {
 
     // Step 1: Create worker.
     let create_params = CallToolRequestParams::new("create_worker")
-        .with_arguments(json_args(json!({"perspective": "AuthImplementor", "worker_id": "wf1"})));
+        .with_arguments(json_args(json!({"perspective": "AuthImplementor", "worker": "wf1"})));
     let create = orch_client.call_tool(create_params).await.unwrap();
     assert_tool_success(&create);
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
@@ -160,7 +160,7 @@ async fn wire_full_workflow() {
 
     // Step 4: Orchestrator merges via wire.
     let merge_params = CallToolRequestParams::new("merge_worker")
-        .with_arguments(json_args(json!({"worker_id": "wf1"})));
+        .with_arguments(json_args(json!({"worker": "wf1"})));
     let merge = orch_client.call_tool(merge_params).await.unwrap();
     assert_tool_success(&merge);
     assert_eq!(tool_json(&merge)["state"], "MERGED");

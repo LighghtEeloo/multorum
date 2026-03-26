@@ -103,7 +103,7 @@ Is that correct?
 
 **Scenario**
 
-The orchestrator wants to create a new worker using an explicit worker id that previously belonged to a finalized worker.
+The orchestrator wants to create a new worker using an explicit worker that previously belonged to a finalized worker.
 
 What should the skill know about that reuse?
 

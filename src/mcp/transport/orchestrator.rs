@@ -62,16 +62,16 @@ impl OrchestratorHandler {
             }
             | "list_workers" => dispatch_tool(self.service.list_workers()),
             | "get_worker" => {
-                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 dispatch_tool(self.service.get_worker(worker_id))
             }
             | "read_worker_outbox" => {
-                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let after = optional_u64(&args, "after").map(crate::runtime::Sequence);
                 dispatch_tool(self.service.read_outbox(worker_id, after))
             }
             | "ack_worker_outbox_message" => {
-                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let sequence = required_u64(&args, "sequence")?;
                 dispatch_tool(
                     self.service.ack_outbox(worker_id, crate::runtime::Sequence(sequence)),
@@ -80,7 +80,7 @@ impl OrchestratorHandler {
             | "create_worker" => {
                 let perspective = parse_perspective(required_str(&args, "perspective")?)?;
                 let mut request = CreateWorker::new(perspective);
-                if let Some(id) = optional_str(&args, "worker_id") {
+                if let Some(id) = optional_str(&args, "worker") {
                     request = request.with_worker_id(parse_worker_id(id)?);
                 }
                 if optional_bool(&args, "overwriting_worktree").unwrap_or(false) {
@@ -93,7 +93,7 @@ impl OrchestratorHandler {
                 dispatch_tool(self.service.create_worker(request))
             }
             | "resolve_worker" => {
-                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 dispatch_tool(self.service.resolve_worker(
                     worker_id,
                     extract_reply(&args),
@@ -101,7 +101,7 @@ impl OrchestratorHandler {
                 ))
             }
             | "revise_worker" => {
-                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 dispatch_tool(self.service.revise_worker(
                     worker_id,
                     extract_reply(&args),
@@ -109,15 +109,15 @@ impl OrchestratorHandler {
                 ))
             }
             | "discard_worker" => {
-                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 dispatch_tool(self.service.discard_worker(worker_id))
             }
             | "delete_worker" => {
-                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 dispatch_tool(self.service.delete_worker(worker_id))
             }
             | "merge_worker" => {
-                let worker_id = parse_worker_id(required_str(&args, "worker_id")?)?;
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let skip_checks = optional_string_list(&args, "skip_checks");
                 let audit_payload = extract_payload(&args);
                 dispatch_tool(self.service.merge_worker(worker_id, skip_checks, audit_payload))
@@ -161,7 +161,7 @@ impl OrchestratorHandler {
 
         let worker_id = worker_id_str
             .parse::<WorkerId>()
-            .map_err(|e| ErrorData::invalid_params(format!("invalid worker id: {e}"), None))?;
+            .map_err(|e| ErrorData::invalid_params(format!("invalid worker: {e}"), None))?;
 
         match sub {
             | None => {
@@ -228,7 +228,7 @@ impl ServerHandler for OrchestratorHandler {
 // ---------------------------------------------------------------------------
 
 fn parse_worker_id(s: &str) -> Result<WorkerId, ErrorData> {
-    s.parse().map_err(|e| ErrorData::invalid_params(format!("invalid worker id: {e}"), None))
+    s.parse().map_err(|e| ErrorData::invalid_params(format!("invalid worker: {e}"), None))
 }
 
 fn parse_perspective(s: &str) -> Result<crate::schema::perspective::PerspectiveName, ErrorData> {

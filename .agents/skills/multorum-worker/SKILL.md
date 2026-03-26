@@ -14,7 +14,7 @@ Operate inside one provisioned worker worktree. Treat the current worker contrac
 - Never create a new file on your own. If the task needs one, send a `report`. The orchestrator will edit the rulebook, create the file in the canonical workspace, install, forward, and resolve.
 - Never edit files outside the write set, even if the change looks trivial or obviously correct. If the real fix is outside your write set, report it. Do not patch it anyway. The orchestrator will either adjust your boundary, create a different worker, or re-scope the task.
 - Never coordinate with other workers directly. All judgment flows through the orchestrator. If another worker owns files you need changed, report the dependency to the orchestrator. Do not ask for direct patches or cross-worker messaging.
-- Remember that the runtime identity is the `worker_id` from `contract.toml`, even when multiple workers share the same perspective in one bidding group.
+- Remember that the runtime identity is the `worker` from `contract.toml`, even when multiple workers share the same perspective in one bidding group.
 - If a blocker may require `multorum perspective forward`, commit your current safe progress first and include that commit as `--head-commit` in the `report`. Forwarding preserves progress only from that recorded commit. A report without `head_commit` will cause the forward to be rejected, so always commit and include it when you anticipate forwarding.
 
 ## Use The Worker Runtime Surface Directly

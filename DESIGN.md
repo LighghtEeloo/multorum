@@ -276,13 +276,13 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
   state.toml             # bidding groups, workers, and compiled boundaries
   exclusion-set.txt      # materialized orchestrator exclusion set
   audit/                 # merge audit trail
-    <worker-id>.toml     # per-worker TOML metadata record
-    <worker-id>/         # optional rationale bundle
+    <worker>.toml     # per-worker TOML metadata record
+    <worker>/         # optional rationale bundle
       body.md
       artifacts/
 ```
 
-`state.toml` is the orchestrator's single runtime state file. It records every bidding group and every worker within it. Each group entry carries the perspective name, base commit, and compiled boundary (read and write sets as concrete file lists). Each worker entry within a group carries the worker id, lifecycle state, and submitted head commit where applicable.
+`state.toml` is the orchestrator's single runtime state file. It records every bidding group and every worker within it. Each group entry carries the perspective name, base commit, and compiled boundary (read and write sets as concrete file lists). Each worker entry within a group carries the worker, lifecycle state, and submitted head commit where applicable.
 
 `rulebook init` creates `state.toml` as an empty file. Subsequent operations update it:
 
@@ -295,19 +295,19 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
 
 `exclusion-set.txt` is a flat projection of `state.toml`: the union of all read and write sets from groups that still carry a boundary. A pre-commit hook in the canonical workspace reads it and rejects commits that touch any listed file. Multorum regenerates it whenever `state.toml` changes. When no groups carry a boundary the file is empty.
 
-`audit/` records the decision trail for merged workers. Each entry is written atomically when `merge` succeeds and contains the worker id, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The rationale is a bundle — a `body.md` and optional `artifacts/` — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. When the orchestrator supplies rationale, Multorum writes it as a bundle subdirectory alongside the TOML record. Audit entries are append-only; Multorum never modifies or deletes them.
+`audit/` records the decision trail for merged workers. Each entry is written atomically when `merge` succeeds and contains the worker, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The rationale is a bundle — a `body.md` and optional `artifacts/` — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. When the orchestrator supplies rationale, Multorum writes it as a bundle subdirectory alongside the TOML record. Audit entries are append-only; Multorum never modifies or deletes them.
 
 ### Git Worktrees
 
 Each worker workspace is a git worktree created from the bidding group's base commit:
 
 ```text
-git worktree add .multorum/tr/<worker-id> <base-commit>
+git worktree add .multorum/tr/<worker> <base-commit>
 ```
 
 Workers in the same bidding group share the same base commit, set when the first worker in the group is created. Workers in different bidding groups may have different base commits.
 
-If a worker id is reused after that worker reaches `MERGED` or `DISCARDED`, Multorum removes the finalized worktree first and creates a fresh workspace at the same path. Reuse means "create a new worker here", not "reopen old state".
+If a worker is reused after that worker reaches `MERGED` or `DISCARDED`, Multorum removes the finalized worktree first and creates a fresh workspace at the same path. Reuse means "create a new worker here", not "reopen old state".
 
 ### Worker Runtime Surface
 
@@ -316,7 +316,7 @@ Every worker worktree has its own `.multorum/` directory, separate from the orch
 ```text
 .multorum/
   rulebook.toml      # snapshot from the base commit
-  contract.toml      # worker id, perspective, base commit
+  contract.toml      # worker, perspective, base commit
   read-set.txt       # compiled read set
   write-set.txt      # compiled write set
   inbox/
@@ -404,7 +404,7 @@ Every message is a bundle (see [Bundles](#bundles)) extended with an `envelope.t
 
 ```toml
 protocol    = "multorum/v1"
-worker      = "my-worker-id"     # author runtime identity
+worker      = "my-worker"        # author runtime identity
 perspective = "AuthImplementor"  # author perspective
 kind        = "report"           # message classification
 sequence    = 7                  # monotonic counter per author
@@ -423,7 +423,7 @@ The `kind` field classifies the message:
 
 Mailbox bundles are published atomically: Multorum writes to a temporary name inside `new/` then renames into place. Readers see either the complete bundle or nothing. Sequence numbers are assigned by the author at publication time and never reused.
 
-Published bundles are immutable. Receipt is recorded by writing an acknowledgement file with the same sequence number into the corresponding `ack/` directory. The unique runtime identity in all exchanges is the worker id, not the perspective name.
+Published bundles are immutable. Receipt is recorded by writing an acknowledgement file with the same sequence number into the corresponding `ack/` directory. The unique runtime identity in all exchanges is the worker, not the perspective name.
 
 ### Ownership and Acknowledgement
 
@@ -456,7 +456,7 @@ Workers may submit evidence with their reports or commits to support the case fo
 
 ### Audit
 
-After a successful merge, Multorum writes an audit entry to `.multorum/orchestrator/audit/<worker-id>.toml`. The entry records the worker id, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is a bundle attached to the `merge` command via `--body`, `--body-path`, and `--artifact` flags. When supplied, Multorum writes the rationale as a bundle directory (see [Bundles](#bundles)) alongside the TOML record under the same audit directory.
+After a successful merge, Multorum writes an audit entry to `.multorum/orchestrator/audit/<worker>.toml`. The entry records the worker, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is a bundle attached to the `merge` command via `--body`, `--body-path`, and `--artifact` flags. When supplied, Multorum writes the rationale as a bundle directory (see [Bundles](#bundles)) alongside the TOML record under the same audit directory.
 
 ---
 
@@ -520,14 +520,14 @@ This section lists the instructions that the orchestrator and workers may issue,
 
 - `multorum worker create <perspective>` — Compile the perspective boundary from the current rulebook against the working tree. If a bidding group for this perspective already exists, join it. Otherwise, form a new group with base commit set to HEAD and check conflict-freedom against all active bidding groups. Create the worker worktree and materialize the runtime surface. Transition: new worker enters `ACTIVE`.
 - `multorum worker list` — List active workers.
-- `multorum worker show <worker-id>` — Return one worker in detail.
-- `multorum worker outbox <worker-id> [--after <sequence>]` — List worker-authored bundles from that worker's outbox. No lifecycle transition.
-- `multorum worker ack <worker-id> <sequence>` — Record orchestrator receipt for one worker outbox bundle. No lifecycle transition.
-- `multorum worker resolve <worker-id>` — Publish a `resolve` bundle to a blocked worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
-- `multorum worker revise <worker-id>` — Publish a `revise` bundle to a committed worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
-- `multorum worker merge <worker-id> [--skip-check <check>]... [--body <text>] [--body-path <file>] [--artifact <file>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. The optional payload arguments attach an audit rationale. Transition: `COMMITTED` to `MERGED`.
-- `multorum worker discard <worker-id>` — Finalize a worker without integration. Allowed from `ACTIVE`, `BLOCKED`, or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
-- `multorum worker delete <worker-id>` — Delete the worktree and remove the worker's entry from `state.toml`. If the worker is the last member of its bidding group, the group entry is also removed. Allowed only from `MERGED` or `DISCARDED`.
+- `multorum worker show <worker>` — Return one worker in detail.
+- `multorum worker outbox <worker> [--after <sequence>]` — List worker-authored bundles from that worker's outbox. No lifecycle transition.
+- `multorum worker ack <worker> <sequence>` — Record orchestrator receipt for one worker outbox bundle. No lifecycle transition.
+- `multorum worker resolve <worker>` — Publish a `resolve` bundle to a blocked worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
+- `multorum worker revise <worker>` — Publish a `revise` bundle to a committed worker inbox. The worker returns to `ACTIVE` when it acknowledges that inbox message.
+- `multorum worker merge <worker> [--skip-check <check>]... [--body <text>] [--body-path <file>] [--artifact <file>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. The optional payload arguments attach an audit rationale. Transition: `COMMITTED` to `MERGED`.
+- `multorum worker discard <worker>` — Finalize a worker without integration. Allowed from `ACTIVE`, `BLOCKED`, or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
+- `multorum worker delete <worker>` — Delete the worktree and remove the worker's entry from `state.toml`. If the worker is the last member of its bidding group, the group entry is also removed. Allowed only from `MERGED` or `DISCARDED`.
 
 ### Worker-Local Commands
 
