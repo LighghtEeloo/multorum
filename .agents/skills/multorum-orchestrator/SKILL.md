@@ -88,13 +88,13 @@ multorum rulebook install
 multorum rulebook uninstall
 multorum perspective list
 multorum perspective forward <perspective>
-multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--body task.md] [--artifact FILE ...]
+multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--body-text <text> | --body-path <file>] [--artifact FILE ...]
 multorum worker list
 multorum worker show <worker>
 multorum worker outbox <worker> [--after <sequence>]
 multorum worker ack <worker> <sequence>
-multorum worker resolve <worker> [--reply-to <sequence>] [--body resolve.md] [--artifact FILE ...]
-multorum worker revise <worker> [--reply-to <sequence>] [--body revise.md] [--artifact FILE ...]
+multorum worker resolve <worker> [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact FILE ...]
+multorum worker revise <worker> [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact FILE ...]
 multorum worker discard <worker>
 multorum worker delete <worker>
 multorum worker merge <worker> [--skip-check <check> ...]
@@ -141,12 +141,12 @@ When attaching a task body, evidence log, or other artifact by path, do not plan
 
 ```bash
 multorum rulebook validate
-multorum worker create AuthImplementor --body task.md --artifact spec.md
+multorum worker create AuthImplementor --body-path task.md --artifact spec.md
 multorum worker outbox auth-implementor-1 --after 6
 multorum worker ack auth-implementor-1 7
 multorum perspective forward AuthImplementor
-multorum worker resolve auth-implementor-1 --reply-to 7 --body resolve.md
-multorum worker revise auth-implementor-1 --reply-to 12 --body revise.md --artifact failing-test.log
+multorum worker resolve auth-implementor-1 --reply-to 7 --body-path resolve.md
+multorum worker revise auth-implementor-1 --reply-to 12 --body-path revise.md --artifact failing-test.log
 multorum worker merge auth-implementor-1 --skip-check test
 multorum worker delete auth-implementor-1
 ```

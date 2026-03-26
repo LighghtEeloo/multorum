@@ -61,8 +61,8 @@ multorum local contract
 multorum local status
 multorum local inbox [--after <sequence>]
 multorum local ack <sequence>
-multorum local report [--head-commit <commit>] [--reply-to <sequence>] [--body blocker.md] [--artifact FILE ...]
-multorum local commit --head-commit <commit> [--body summary.md] [--artifact FILE ...]
+multorum local report [--head-commit <commit>] [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact FILE ...]
+multorum local commit --head-commit <commit> [--body-text <text> | --body-path <file>] [--artifact FILE ...]
 ```
 
 ## Run The Worker Loop
@@ -105,8 +105,8 @@ Example CLI shapes:
 ```bash
 multorum local inbox --after 7
 multorum local ack 8
-multorum local report --head-commit abc1234 --reply-to 8 --body blocker.md --artifact failing-output.log
-multorum local commit --head-commit abc1234 --body summary.md --artifact test.log
+multorum local report --head-commit abc1234 --reply-to 8 --body-path blocker.md --artifact failing-output.log
+multorum local commit --head-commit abc1234 --body-path summary.md --artifact test.log
 ```
 
 ## Respect The State Machine
