@@ -205,8 +205,8 @@ While workers are active, the orchestrator must respect the exclusion set formed
 
 ### Revise Versus Resolve
 
-- `resolve` is for `BLOCKED` workers. It unblocks them and optionally answers a specific report.
-- `revise` is for `COMMITTED` workers. It returns them to `ACTIVE` and tells them what to fix.
+- `resolve` is for `BLOCKED` workers. It publishes a `resolve` inbox message; the worker transitions to `ACTIVE` when it acknowledges that message.
+- `revise` is for `COMMITTED` workers. It publishes a `revise` inbox message; the worker transitions to `ACTIVE` when it acknowledges that message.
 - Do not use `resolve` on a committed worker or `revise` on a blocked worker.
 
 ### Merge Is Based On The Submitted Commit

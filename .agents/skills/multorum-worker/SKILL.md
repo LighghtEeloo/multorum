@@ -113,7 +113,7 @@ multorum local commit --head-commit abc1234 --body summary.md --artifact test.lo
 
 - Work only while ACTIVE.
 - After `report`, treat the worker as blocked until a `resolve` message arrives and is acknowledged. The orchestrator may forward the whole blocked bidding group to a newer pinned base before that resolve arrives.
-- After `commit`, treat the worktree as frozen until the orchestrator revises, merges, or discards it. The orchestrator may send `revise` to return you to ACTIVE, or `merge`/`discard` to finalize.
+- After `commit`, treat the worktree as frozen until the orchestrator revises, merges, or discards it. The orchestrator may send `revise`; acknowledge it to return to ACTIVE, or wait for `merge`/`discard` to finalize.
 - Do not keep editing after submission unless the orchestrator explicitly sends a revision request.
 
 ## Keep The Worktree Clean At Submission

@@ -353,10 +353,12 @@ create ─────────► ACTIVE ──────►┼───�
 ```
 
 - `ACTIVE`: the workspace exists and execution may proceed
-- `BLOCKED`: the worker has reported a blocker and awaits orchestrator resolution or discard
-- `COMMITTED`: the worker has submitted a commit; the workspace is frozen pending orchestrator action
+- `BLOCKED`: the worker has reported a blocker; returns to `ACTIVE` once it acknowledges a `resolve` inbox message, or is discarded
+- `COMMITTED`: the worker has submitted a commit; returns to `ACTIVE` once it acknowledges a `revise` inbox message, is merged, or is discarded
 - `MERGED`: the commit passed the merge pipeline and was integrated
 - `DISCARDED`: the worker was finalized without merge
+
+The `resolve` and `revise` arcs in the diagram are labeled by the inbox message kind. The orchestrator publishes the message; the state transition fires when the worker acknowledges it via `local ack`.
 
 Once one worker in a bidding group reaches `MERGED`, every sibling in that group becomes `DISCARDED`.
 
@@ -372,9 +374,9 @@ Once one worker in a bidding group reaches `MERGED`, every sibling in that group
 | ACTIVE | BLOCKED | worker issues `report` |
 | ACTIVE | COMMITTED | worker issues `commit` |
 | ACTIVE | DISCARDED | orchestrator issues `discard` |
-| BLOCKED | ACTIVE | orchestrator issues `resolve` |
+| BLOCKED | ACTIVE | worker acknowledges `resolve` |
 | BLOCKED | DISCARDED | orchestrator issues `discard` |
-| COMMITTED | ACTIVE | orchestrator issues `revise` |
+| COMMITTED | ACTIVE | worker acknowledges `revise` |
 | COMMITTED | MERGED | orchestrator issues `merge` and checks pass |
 | COMMITTED | DISCARDED | orchestrator issues `discard` |
 
