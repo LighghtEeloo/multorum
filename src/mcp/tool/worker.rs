@@ -31,7 +31,7 @@ const REPORT_INPUTS: &[ToolInputDescriptor] = &[
         ToolInputType::String,
     ),
     ToolInputDescriptor::optional(
-        "body",
+        "body_path",
         "Optional Markdown file to move into the report body.",
         ToolInputType::String,
     ),
@@ -54,7 +54,7 @@ const COMMIT_INPUTS: &[ToolInputDescriptor] = &[
         ToolInputType::String,
     ),
     ToolInputDescriptor::optional(
-        "body",
+        "body_path",
         "Optional Markdown file to move into the commit bundle body.",
         ToolInputType::String,
     ),

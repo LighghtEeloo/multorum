@@ -56,7 +56,7 @@ const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
         ToolInputType::String,
     ),
     ToolInputDescriptor::optional(
-        "body",
+        "body_path",
         "Optional Markdown file to move into the seeded task bundle body.",
         ToolInputType::String,
     ),
@@ -103,7 +103,7 @@ const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
         ToolInputType::String,
     ),
     ToolInputDescriptor::optional(
-        "body",
+        "body_path",
         "Optional Markdown file to move into the bundle body.",
         ToolInputType::String,
     ),
@@ -137,7 +137,7 @@ const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
         ToolInputType::String,
     ),
     ToolInputDescriptor::optional(
-        "body",
+        "body_path",
         "Optional Markdown file to move into the audit rationale body.",
         ToolInputType::String,
     ),

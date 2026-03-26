@@ -324,7 +324,7 @@ fn orchestrator_resolve_worker() {
             "resolve_worker",
             json_args(json!({
                 "worker": "w1",
-                "body": resolve_body.to_str().unwrap(),
+                "body_path": resolve_body.to_str().unwrap(),
             })),
         )
         .unwrap();
@@ -359,7 +359,7 @@ fn orchestrator_revise_worker() {
             "revise_worker",
             json_args(json!({
                 "worker": "w1",
-                "body": revise_body.to_str().unwrap(),
+                "body_path": revise_body.to_str().unwrap(),
             })),
         )
         .unwrap();
@@ -698,7 +698,7 @@ fn worker_send_report() {
     let report_body = worktree.join("report.md");
     fs::write(&report_body, "Blocked on design question.\n").unwrap();
     let result = handler
-        .dispatch("send_report", json_args(json!({"body": report_body.to_str().unwrap()})))
+        .dispatch("send_report", json_args(json!({"body_path": report_body.to_str().unwrap()})))
         .unwrap();
     assert_tool_success(&result);
     assert!(!report_body.exists(), "report body should be moved into .multorum storage");

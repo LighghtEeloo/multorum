@@ -205,7 +205,7 @@ async fn blocker_report_resolve_then_commit() {
     let report = worker_client
         .call_tool(
             CallToolRequestParams::new("send_report")
-                .with_arguments(json_args(json!({"body": report_body.to_str().unwrap()}))),
+                .with_arguments(json_args(json!({"body_path": report_body.to_str().unwrap()}))),
         )
         .await
         .unwrap();
@@ -249,7 +249,7 @@ async fn blocker_report_resolve_then_commit() {
     let resolve = orch
         .call_tool(CallToolRequestParams::new("resolve_worker").with_arguments(json_args(json!({
             "worker": "block-w",
-            "body": resolve_body.to_str().unwrap(),
+            "body_path": resolve_body.to_str().unwrap(),
         }))))
         .await
         .unwrap();
@@ -355,7 +355,7 @@ async fn revise_cycle_resubmit_and_merge() {
     let revise = orch
         .call_tool(CallToolRequestParams::new("revise_worker").with_arguments(json_args(json!({
             "worker": "rev-w",
-            "body": revise_body.to_str().unwrap(),
+            "body_path": revise_body.to_str().unwrap(),
         }))))
         .await
         .unwrap();
@@ -535,7 +535,7 @@ async fn report_from_committed_worker_rejected() {
     let report = w
         .call_tool(
             CallToolRequestParams::new("send_report")
-                .with_arguments(json_args(json!({"body": report_body.to_str().unwrap()}))),
+                .with_arguments(json_args(json!({"body_path": report_body.to_str().unwrap()}))),
         )
         .await
         .unwrap();
@@ -564,7 +564,7 @@ async fn resolve_active_worker_rejected() {
     let resolve = orch
         .call_tool(CallToolRequestParams::new("resolve_worker").with_arguments(json_args(json!({
             "worker": "res-w",
-            "body": resolve_body.to_str().unwrap(),
+            "body_path": resolve_body.to_str().unwrap(),
         }))))
         .await
         .unwrap();
@@ -592,7 +592,7 @@ async fn revise_active_worker_rejected() {
     let revise = orch
         .call_tool(CallToolRequestParams::new("revise_worker").with_arguments(json_args(json!({
             "worker": "reva-w",
-            "body": revise_body.to_str().unwrap(),
+            "body_path": revise_body.to_str().unwrap(),
         }))))
         .await
         .unwrap();

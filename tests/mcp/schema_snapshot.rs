@@ -94,7 +94,7 @@ fn orchestrator_tool_input_schemas_stable() {
             ("worker", ToolInputType::String, false),
             ("overwriting_worktree", ToolInputType::Boolean, false),
             ("body_text", ToolInputType::String, false),
-            ("body", ToolInputType::String, false),
+            ("body_path", ToolInputType::String, false),
             ("artifacts", ToolInputType::StringList, false),
         ]
     );
@@ -108,7 +108,7 @@ fn orchestrator_tool_input_schemas_stable() {
                 ("worker", ToolInputType::String, true),
                 ("reply_to", ToolInputType::Integer, false),
                 ("body_text", ToolInputType::String, false),
-                ("body", ToolInputType::String, false),
+                ("body_path", ToolInputType::String, false),
                 ("artifacts", ToolInputType::StringList, false),
             ],
             "{name} schema mismatch"
@@ -129,7 +129,7 @@ fn orchestrator_tool_input_schemas_stable() {
             ("worker", ToolInputType::String, true),
             ("skip_checks", ToolInputType::StringList, false),
             ("body_text", ToolInputType::String, false),
-            ("body", ToolInputType::String, false),
+            ("body_path", ToolInputType::String, false),
             ("artifacts", ToolInputType::StringList, false),
         ]
     );
@@ -222,7 +222,7 @@ fn worker_tool_input_schemas_stable() {
             ("head_commit", ToolInputType::String, false),
             ("reply_to", ToolInputType::Integer, false),
             ("body_text", ToolInputType::String, false),
-            ("body", ToolInputType::String, false),
+            ("body_path", ToolInputType::String, false),
             ("artifacts", ToolInputType::StringList, false),
         ]
     );
@@ -234,7 +234,7 @@ fn worker_tool_input_schemas_stable() {
         &[
             ("head_commit", ToolInputType::String, true),
             ("body_text", ToolInputType::String, false),
-            ("body", ToolInputType::String, false),
+            ("body_path", ToolInputType::String, false),
             ("artifacts", ToolInputType::StringList, false),
         ]
     );

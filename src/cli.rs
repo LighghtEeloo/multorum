@@ -123,16 +123,22 @@ impl CliServices {
 
 /// Shared payload options for commands that publish mailbox bundles.
 ///
-/// The stub CLI models bundle contents as filesystem paths so the command
-/// surface matches the file-based protocol in `DESIGN.md`.
+/// `--body-text` and `--body-path` are mutually exclusive.
 #[derive(Debug, Clone, Args)]
 pub struct BundlePayloadArgs {
-    /// Optional Markdown body file to move into `body.md`.
+    /// Inline Markdown body text for the bundle's `body.md`.
+    ///
+    /// Mutually exclusive with `--body-path`.
+    #[arg(long = "body-text", value_name = "TEXT", conflicts_with = "body_path")]
+    pub body_text: Option<String>,
+
+    /// Existing Markdown file to move into the bundle's `body.md`.
     ///
     /// On successful publication, Multorum consumes the path and stores
     /// the moved file under its managed `.multorum/` runtime state.
-    #[arg(long, value_name = "FILE")]
-    pub body: Option<PathBuf>,
+    /// Mutually exclusive with `--body-text`.
+    #[arg(long = "body-path", value_name = "FILE", conflicts_with = "body_text")]
+    pub body_path: Option<PathBuf>,
 
     /// Files to move under the bundle's `artifacts/` directory.
     ///
@@ -146,8 +152,8 @@ impl BundlePayloadArgs {
     /// Convert CLI payload arguments into runtime bundle payload.
     pub fn into_runtime(self) -> crate::bundle::BundlePayload {
         crate::bundle::BundlePayload {
-            body_text: None,
-            body_path: self.body,
+            body_text: self.body_text,
+            body_path: self.body_path,
             artifacts: self.artifacts,
         }
     }

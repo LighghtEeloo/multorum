@@ -241,12 +241,12 @@ fn optional_string_list(args: &serde_json::Map<String, Value>, key: &str) -> Vec
 /// Build a [`BundlePayload`] from common MCP tool arguments.
 ///
 /// MCP callers may provide either inline Markdown via `body_text` or a
-/// path-backed body via `body`. The path-backed form transfers file
+/// path-backed body via `body_path`. The path-backed form transfers file
 /// ownership into Multorum-managed bundle storage on successful
 /// publication.
 fn extract_payload(args: &serde_json::Map<String, Value>) -> crate::bundle::BundlePayload {
     let body_text = optional_str(args, "body_text").map(str::to_owned);
-    let body_path = optional_str(args, "body").map(std::path::PathBuf::from);
+    let body_path = optional_str(args, "body_path").map(std::path::PathBuf::from);
     let artifacts = args
         .get("artifacts")
         .and_then(Value::as_array)
