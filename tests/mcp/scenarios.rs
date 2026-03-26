@@ -742,10 +742,10 @@ async fn check_pipeline_failure_blocks_merge() {
     // Set up a repo with a check that will fail.
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join("src")).unwrap();
-    fs::create_dir_all(dir.path().join(".multorum")).unwrap();
     fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
     fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
-    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
+    use multorum::runtime::{FsOrchestratorService, OrchestratorService};
+    FsOrchestratorService::new(dir.path()).unwrap().rulebook_init().unwrap();
     fs::write(
         dir.path().join(".multorum/rulebook.toml"),
         r#"
@@ -775,9 +775,6 @@ async fn check_pipeline_failure_blocks_merge() {
     git(dir.path(), &["add", "."]);
     git(dir.path(), &["commit", "-m", "feat: failing check fixture"]);
 
-    use multorum::runtime::FsOrchestratorService;
-    fs::create_dir_all(dir.path().join(".multorum/orchestrator")).unwrap();
-    fs::write(dir.path().join(".multorum/orchestrator/state.toml"), "").unwrap();
     let svc = FsOrchestratorService::new(dir.path()).unwrap();
 
     let orch = OrchestratorHandler::new(svc);
@@ -815,10 +812,10 @@ async fn check_pipeline_skip_succeeds() {
 
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join("src")).unwrap();
-    fs::create_dir_all(dir.path().join(".multorum")).unwrap();
     fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
     fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
-    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
+    use multorum::runtime::{FsOrchestratorService, OrchestratorService};
+    FsOrchestratorService::new(dir.path()).unwrap().rulebook_init().unwrap();
     fs::write(
         dir.path().join(".multorum/rulebook.toml"),
         r#"
@@ -848,9 +845,6 @@ async fn check_pipeline_skip_succeeds() {
     git(dir.path(), &["add", "."]);
     git(dir.path(), &["commit", "-m", "feat: skip check fixture"]);
 
-    use multorum::runtime::FsOrchestratorService;
-    fs::create_dir_all(dir.path().join(".multorum/orchestrator")).unwrap();
-    fs::write(dir.path().join(".multorum/orchestrator/state.toml"), "").unwrap();
     let svc = FsOrchestratorService::new(dir.path()).unwrap();
 
     let orch = OrchestratorHandler::new(svc);

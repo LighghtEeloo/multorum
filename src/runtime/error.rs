@@ -48,10 +48,6 @@ pub enum RuntimeError {
     #[error("no orchestrator state found; run `multorum rulebook init` first")]
     MissingOrchestratorState,
 
-    /// The workspace already has a committed rulebook.
-    #[error("rulebook already exists at {0}")]
-    RulebookExists(std::path::PathBuf),
-
     /// The requested perspective does not exist in the current rulebook
     /// or runtime state.
     #[error("unknown perspective: {0}")]

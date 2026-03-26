@@ -70,7 +70,6 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::AmbiguousRuntimeRole { .. } => McpErrorCode::InvalidState,
             | RuntimeError::RuntimeRoleMismatch { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MissingOrchestratorState => McpErrorCode::InvalidState,
-            | RuntimeError::RulebookExists(_) => McpErrorCode::InvalidState,
             | RuntimeError::UnknownPerspective(_) => McpErrorCode::UnknownPerspective,
             | RuntimeError::UnknownWorker(_) => McpErrorCode::UnknownWorker,
             | RuntimeError::WorkerExists(_) => McpErrorCode::WorkerExists,

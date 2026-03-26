@@ -1161,12 +1161,10 @@ mod tests {
     fn setup_repo() -> (TempDir, FsOrchestratorService) {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dir.path().join("src")).unwrap();
-        fs::create_dir_all(dir.path().join(".multorum/orchestrator")).unwrap();
         fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
         fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
-        fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
+        FsOrchestratorService::new(dir.path()).unwrap().rulebook_init().unwrap();
         fs::write(dir.path().join(".multorum/rulebook.toml"), initial_rulebook()).unwrap();
-        fs::write(dir.path().join(".multorum/orchestrator/state.toml"), "").unwrap();
 
         git(dir.path(), &["init"]);
         git(dir.path(), &["config", "user.name", "Multorum Test"]);

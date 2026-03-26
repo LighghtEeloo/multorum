@@ -8,13 +8,12 @@ use std::process::Command;
 use super::error::{Result, VcsError};
 use super::{CanonicalCommitHash, VersionControl};
 
-const WORKER_EXCLUDE_ENTRIES: [&str; 6] = [
+const WORKER_EXCLUDE_ENTRIES: [&str; 5] = [
     ".multorum/contract.toml",
     ".multorum/read-set.txt",
     ".multorum/write-set.txt",
     ".multorum/inbox/",
     ".multorum/outbox/",
-    ".multorum/artifacts/",
 ];
 
 /// Git backend for Multorum repository operations.

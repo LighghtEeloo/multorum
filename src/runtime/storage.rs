@@ -417,16 +417,12 @@ impl RuntimeFs {
     // Rulebook initialization
     // -----------------------------------------------------------------------
 
-    /// Initialize the committed `.multorum/` project surface.
+    /// Initialize or repair the committed `.multorum/` project surface.
     pub(crate) fn initialize_rulebook(&self) -> Result<RulebookInit, RuntimeError> {
         let multorum_root = self.paths.multorum_root();
         let gitignore_path = self.paths.multorum_gitignore();
         let rulebook_path = Rulebook::rulebook_path(self.workspace_root());
         let orchestrator_paths = self.paths.orchestrator();
-
-        if rulebook_path.exists() {
-            return Err(RuntimeError::RulebookExists(rulebook_path));
-        }
 
         fs::create_dir_all(&multorum_root)?;
         fs::create_dir_all(orchestrator_paths.root())?;
@@ -434,10 +430,20 @@ impl RuntimeFs {
         fs::create_dir_all(multorum_root.join("tr"))?;
 
         self.ensure_multorum_gitignore()?;
-        fs::write(&rulebook_path, Rulebook::default_template())?;
-        let state = StateFile::default();
-        self.store_state(&state)?;
-        self.rewrite_exclusion_set(&state)?;
+        if !rulebook_path.exists() {
+            fs::write(&rulebook_path, Rulebook::default_template())?;
+        }
+
+        let state_path = orchestrator_paths.state();
+        if !state_path.exists() {
+            fs::write(&state_path, "")?;
+        }
+
+        let exclusion_path = orchestrator_paths.exclusion_set();
+        if !exclusion_path.exists() {
+            let state = self.load_state()?;
+            self.rewrite_exclusion_set(&state)?;
+        }
         tracing::info!(
             multorum_root = %multorum_root.display(),
             rulebook_path = %rulebook_path.display(),
@@ -458,7 +464,11 @@ impl RuntimeFs {
         if !path.exists() {
             return Err(RuntimeError::MissingOrchestratorState);
         }
-        Self::read_toml(&path)
+        let contents = fs::read_to_string(&path)?;
+        if contents.trim().is_empty() {
+            return Ok(StateFile::default());
+        }
+        Ok(toml::from_str(&contents)?)
     }
 
     /// Persist the orchestrator state file.

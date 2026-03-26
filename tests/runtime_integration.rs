@@ -58,12 +58,10 @@ fn setup_repo() -> (TempDir, FsOrchestratorService, String) {
 fn setup_repo_with_rulebook(rulebook_toml: &str) -> (TempDir, FsOrchestratorService, String) {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join("src")).unwrap();
-    fs::create_dir_all(dir.path().join(".multorum/orchestrator")).unwrap();
     fs::write(dir.path().join("src/owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
     fs::write(dir.path().join("src/other.rs"), "pub fn other() -> i32 { 2 }\n").unwrap();
-    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\ntr/\n").unwrap();
+    FsOrchestratorService::new(dir.path()).unwrap().rulebook_init().unwrap();
     fs::write(dir.path().join(".multorum/rulebook.toml"), rulebook_toml).unwrap();
-    fs::write(dir.path().join(".multorum/orchestrator/state.toml"), "").unwrap();
 
     git(dir.path(), &["init"]);
     git(dir.path(), &["config", "user.name", "Multorum Test"]);
@@ -103,6 +101,7 @@ fn rulebook_init_creates_default_committed_files() {
     assert!(init.multorum_root.join("orchestrator/audit").is_dir());
     assert!(init.multorum_root.join("orchestrator/state.toml").is_file());
     assert!(init.multorum_root.join("orchestrator/exclusion-set.txt").is_file());
+    assert_eq!(fs::read_to_string(init.multorum_root.join("orchestrator/state.toml")).unwrap(), "");
     assert_eq!(
         fs::read_to_string(init.multorum_root.join("orchestrator/exclusion-set.txt")).unwrap(),
         ""
@@ -113,23 +112,45 @@ fn rulebook_init_creates_default_committed_files() {
     assert!(rulebook.fileset().definitions().is_empty());
     assert!(rulebook.perspective().declarations().is_empty());
     assert!(rulebook.check().pipeline().is_empty());
-    let state = read_state_toml(dir.path());
-    assert!(state["groups"].as_array().unwrap().is_empty());
+    let status = orchestrator.status().unwrap();
+    assert!(status.active_perspectives.is_empty());
+    assert!(status.workers.is_empty());
 }
 
 #[test]
-fn rulebook_init_refuses_to_overwrite_existing_rulebook() {
+fn rulebook_init_repairs_runtime_surface_without_overwriting_existing_rulebook() {
     let dir = tempfile::tempdir().unwrap();
     let rulebook_path = dir.path().join(".multorum/rulebook.toml");
     fs::create_dir_all(rulebook_path.parent().unwrap()).unwrap();
     fs::write(&rulebook_path, "[check]\npipeline = []\n").unwrap();
+    fs::write(dir.path().join(".multorum/.gitignore"), "orchestrator/\n").unwrap();
     let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
-    let canonical_rulebook_path = rulebook_path.canonicalize().unwrap();
 
-    let error = orchestrator.rulebook_init().unwrap_err();
+    let init = orchestrator.rulebook_init().unwrap();
 
-    assert!(matches!(error, RuntimeError::RulebookExists(path) if path == canonical_rulebook_path));
-    assert_eq!(fs::read_to_string(rulebook_path).unwrap(), "[check]\npipeline = []\n");
+    assert_eq!(init.rulebook_path, rulebook_path.canonicalize().unwrap());
+    assert_eq!(fs::read_to_string(&rulebook_path).unwrap(), "[check]\npipeline = []\n");
+    assert_eq!(
+        fs::read_to_string(dir.path().join(".multorum/.gitignore")).unwrap(),
+        "orchestrator/\ntr/\n"
+    );
+    assert!(dir.path().join(".multorum/orchestrator/audit").is_dir());
+    assert_eq!(
+        fs::read_to_string(dir.path().join(".multorum/orchestrator/state.toml")).unwrap(),
+        ""
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join(".multorum/orchestrator/exclusion-set.txt")).unwrap(),
+        ""
+    );
+    assert!(dir.path().join(".multorum/tr").is_dir());
+
+    orchestrator.rulebook_init().unwrap();
+    assert_eq!(fs::read_to_string(&rulebook_path).unwrap(), "[check]\npipeline = []\n");
+    assert_eq!(
+        fs::read_to_string(dir.path().join(".multorum/orchestrator/state.toml")).unwrap(),
+        ""
+    );
 }
 
 #[test]
