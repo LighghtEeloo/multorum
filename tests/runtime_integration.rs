@@ -894,6 +894,7 @@ fn discard_worker_accepts_blocked_state_and_clears_exclusion_set() {
     assert_eq!(worker.status().unwrap().state, WorkerState::Discarded);
     assert!(read_exclusion_set(dir.path()).is_empty());
     let state = read_state_toml(dir.path());
+    assert_eq!(state["groups"][0]["workers"][0]["state"].as_str().unwrap(), "discarded");
     assert!(state["groups"][0]["read_set"].as_array().unwrap().is_empty());
     assert!(state["groups"][0]["write_set"].as_array().unwrap().is_empty());
 }

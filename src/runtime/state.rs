@@ -16,8 +16,13 @@ use super::timestamp::Timestamp;
 use super::worker_id::WorkerId;
 
 /// Worker lifecycle state as projected by Multorum.
+///
+/// Serde encodes these states as lowercase identifiers so persisted
+/// runtime files and machine-facing APIs share one stable wire format.
+/// Human-facing diagnostics continue to use uppercase spellings via
+/// [`WorkerState::as_str`] and [`std::fmt::Display`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(rename_all = "lowercase")]
 pub enum WorkerState {
     /// The worktree and runtime surface have been created and the worker may run.
     ///
@@ -357,5 +362,25 @@ impl TranscriptView {
     /// Construct an empty transcript.
     pub fn empty() -> Self {
         Self { messages: Vec::new() }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::WorkerState;
+
+    #[test]
+    fn worker_state_serializes_as_lowercase() {
+        assert_eq!(serde_json::to_value(WorkerState::Active).unwrap(), json!("active"));
+    }
+
+    #[test]
+    fn worker_state_deserializes_from_lowercase() {
+        assert_eq!(
+            serde_json::from_value::<WorkerState>(json!("discarded")).unwrap(),
+            WorkerState::Discarded
+        );
     }
 }

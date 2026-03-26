@@ -74,7 +74,7 @@ async fn bidding_group_sibling_discarded_on_merge() {
         .await
         .unwrap();
     assert_tool_success(&merge);
-    assert_eq!(tool_json(&merge)["state"], "MERGED");
+    assert_eq!(tool_json(&merge)["state"], "merged");
 
     // Sibling worker B should now be discarded.
     let detail_b = orch
@@ -85,7 +85,7 @@ async fn bidding_group_sibling_discarded_on_merge() {
         .await
         .unwrap();
     assert_tool_success(&detail_b);
-    assert_eq!(tool_json(&detail_b)["state"], "DISCARDED");
+    assert_eq!(tool_json(&detail_b)["state"], "discarded");
 
     // The merged file should be in the canonical workspace.
     assert_eq!(
@@ -140,12 +140,12 @@ async fn different_perspectives_independent_on_merge() {
     // Merge auth worker.
     let merge_auth = orch.dispatch("merge_worker", json_args(json!({"worker": "auth-w"}))).unwrap();
     assert_tool_success(&merge_auth);
-    assert_eq!(tool_json(&merge_auth)["state"], "MERGED");
+    assert_eq!(tool_json(&merge_auth)["state"], "merged");
 
     // Data worker should still be ACTIVE (different perspective).
     let detail_data = orch.dispatch("get_worker", json_args(json!({"worker": "data-w"}))).unwrap();
     assert_tool_success(&detail_data);
-    assert_eq!(tool_json(&detail_data)["state"], "ACTIVE");
+    assert_eq!(tool_json(&detail_data)["state"], "active");
 
     // Data worker can still commit and merge independently.
     fs::write(Path::new(&wt_data).join("src/data.rs"), "pub fn data() -> i32 { 20 }\n").unwrap();
@@ -160,7 +160,7 @@ async fn different_perspectives_independent_on_merge() {
 
     let merge_data = orch.dispatch("merge_worker", json_args(json!({"worker": "data-w"}))).unwrap();
     assert_tool_success(&merge_data);
-    assert_eq!(tool_json(&merge_data)["state"], "MERGED");
+    assert_eq!(tool_json(&merge_data)["state"], "merged");
 
     // Both changes should be present in the canonical workspace.
     assert_eq!(
@@ -210,7 +210,7 @@ async fn blocker_report_resolve_then_commit() {
 
     // Worker should now be BLOCKED.
     let status = worker_client.call_tool(CallToolRequestParams::new("get_status")).await.unwrap();
-    assert_eq!(tool_json(&status)["state"], "BLOCKED");
+    assert_eq!(tool_json(&status)["state"], "blocked");
     worker_client.cancel().await.unwrap();
 
     // Orchestrator reads the outbox.
@@ -272,7 +272,7 @@ async fn blocker_report_resolve_then_commit() {
 
     // Worker should be ACTIVE after acking the resolve.
     let status2 = worker_client2.call_tool(CallToolRequestParams::new("get_status")).await.unwrap();
-    assert_eq!(tool_json(&status2)["state"], "ACTIVE");
+    assert_eq!(tool_json(&status2)["state"], "active");
 
     // Worker modifies files, commits, and submits.
     fs::write(wt.join("src/owned.rs"), "pub fn owned() -> i32 { 777 }\n").unwrap();
@@ -299,7 +299,7 @@ async fn blocker_report_resolve_then_commit() {
         .await
         .unwrap();
     assert_tool_success(&merge);
-    assert_eq!(tool_json(&merge)["state"], "MERGED");
+    assert_eq!(tool_json(&merge)["state"], "merged");
 
     assert_eq!(
         fs::read_to_string(dir.path().join("src/owned.rs")).unwrap(),
@@ -342,7 +342,7 @@ async fn revise_cycle_resubmit_and_merge() {
     assert_tool_success(&commit1);
     assert_eq!(
         tool_json(&w1.call_tool(CallToolRequestParams::new("get_status")).await.unwrap())["state"],
-        "COMMITTED"
+        "committed"
     );
     w1.cancel().await.unwrap();
 
@@ -375,7 +375,7 @@ async fn revise_cycle_resubmit_and_merge() {
     assert_tool_success(&ack);
     assert_eq!(
         tool_json(&w2.call_tool(CallToolRequestParams::new("get_status")).await.unwrap())["state"],
-        "ACTIVE"
+        "active"
     );
 
     // Worker re-commits with the corrected value, amending the
@@ -404,7 +404,7 @@ async fn revise_cycle_resubmit_and_merge() {
         .await
         .unwrap();
     assert_tool_success(&merge);
-    assert_eq!(tool_json(&merge)["state"], "MERGED");
+    assert_eq!(tool_json(&merge)["state"], "merged");
 
     assert_eq!(
         fs::read_to_string(dir.path().join("src/owned.rs")).unwrap(),
@@ -723,7 +723,7 @@ async fn write_set_respected_merge_succeeds() {
         .await
         .unwrap();
     assert_tool_success(&merge);
-    assert_eq!(tool_json(&merge)["state"], "MERGED");
+    assert_eq!(tool_json(&merge)["state"], "merged");
 
     orch.cancel().await.unwrap();
 }
@@ -874,7 +874,7 @@ async fn check_pipeline_skip_succeeds() {
         .unwrap();
     assert_tool_success(&merge);
     let merge_json = tool_json(&merge);
-    assert_eq!(merge_json["state"], "MERGED");
+    assert_eq!(merge_json["state"], "merged");
     assert!(
         merge_json["skipped_checks"].as_array().unwrap().iter().any(|c| c == "lint"),
         "lint should appear in skipped_checks"
@@ -952,7 +952,7 @@ async fn check_pipeline_passing_reports_ran_checks() {
     let merge = orch.dispatch("merge_worker", json_args(json!({"worker": "rc-w"}))).unwrap();
     assert_tool_success(&merge);
     let merge_json = tool_json(&merge);
-    assert_eq!(merge_json["state"], "MERGED");
+    assert_eq!(merge_json["state"], "merged");
 
     let ran = merge_json["ran_checks"].as_array().unwrap();
     assert_eq!(ran.len(), 2);

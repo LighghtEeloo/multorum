@@ -67,7 +67,7 @@ async fn orchestrator_wire_call_tool_with_args() {
     assert_tool_success(&result);
     let created = tool_json(&result);
     assert_eq!(created["worker"], "w1");
-    assert_eq!(created["state"], "ACTIVE");
+    assert_eq!(created["state"], "active");
     client.cancel().await.unwrap();
 }
 
@@ -123,7 +123,7 @@ async fn worker_wire_contract_and_status() {
 
     let status = client.call_tool(CallToolRequestParams::new("get_status")).await.unwrap();
     assert_tool_success(&status);
-    assert_eq!(tool_json(&status)["state"], "ACTIVE");
+    assert_eq!(tool_json(&status)["state"], "active");
 
     client.cancel().await.unwrap();
 }
@@ -163,7 +163,7 @@ async fn wire_full_workflow() {
         .with_arguments(json_args(json!({"worker": "wf1"})));
     let merge = orch_client.call_tool(merge_params).await.unwrap();
     assert_tool_success(&merge);
-    assert_eq!(tool_json(&merge)["state"], "MERGED");
+    assert_eq!(tool_json(&merge)["state"], "merged");
 
     // Step 5: Verify merged file landed.
     assert_eq!(

@@ -136,7 +136,7 @@ fn orchestrator_create_worker() {
     assert_tool_success(&result);
     let json = tool_json(&result);
     assert_eq!(json["perspective"], "AuthImplementor");
-    assert_eq!(json["state"], "ACTIVE");
+    assert_eq!(json["state"], "active");
     assert!(json["worktree_path"].is_string());
 }
 
@@ -172,7 +172,7 @@ fn orchestrator_get_worker() {
     assert_tool_success(&result);
     let detail = tool_json(&result);
     assert_eq!(detail["worker"], "w1");
-    assert_eq!(detail["state"], "ACTIVE");
+    assert_eq!(detail["state"], "active");
 }
 
 #[test]
@@ -426,7 +426,7 @@ fn orchestrator_merge_worker() {
     let result = handler.dispatch("merge_worker", json_args(json!({"worker": "w1"}))).unwrap();
     assert_tool_success(&result);
     let merge = tool_json(&result);
-    assert_eq!(merge["state"], "MERGED");
+    assert_eq!(merge["state"], "merged");
 }
 
 // ===========================================================================
@@ -561,7 +561,7 @@ fn orchestrator_resource_worker_detail() {
     let result = handler.read("multorum://orchestrator/workers/w1").unwrap();
     let detail = resource_json(&result);
     assert_eq!(detail["worker"], "w1");
-    assert_eq!(detail["state"], "ACTIVE");
+    assert_eq!(detail["state"], "active");
 }
 
 #[test]
@@ -859,7 +859,7 @@ fn worker_get_status() {
     let result = handler.dispatch("get_status", empty_args()).unwrap();
     assert_tool_success(&result);
     let status = tool_json(&result);
-    assert_eq!(status["state"], "ACTIVE");
+    assert_eq!(status["state"], "active");
 }
 
 // ===========================================================================
@@ -955,7 +955,7 @@ fn worker_resource_status() {
 
     let result = handler.read("multorum://worker/status").unwrap();
     let status = resource_json(&result);
-    assert_eq!(status["state"], "ACTIVE");
+    assert_eq!(status["state"], "active");
 }
 
 #[test]
@@ -1025,7 +1025,7 @@ fn full_workflow_create_commit_merge_via_mcp() {
     assert_eq!(tool_json(&contract)["perspective"], "AuthImplementor");
 
     let status = worker.dispatch("get_status", empty_args()).unwrap();
-    assert_eq!(tool_json(&status)["state"], "ACTIVE");
+    assert_eq!(tool_json(&status)["state"], "active");
 
     fs::write(Path::new(&worktree).join("src/owned.rs"), "pub fn owned() -> i32 { 42 }\n").unwrap();
     git(Path::new(&worktree), &["add", "src/owned.rs"]);
@@ -1036,11 +1036,11 @@ fn full_workflow_create_commit_merge_via_mcp() {
     assert_tool_success(&commit);
 
     let status = worker.dispatch("get_status", empty_args()).unwrap();
-    assert_eq!(tool_json(&status)["state"], "COMMITTED");
+    assert_eq!(tool_json(&status)["state"], "committed");
 
     let merge = orch.dispatch("merge_worker", json_args(json!({"worker": "mcp-w1"}))).unwrap();
     assert_tool_success(&merge);
-    assert_eq!(tool_json(&merge)["state"], "MERGED");
+    assert_eq!(tool_json(&merge)["state"], "merged");
 
     assert_eq!(
         fs::read_to_string(repo.path().join("src/owned.rs")).unwrap(),
