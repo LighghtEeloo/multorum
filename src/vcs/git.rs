@@ -288,10 +288,38 @@ impl VersionControl for GitVcs {
         Err(VcsError::DirtyWorkspace { changed_paths: changed_paths.join(", ") })
     }
 
-    fn integrate_commit(&self, workspace_root: &Path, commit: &CanonicalCommitHash) -> Result<()> {
+    fn begin_integration(&self, workspace_root: &Path, commit: &CanonicalCommitHash) -> Result<()> {
         let mut command = self.git_command(workspace_root);
-        command.arg("cherry-pick").arg(commit.as_str());
-        self.run_command(command, "integrate submitted commit").map(|_| ())
+        command.arg("cherry-pick").arg("--no-commit").arg(commit.as_str());
+        let result = self.run_command(command, "apply submitted commit for integration");
+        if let Err(error) = result {
+            let mut abort = self.git_command(workspace_root);
+            abort.arg("cherry-pick").arg("--abort");
+            let _ = self.run_command(abort, "abort failed canonical cherry-pick");
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn finalize_integration(
+        &self, workspace_root: &Path, commit: &CanonicalCommitHash,
+    ) -> Result<()> {
+        let mut command = self.git_command(workspace_root);
+        command.arg("commit").arg("--reuse-message").arg(commit.as_str());
+        self.run_command(command, "finalize integrated commit").map(|_| ())
+    }
+
+    fn abort_integration(&self, workspace_root: &Path) -> Result<()> {
+        let mut command = self.git_command(workspace_root);
+        command.arg("cherry-pick").arg("--abort");
+        match self.run_command(command, "abort canonical cherry-pick") {
+            | Ok(_) => Ok(()),
+            | Err(_) => {
+                let mut reset = self.git_command(workspace_root);
+                reset.arg("reset").arg("--hard").arg("HEAD");
+                self.run_command(reset, "reset canonical integration").map(|_| ())
+            }
+        }
     }
 
     fn checkout_detached(&self, worktree_root: &Path, commit: &CanonicalCommitHash) -> Result<()> {
@@ -356,6 +384,83 @@ impl VersionControl for GitVcs {
         command.arg("ls-tree").arg("-r").arg("--name-only").arg(commit.as_str());
         let output = self.run_command(command, "list commit files")?;
         Ok(output.lines().filter(|line| !line.trim().is_empty()).map(PathBuf::from).collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+
+    use tempfile::tempdir;
+
+    use super::{GitVcs, VersionControl};
+
+    fn git(root: &Path, args: &[&str]) -> String {
+        let output =
+            std::process::Command::new("git").args(args).current_dir(root).output().unwrap();
+        if !output.status.success() {
+            panic!("git {:?} failed: {}", args, String::from_utf8_lossy(&output.stderr));
+        }
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    }
+
+    fn setup_repo()
+    -> (tempfile::TempDir, GitVcs, super::CanonicalCommitHash, super::CanonicalCommitHash) {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("owned.rs"), "pub fn owned() -> i32 { 1 }\n").unwrap();
+
+        git(dir.path(), &["init"]);
+        git(dir.path(), &["config", "user.name", "Multorum Test"]);
+        git(dir.path(), &["config", "user.email", "multorum@test.invalid"]);
+        git(dir.path(), &["config", "commit.gpgsign", "false"]);
+        git(dir.path(), &["add", "owned.rs"]);
+        git(dir.path(), &["commit", "-m", "feat: initialize"]);
+        let base = GitVcs::new().head_commit(dir.path()).unwrap();
+
+        fs::write(dir.path().join("owned.rs"), "pub fn owned() -> i32 { 2 }\n").unwrap();
+        git(dir.path(), &["add", "owned.rs"]);
+        git(dir.path(), &["commit", "-m", "incr: update owned"]);
+        let worker_commit = GitVcs::new().head_commit(dir.path()).unwrap();
+
+        git(dir.path(), &["reset", "--hard", base.as_str()]);
+        (dir, GitVcs::new(), base, worker_commit)
+    }
+
+    #[test]
+    fn begin_and_abort_integration_restore_the_workspace() {
+        let (dir, vcs, base, worker_commit) = setup_repo();
+
+        vcs.begin_integration(dir.path(), &worker_commit).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("owned.rs")).unwrap(),
+            "pub fn owned() -> i32 { 2 }\n"
+        );
+        assert_eq!(vcs.head_commit(dir.path()).unwrap(), base);
+
+        vcs.abort_integration(dir.path()).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("owned.rs")).unwrap(),
+            "pub fn owned() -> i32 { 1 }\n"
+        );
+        assert_eq!(vcs.head_commit(dir.path()).unwrap(), base);
+        assert!(git(dir.path(), &["status", "--porcelain"]).is_empty());
+    }
+
+    #[test]
+    fn finalize_integration_commits_the_applied_change() {
+        let (dir, vcs, base, worker_commit) = setup_repo();
+
+        vcs.begin_integration(dir.path(), &worker_commit).unwrap();
+        vcs.finalize_integration(dir.path(), &worker_commit).unwrap();
+
+        assert_ne!(vcs.head_commit(dir.path()).unwrap(), base);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("owned.rs")).unwrap(),
+            "pub fn owned() -> i32 { 2 }\n"
+        );
+        assert_eq!(git(dir.path(), &["log", "-1", "--format=%s"]), "incr: update owned");
+        assert!(git(dir.path(), &["status", "--porcelain"]).is_empty());
     }
 }
 

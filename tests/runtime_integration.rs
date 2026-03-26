@@ -970,6 +970,100 @@ fn merge_writes_audit_entry_without_rationale() {
 }
 
 #[test]
+fn merge_rejects_invalid_audit_payload_without_integrating_the_worker_commit() {
+    let (dir, orchestrator, base_head) = setup_repo();
+    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    let worker = FsWorkerService::new(&result.worktree_path).unwrap();
+    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 13 }\n").unwrap();
+    git(&result.worktree_path, &["add", "src/owned.rs"]);
+    git(&result.worktree_path, &["commit", "-m", "incr: stage invalid audit payload"]);
+    let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
+    worker.send_commit(head, BundlePayload::default()).unwrap();
+
+    let exclusion_before = read_exclusion_set(dir.path());
+    let rationale_body = dir.path().join("rationale.md");
+    fs::write(&rationale_body, "This file should stay in place.\n").unwrap();
+    let error = orchestrator
+        .merge_worker(
+            result.worker_id.clone(),
+            vec![],
+            BundlePayload {
+                body_text: Some("inline body".to_owned()),
+                body_path: Some(rationale_body.clone()),
+                artifacts: vec![],
+            },
+        )
+        .unwrap_err();
+
+    assert!(matches!(error, RuntimeError::Bundle(_)));
+    assert_eq!(git(dir.path(), &["rev-parse", "HEAD"]), base_head);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/owned.rs")).unwrap(),
+        "pub fn owned() -> i32 { 1 }\n"
+    );
+    assert_eq!(worker.status().unwrap().state, WorkerState::Committed);
+    assert_eq!(read_exclusion_set(dir.path()), exclusion_before);
+    assert!(rationale_body.exists(), "invalid audit payload must not be consumed");
+    assert!(
+        !dir.path()
+            .join(format!(".multorum/orchestrator/audit/{}.toml", result.worker_id.as_str()))
+            .exists(),
+        "audit entry must not be visible after merge rejection"
+    );
+}
+
+#[test]
+fn merge_rejects_duplicate_audit_artifact_names_without_integrating_the_worker_commit() {
+    let (dir, orchestrator, base_head) = setup_repo();
+    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    let worker = FsWorkerService::new(&result.worktree_path).unwrap();
+    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 21 }\n").unwrap();
+    git(&result.worktree_path, &["add", "src/owned.rs"]);
+    git(&result.worktree_path, &["commit", "-m", "incr: stage duplicate artifacts"]);
+    let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
+    worker.send_commit(head, BundlePayload::default()).unwrap();
+
+    let exclusion_before = read_exclusion_set(dir.path());
+    let artifact_a = dir.path().join("audit-a/log.txt");
+    let artifact_b = dir.path().join("audit-b/log.txt");
+    fs::create_dir_all(artifact_a.parent().unwrap()).unwrap();
+    fs::create_dir_all(artifact_b.parent().unwrap()).unwrap();
+    fs::write(&artifact_a, "artifact a\n").unwrap();
+    fs::write(&artifact_b, "artifact b\n").unwrap();
+
+    let error = orchestrator
+        .merge_worker(
+            result.worker_id.clone(),
+            vec![],
+            BundlePayload {
+                body_text: None,
+                body_path: None,
+                artifacts: vec![artifact_a.clone(), artifact_b.clone()],
+            },
+        )
+        .unwrap_err();
+
+    assert!(matches!(error, RuntimeError::Bundle(_)));
+    assert_eq!(git(dir.path(), &["rev-parse", "HEAD"]), base_head);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/owned.rs")).unwrap(),
+        "pub fn owned() -> i32 { 1 }\n"
+    );
+    assert_eq!(worker.status().unwrap().state, WorkerState::Committed);
+    assert_eq!(read_exclusion_set(dir.path()), exclusion_before);
+    assert!(artifact_a.exists(), "duplicate artifact validation must not consume sources");
+    assert!(artifact_b.exists(), "duplicate artifact validation must not consume sources");
+    assert!(
+        !dir.path()
+            .join(format!(".multorum/orchestrator/audit/{}.toml", result.worker_id.as_str()))
+            .exists(),
+        "audit entry must not be visible after merge rejection"
+    );
+}
+
+#[test]
 fn orchestrator_hook_rejects_commit_touching_excluded_file() {
     let (dir, orchestrator, _head) = setup_repo();
     let root = dir.path().canonicalize().unwrap();

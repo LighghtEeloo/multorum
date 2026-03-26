@@ -71,9 +71,30 @@ pub trait VersionControl: std::fmt::Debug + Send + Sync {
     /// unstaged, or untracked changes.
     fn ensure_clean_worktree(&self, worktree_root: &Path) -> Result<()>;
 
-    /// Integrate one submitted worker commit into the canonical
-    /// workspace.
-    fn integrate_commit(&self, workspace_root: &Path, commit: &CanonicalCommitHash) -> Result<()>;
+    /// Apply one submitted worker commit into the canonical workspace
+    /// without finalizing the canonical commit yet.
+    ///
+    /// Note: Merge-time runtime persistence happens between this step and
+    /// [`VersionControl::finalize_integration`] so Multorum can still
+    /// abort without mutating the canonical branch when audit/state
+    /// persistence fails.
+    fn begin_integration(&self, workspace_root: &Path, commit: &CanonicalCommitHash) -> Result<()>;
+
+    /// Finalize a previously-begun canonical integration.
+    ///
+    /// Implementations must preserve the submitted worker commit message
+    /// and equivalent metadata so the resulting canonical commit matches
+    /// the normal merge path.
+    fn finalize_integration(
+        &self, workspace_root: &Path, commit: &CanonicalCommitHash,
+    ) -> Result<()>;
+
+    /// Abort a previously-begun canonical integration.
+    ///
+    /// Note: This is the rollback boundary for merge-time failures that
+    /// happen after the worker patch has been applied but before the
+    /// canonical commit is finalized.
+    fn abort_integration(&self, workspace_root: &Path) -> Result<()>;
 
     /// Move a detached worktree head to a specific commit without
     /// changing persisted runtime metadata.

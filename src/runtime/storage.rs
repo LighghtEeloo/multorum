@@ -14,6 +14,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -182,6 +183,119 @@ pub(crate) struct AckRecord {
     pub(crate) sequence: Sequence,
     /// Timestamp recorded when the acknowledgement was written.
     pub(crate) acknowledged_at: Timestamp,
+}
+
+/// One staged runtime path waiting to be promoted into place.
+///
+/// Note: Merge-time promotion may need to roll back both files and
+/// directories, so this helper treats both uniformly as rename targets.
+#[derive(Debug)]
+struct PreparedPromotion {
+    staged_path: PathBuf,
+    final_path: PathBuf,
+    backup_path: PathBuf,
+    had_original: bool,
+    promoted: bool,
+}
+
+impl PreparedPromotion {
+    /// Construct one staged promotion under the merge staging root.
+    fn new(
+        staged_path: PathBuf, final_path: PathBuf, staging_root: &Path, backup_name: &str,
+    ) -> Self {
+        Self {
+            had_original: final_path.exists(),
+            promoted: false,
+            backup_path: staging_root.join(backup_name),
+            staged_path,
+            final_path,
+        }
+    }
+
+    /// Promote the staged path into its final runtime location.
+    fn promote(&mut self) -> Result<(), RuntimeError> {
+        if let Some(parent) = self.final_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if let Some(parent) = self.backup_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if self.had_original {
+            fs::rename(&self.final_path, &self.backup_path)?;
+        }
+        if let Err(error) = fs::rename(&self.staged_path, &self.final_path) {
+            if self.had_original && self.backup_path.exists() {
+                fs::rename(&self.backup_path, &self.final_path)?;
+            }
+            return Err(RuntimeError::Io(error));
+        }
+        self.promoted = true;
+        Ok(())
+    }
+
+    /// Restore the original runtime path after a failed merge.
+    fn rollback(&mut self) -> Result<(), RuntimeError> {
+        if self.promoted && self.final_path.exists() {
+            fs::rename(&self.final_path, &self.staged_path)?;
+            self.promoted = false;
+        }
+        if self.had_original && self.backup_path.exists() {
+            fs::rename(&self.backup_path, &self.final_path)?;
+        }
+        Ok(())
+    }
+}
+
+/// Merge-time runtime artifacts staged under `.multorum/orchestrator/`.
+///
+/// The staged directory is invisible to readers until promotion. This
+/// lets `merge_worker` validate audit payloads and prepare the final
+/// runtime projection before the canonical branch is mutated.
+#[derive(Debug)]
+pub(crate) struct StagedMergeArtifacts {
+    promotions: Vec<PreparedPromotion>,
+    staging_root: PathBuf,
+}
+
+impl StagedMergeArtifacts {
+    /// Promote every staged runtime artifact into place.
+    pub(crate) fn promote(&mut self) -> Result<(), RuntimeError> {
+        for idx in 0..self.promotions.len() {
+            if let Err(error) = self.promotions[idx].promote() {
+                let rollback_result = self.rollback_range(idx + 1);
+                return Err(rollback_result.err().unwrap_or(error));
+            }
+        }
+        Ok(())
+    }
+
+    /// Roll back every already-promoted runtime artifact.
+    pub(crate) fn rollback(&mut self) -> Result<(), RuntimeError> {
+        self.rollback_range(self.promotions.len())
+    }
+
+    fn rollback_range(&mut self, promoted: usize) -> Result<(), RuntimeError> {
+        for promotion in self.promotions[..promoted].iter_mut().rev() {
+            promotion.rollback()?;
+        }
+        Ok(())
+    }
+
+    /// Remove merge staging after the runtime transaction has finished.
+    ///
+    /// Note: Cleanup happens after the canonical commit is finalized, so
+    /// failures here must not change the merge result.
+    pub(crate) fn cleanup(self) {
+        if self.staging_root.exists()
+            && let Err(error) = fs::remove_dir_all(&self.staging_root)
+        {
+            tracing::warn!(
+                path = %self.staging_root.display(),
+                error = %error,
+                "failed to clean up merge staging"
+            );
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -470,17 +584,22 @@ impl RuntimeFs {
     // Exclusion set
     // -----------------------------------------------------------------------
 
+    fn collect_exclusion_set(state: &StateFile) -> BTreeSet<PathBuf> {
+        let mut exclusion = BTreeSet::<PathBuf>::new();
+        for group in state.live_groups() {
+            exclusion.extend(group.read_set.iter().cloned());
+            exclusion.extend(group.write_set.iter().cloned());
+        }
+        exclusion
+    }
+
     /// Recompute and persist the orchestrator exclusion set from `state.toml`.
     ///
     /// The exclusion set is the union of every live bidding group's
     /// read and write sets. It must be rewritten after every persisted
     /// `state.toml` update so the projection always matches runtime state.
     pub(crate) fn rewrite_exclusion_set(&self, state: &StateFile) -> Result<(), RuntimeError> {
-        let mut exclusion = BTreeSet::<PathBuf>::new();
-        for group in state.live_groups() {
-            exclusion.extend(group.read_set.iter().cloned());
-            exclusion.extend(group.write_set.iter().cloned());
-        }
+        let exclusion = Self::collect_exclusion_set(state);
         let path = self.paths.orchestrator().exclusion_set();
         Self::write_path_list(&path, &exclusion)?;
         tracing::trace!(count = exclusion.len(), "rewrote orchestrator exclusion set");
@@ -491,26 +610,63 @@ impl RuntimeFs {
     // Audit
     // -----------------------------------------------------------------------
 
-    /// Write an audit entry for a successfully merged worker.
+    /// Stage the runtime artifacts that must become visible when a merge
+    /// transaction commits.
     ///
-    /// The rationale payload body and artifacts are moved into the audit
-    /// directory alongside the TOML entry, using the same bundle I/O as
-    /// mailbox publishing.
-    pub(crate) fn write_audit_entry(
-        &self, worker: &WorkerEntry, group: &BiddingGroupRecord, head_commit: &CanonicalCommitHash,
-        changed_files: &BTreeSet<PathBuf>, ran_checks: &[String], skipped_checks: &[String],
-        payload: BundlePayload,
-    ) -> Result<(), RuntimeError> {
-        let audit_dir = self.paths.orchestrator().audit();
-        let entry_dir = audit_dir.join(worker.worker_id.as_str());
-        fs::create_dir_all(&entry_dir)?;
+    /// Note: This prepares audit state, `state.toml`, and the exclusion
+    /// set before canonical integration starts. Promotion still happens
+    /// later, after the worker patch has been applied in no-commit mode.
+    pub(crate) fn prepare_merge_artifacts(
+        &self, updated_state: &StateFile, worker: &WorkerEntry, group: &BiddingGroupRecord,
+        head_commit: &CanonicalCommitHash, changed_files: &BTreeSet<PathBuf>,
+        ran_checks: &[String], skipped_checks: &[String], payload: BundlePayload,
+    ) -> Result<StagedMergeArtifacts, RuntimeError> {
+        payload.validate()?;
 
-        let (rationale_body, rationale_artifacts) = if !payload.is_empty() {
-            let written = BundleWriter::write(&entry_dir, payload)?;
-            (written.body_path, written.artifact_paths)
-        } else {
-            (None, Vec::new())
-        };
+        let orchestrator_paths = self.paths.orchestrator();
+        fs::create_dir_all(orchestrator_paths.audit())?;
+        let staging_nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock is after unix epoch")
+            .as_nanos();
+        let staging_root = orchestrator_paths.root().join(format!(
+            ".merge-{}-{}",
+            worker.worker_id.as_str(),
+            staging_nonce
+        ));
+        fs::create_dir_all(&staging_root)?;
+
+        let staged_state_path = staging_root.join("state.toml");
+        Self::write_toml(&staged_state_path, updated_state)?;
+
+        let staged_exclusion_path = staging_root.join("exclusion-set.txt");
+        let exclusion = Self::collect_exclusion_set(updated_state);
+        Self::write_path_list(&staged_exclusion_path, &exclusion)?;
+
+        let final_bundle_root = orchestrator_paths.audit().join(worker.worker_id.as_str());
+        let mut rationale_body = None;
+        let mut rationale_artifacts = Vec::new();
+        let mut promotions = Vec::new();
+
+        if !payload.is_empty() {
+            let staged_bundle_root = staging_root.join("audit-bundle");
+            fs::create_dir_all(&staged_bundle_root)?;
+            let written = BundleWriter::write(&staged_bundle_root, payload)?;
+            if written.body_path.is_some() {
+                rationale_body = Some(final_bundle_root.join(BODY_FILE_NAME));
+            }
+            rationale_artifacts = written
+                .artifact_paths
+                .iter()
+                .map(|path| final_bundle_root.join("artifacts").join(path.file_name().unwrap()))
+                .collect();
+            promotions.push(PreparedPromotion::new(
+                staged_bundle_root,
+                final_bundle_root,
+                &staging_root,
+                "backup-audit-bundle",
+            ));
+        }
 
         let entry = AuditEntry {
             worker_id: worker.worker_id.clone(),
@@ -524,9 +680,29 @@ impl RuntimeFs {
             rationale_body,
             rationale_artifacts,
         };
-        Self::write_toml(&self.paths.orchestrator().audit_entry(&worker.worker_id), &entry)?;
-        tracing::info!(worker_id = %worker.worker_id, "wrote audit entry");
-        Ok(())
+        let staged_audit_entry = staging_root.join("audit-entry.toml");
+        Self::write_toml(&staged_audit_entry, &entry)?;
+
+        promotions.push(PreparedPromotion::new(
+            staged_audit_entry,
+            orchestrator_paths.audit_entry(&worker.worker_id),
+            &staging_root,
+            "backup-audit-entry.toml",
+        ));
+        promotions.push(PreparedPromotion::new(
+            staged_state_path,
+            orchestrator_paths.state(),
+            &staging_root,
+            "backup-state.toml",
+        ));
+        promotions.push(PreparedPromotion::new(
+            staged_exclusion_path,
+            orchestrator_paths.exclusion_set(),
+            &staging_root,
+            "backup-exclusion-set.txt",
+        ));
+
+        Ok(StagedMergeArtifacts { promotions, staging_root })
     }
 
     fn ensure_multorum_gitignore(&self) -> Result<(), RuntimeError> {

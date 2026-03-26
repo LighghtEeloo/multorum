@@ -13,6 +13,8 @@
 
 use std::path::PathBuf;
 
+use crate::bundle::BundleError;
+
 /// User-supplied content to place into a bundle directory.
 ///
 /// `body_text` and `body_path` are mutually exclusive.
@@ -34,5 +36,45 @@ impl BundlePayload {
     /// Return `true` if the payload carries no body or artifacts.
     pub fn is_empty(&self) -> bool {
         self.body_text.is_none() && self.body_path.is_none() && self.artifacts.is_empty()
+    }
+
+    /// Validate that the payload is well-formed before Multorum starts
+    /// moving any path-backed inputs into managed storage.
+    ///
+    /// Note: Merge-time audit staging calls this before canonical
+    /// integration starts so deterministic bundle validation failures
+    /// cannot leave the canonical branch partially updated.
+    pub fn validate(&self) -> Result<(), BundleError> {
+        let mut seen_artifact_names = std::collections::BTreeSet::new();
+
+        match (&self.body_text, &self.body_path) {
+            | (Some(_), Some(_)) => return Err(BundleError::ConflictingBody),
+            | (_, Some(path)) => {
+                if !path.is_file() {
+                    return Err(BundleError::Io(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("bundle body path is not a file: {}", path.display()),
+                    )));
+                }
+            }
+            | _ => {}
+        }
+
+        for artifact in &self.artifacts {
+            let Some(name) = artifact.file_name() else {
+                return Err(BundleError::InvalidArtifactPath);
+            };
+            if !seen_artifact_names.insert(name.to_owned()) {
+                return Err(BundleError::DuplicateArtifactName);
+            }
+            if !artifact.is_file() {
+                return Err(BundleError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("bundle artifact path is not a file: {}", artifact.display()),
+                )));
+            }
+        }
+
+        Ok(())
     }
 }

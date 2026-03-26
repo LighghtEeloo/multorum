@@ -833,7 +833,7 @@ impl OrchestratorService for FsOrchestratorService {
         &self, worker_id: WorkerId, skip_checks: Vec<String>, audit_payload: BundlePayload,
     ) -> Result<MergeResult> {
         tracing::trace!(worker_id = %worker_id, "starting worker merge");
-        let mut state = self.fs.load_state()?;
+        let state = self.fs.load_state()?;
 
         let (group, worker) = state
             .find_worker(&worker_id)
@@ -913,28 +913,25 @@ impl OrchestratorService for FsOrchestratorService {
             ran_checks.push(check_name.to_string());
         }
 
-        self.fs.vcs().ensure_clean_workspace(self.fs.workspace_root())?;
-        self.fs.vcs().integrate_commit(self.fs.workspace_root(), &head_commit)?;
-
-        // Mark merged worker and discard siblings.
-        let group_mut = state.find_worker_group_mut(&worker_id).unwrap();
-        let worker_entry_for_audit = group_mut.find_worker(&worker_id).unwrap().clone();
-        let group_for_audit = group_mut.clone();
-
-        for w in &mut group_mut.workers {
-            if w.worker_id == worker_id {
-                w.state = WorkerState::Merged;
-            } else if w.state.is_live() {
-                w.state = WorkerState::Discarded;
-                w.submitted_head_commit = None;
+        // Prepare the post-merge runtime projection before touching the
+        // canonical branch so deterministic audit/state failures happen
+        // while the worker is still `COMMITTED`.
+        let worker_entry_for_audit = worker.clone();
+        let group_for_audit = group.clone();
+        let mut updated_state = state.clone();
+        let group_mut = updated_state.find_worker_group_mut(&worker_id).unwrap();
+        for entry in &mut group_mut.workers {
+            if entry.worker_id == worker_id {
+                entry.state = WorkerState::Merged;
+            } else if entry.state.is_live() {
+                entry.state = WorkerState::Discarded;
+                entry.submitted_head_commit = None;
             }
         }
-
         group_mut.clear_boundary();
 
-        self.fs.store_state(&state)?;
-        self.fs.rewrite_exclusion_set(&state)?;
-        self.fs.write_audit_entry(
+        let mut staged_merge = self.fs.prepare_merge_artifacts(
+            &updated_state,
             &worker_entry_for_audit,
             &group_for_audit,
             &head_commit,
@@ -943,6 +940,39 @@ impl OrchestratorService for FsOrchestratorService {
             &skipped_checks,
             audit_payload,
         )?;
+
+        self.fs.vcs().ensure_clean_workspace(self.fs.workspace_root())?;
+        self.fs.vcs().begin_integration(self.fs.workspace_root(), &head_commit)?;
+        if let Err(error) = staged_merge.promote() {
+            let abort_error = self.fs.vcs().abort_integration(self.fs.workspace_root()).err();
+            staged_merge.cleanup();
+            return Err(abort_error.map(RuntimeError::from).unwrap_or(error));
+        }
+        if let Err(error) =
+            self.fs.vcs().finalize_integration(self.fs.workspace_root(), &head_commit)
+        {
+            let rollback_error = staged_merge.rollback().err();
+            let abort_error = self.fs.vcs().abort_integration(self.fs.workspace_root()).err();
+            staged_merge.cleanup();
+            if let Some(abort_error) = abort_error {
+                tracing::error!(
+                    worker_id = %worker_id,
+                    original_error = %error,
+                    "failed to abort canonical integration after finalize failure"
+                );
+                return Err(RuntimeError::from(abort_error));
+            }
+            if let Some(rollback_error) = rollback_error {
+                tracing::error!(
+                    worker_id = %worker_id,
+                    original_error = %error,
+                    "failed to roll back staged runtime artifacts after finalize failure"
+                );
+                return Err(rollback_error);
+            }
+            return Err(RuntimeError::from(error));
+        }
+        staged_merge.cleanup();
 
         tracing::info!(
             worker_id = %worker_id,
