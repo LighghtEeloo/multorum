@@ -492,11 +492,34 @@ MCP resources expose read-only projections of runtime state and are returned as 
 
 Concrete resources should list only currently implemented projections. Parameterized URIs belong in resource templates rather than in the concrete resource list.
 
-Current discovery rules:
+#### Orchestrator-mode resources
 
-- concrete resources cover fixed snapshots such as orchestrator status, worker inbox contents, and worker status
-- parameterized templates cover projections that require a runtime identity, such as orchestrator-side worker detail and worker outbox listings
-- projections that are not implemented yet must not be advertised as concrete resources
+Concrete:
+
+| URI | Description |
+|---|---|
+| `multorum://orchestrator/status` | Full orchestrator snapshot: active perspectives and workers. |
+| `multorum://orchestrator/perspectives` | Compiled perspective summaries from the current rulebook. |
+| `multorum://orchestrator/workers` | Worker summary listing for the current runtime. |
+
+Templates:
+
+| URI template | Description |
+|---|---|
+| `multorum://orchestrator/workers/{worker}` | Detailed orchestrator-side view of one worker. |
+| `multorum://orchestrator/workers/{worker}/outbox` | Outbox mailbox listing for one worker. |
+
+#### Worker-mode resources
+
+Concrete:
+
+| URI | Description |
+|---|---|
+| `multorum://worker/contract` | Immutable worker contract for the active perspective. |
+| `multorum://worker/inbox` | Inbox mailbox listing for the active worker. |
+| `multorum://worker/status` | Projected worker lifecycle status. |
+
+Worker-mode resources carry no worker identity parameter because the server is started from inside a single worker worktree — the identity is implicit.
 
 ### Error Contract
 
