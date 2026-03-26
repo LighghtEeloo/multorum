@@ -16,15 +16,21 @@ use rmcp::{ErrorData, ServerHandler};
 use crate::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService, WorkerId};
 
 use super::{
-    args_or_empty, dispatch_tool, extract_payload, extract_reply, list_resource_templates_result,
-    list_resources_result, list_tools_result, optional_bool, optional_str, optional_string_list,
-    optional_u64, required_str, required_u64, resource_success, runtime_to_resource_error,
-    server_info, validate_tool_arguments,
+    DeferredService, args_or_empty, dispatch_tool, extract_payload, extract_reply,
+    list_resource_templates_result, list_resources_result, list_tools_result,
+    mcp_to_resource_error, optional_bool, optional_str, optional_string_list, optional_u64,
+    required_str, required_u64, resource_success, runtime_to_resource_error, server_info,
+    tool_error_result, validate_tool_arguments,
 };
 
 /// MCP server handler for the orchestrator surface.
 pub struct OrchestratorHandler {
-    service: FsOrchestratorService,
+    /// Deferred runtime binding.
+    ///
+    /// Note: The handler stays protocol-live even when startup role
+    /// detection fails so MCP hosts can complete initialization and then
+    /// observe a structured error on the first runtime operation.
+    service: DeferredService<FsOrchestratorService>,
     tools: ListToolsResult,
     resources: ListResourcesResult,
     resource_templates: ListResourceTemplatesResult,
@@ -33,11 +39,22 @@ pub struct OrchestratorHandler {
 impl OrchestratorHandler {
     /// Construct the handler from a runtime orchestrator service.
     pub fn new(service: FsOrchestratorService) -> Self {
+        Self::from_startup_result(Ok(service))
+    }
+
+    /// Construct the handler from the startup attempt used by the CLI
+    /// entrypoint.
+    pub fn from_startup_result(service: crate::runtime::Result<FsOrchestratorService>) -> Self {
         let tools = list_tools_result(&crate::mcp::tool::orchestrator::descriptors());
         let resources = list_resources_result(&crate::mcp::resource::orchestrator::descriptors());
         let resource_templates =
             list_resource_templates_result(&crate::mcp::resource::orchestrator::templates());
-        Self { service, tools, resources, resource_templates }
+        Self {
+            service: DeferredService::from_startup_result(service),
+            tools,
+            resources,
+            resource_templates,
+        }
     }
 
     /// Dispatch one tool call to the runtime by name and JSON arguments.
@@ -45,37 +62,39 @@ impl OrchestratorHandler {
         &self, name: &str, args: serde_json::Map<String, serde_json::Value>,
     ) -> Result<CallToolResult, ErrorData> {
         validate_tool_arguments(name, &args, &crate::mcp::tool::orchestrator::descriptors())?;
+        let service = match self.service.get() {
+            | Ok(service) => service,
+            | Err(error) => return Ok(tool_error_result(error)),
+        };
         match name {
-            | "rulebook_init" => dispatch_tool(self.service.rulebook_init()),
-            | "list_perspectives" => dispatch_tool(self.service.list_perspectives()),
+            | "rulebook_init" => dispatch_tool(service.rulebook_init()),
+            | "list_perspectives" => dispatch_tool(service.list_perspectives()),
             | "validate_perspectives" => {
                 let perspectives = optional_string_list(&args, "perspectives")
                     .into_iter()
                     .map(|s| parse_perspective(&s))
                     .collect::<std::result::Result<Vec<_>, _>>()?;
                 let no_live = optional_bool(&args, "no_live").unwrap_or(false);
-                dispatch_tool(self.service.validate_perspectives(perspectives, no_live))
+                dispatch_tool(service.validate_perspectives(perspectives, no_live))
             }
             | "forward_perspective" => {
                 let perspective = parse_perspective(required_str(&args, "perspective")?)?;
-                dispatch_tool(self.service.forward_perspective(perspective))
+                dispatch_tool(service.forward_perspective(perspective))
             }
-            | "list_workers" => dispatch_tool(self.service.list_workers()),
+            | "list_workers" => dispatch_tool(service.list_workers()),
             | "get_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
-                dispatch_tool(self.service.get_worker(worker_id))
+                dispatch_tool(service.get_worker(worker_id))
             }
             | "read_worker_outbox" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let after = optional_u64(&args, "after").map(crate::runtime::Sequence);
-                dispatch_tool(self.service.read_outbox(worker_id, after))
+                dispatch_tool(service.read_outbox(worker_id, after))
             }
             | "ack_worker_outbox_message" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let sequence = required_u64(&args, "sequence")?;
-                dispatch_tool(
-                    self.service.ack_outbox(worker_id, crate::runtime::Sequence(sequence)),
-                )
+                dispatch_tool(service.ack_outbox(worker_id, crate::runtime::Sequence(sequence)))
             }
             | "create_worker" => {
                 let perspective = parse_perspective(required_str(&args, "perspective")?)?;
@@ -90,11 +109,11 @@ impl OrchestratorHandler {
                 if !payload.is_empty() {
                     request = request.with_task(payload);
                 }
-                dispatch_tool(self.service.create_worker(request))
+                dispatch_tool(service.create_worker(request))
             }
             | "resolve_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
-                dispatch_tool(self.service.resolve_worker(
+                dispatch_tool(service.resolve_worker(
                     worker_id,
                     extract_reply(&args),
                     extract_payload(&args),
@@ -102,7 +121,7 @@ impl OrchestratorHandler {
             }
             | "hint_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
-                dispatch_tool(self.service.hint_worker(
+                dispatch_tool(service.hint_worker(
                     worker_id,
                     extract_reply(&args),
                     extract_payload(&args),
@@ -110,7 +129,7 @@ impl OrchestratorHandler {
             }
             | "revise_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
-                dispatch_tool(self.service.revise_worker(
+                dispatch_tool(service.revise_worker(
                     worker_id,
                     extract_reply(&args),
                     extract_payload(&args),
@@ -118,48 +137,54 @@ impl OrchestratorHandler {
             }
             | "discard_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
-                dispatch_tool(self.service.discard_worker(worker_id))
+                dispatch_tool(service.discard_worker(worker_id))
             }
             | "delete_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
-                dispatch_tool(self.service.delete_worker(worker_id))
+                dispatch_tool(service.delete_worker(worker_id))
             }
             | "merge_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let skip_checks = optional_string_list(&args, "skip_checks");
                 let audit_payload = extract_payload(&args);
-                dispatch_tool(self.service.merge_worker(worker_id, skip_checks, audit_payload))
+                dispatch_tool(service.merge_worker(worker_id, skip_checks, audit_payload))
             }
-            | "get_status" => dispatch_tool(self.service.status()),
+            | "get_status" => dispatch_tool(service.status()),
             | _ => Err(ErrorData::invalid_params(format!("unknown tool: {name}"), None)),
         }
     }
 
     /// Dispatch one resource read to the runtime by URI.
     pub fn read(&self, uri: &str) -> Result<ReadResourceResult, ErrorData> {
+        let service = match self.service.get() {
+            | Ok(service) => service,
+            | Err(error) => return Err(mcp_to_resource_error(error)),
+        };
         match uri {
             | "multorum://orchestrator/status" => {
-                let status = self.service.status().map_err(runtime_to_resource_error)?;
+                let status = service.status().map_err(runtime_to_resource_error)?;
                 resource_success(uri, &status)
             }
             | "multorum://orchestrator/perspectives" => {
                 let perspectives =
-                    self.service.list_perspectives().map_err(runtime_to_resource_error)?;
+                    service.list_perspectives().map_err(runtime_to_resource_error)?;
                 resource_success(uri, &perspectives)
             }
             | "multorum://orchestrator/workers" => {
-                let workers = self.service.list_workers().map_err(runtime_to_resource_error)?;
+                let workers = service.list_workers().map_err(runtime_to_resource_error)?;
                 resource_success(uri, &workers)
             }
             | _ if uri.starts_with("multorum://orchestrator/workers/") => {
-                self.read_worker_resource(uri)
+                self.read_worker_resource(service, uri)
             }
             | _ => Err(ErrorData::resource_not_found(format!("unknown resource: {uri}"), None)),
         }
     }
 
     /// Handle parameterised worker resource URIs.
-    fn read_worker_resource(&self, uri: &str) -> Result<ReadResourceResult, ErrorData> {
+    fn read_worker_resource(
+        &self, service: &FsOrchestratorService, uri: &str,
+    ) -> Result<ReadResourceResult, ErrorData> {
         let path = uri.strip_prefix("multorum://orchestrator/workers/").unwrap_or("");
 
         let (worker_id_str, sub) = match path.find('/') {
@@ -173,13 +198,12 @@ impl OrchestratorHandler {
 
         match sub {
             | None => {
-                let detail =
-                    self.service.get_worker(worker_id).map_err(runtime_to_resource_error)?;
+                let detail = service.get_worker(worker_id).map_err(runtime_to_resource_error)?;
                 resource_success(uri, &detail)
             }
             | Some("outbox") => {
                 let messages =
-                    self.service.read_outbox(worker_id, None).map_err(runtime_to_resource_error)?;
+                    service.read_outbox(worker_id, None).map_err(runtime_to_resource_error)?;
                 resource_success(uri, &messages)
             }
             | Some("contract" | "transcript" | "checks") => Err(ErrorData::resource_not_found(

@@ -73,6 +73,17 @@ fn spawn_orchestrator(dir: &std::path::Path) -> Child {
         .expect("failed to spawn multorum binary")
 }
 
+fn spawn_worker(dir: &std::path::Path) -> Child {
+    Command::new(env!("CARGO_BIN_EXE_multorum"))
+        .args(["serve", "worker"])
+        .current_dir(dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn multorum binary")
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -133,4 +144,54 @@ async fn cli_orchestrator_clean_shutdown() {
     drop(child.stdin.take());
     let status = child.wait().await.unwrap();
     assert!(status.success(), "process should exit with code 0 after stdin close");
+}
+
+#[tokio::test]
+async fn cli_worker_role_mismatch_is_deferred_until_tool_call() {
+    let (dir, _svc) = setup_repo();
+    let mut child = spawn_worker(dir.path());
+    let child_stdout = child.stdout.take().unwrap();
+    let mut stdout = BufReader::new(child_stdout);
+
+    let response = handshake(&mut child, &mut stdout).await;
+    let server_info = &response["result"]["serverInfo"];
+    assert_eq!(server_info["name"], "multorum-worker");
+
+    let list_tools = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list"
+    });
+    send_jsonrpc(&mut child, &list_tools).await;
+    let response = read_jsonrpc(&mut stdout).await;
+    assert_eq!(response["id"], 2);
+    let tools = response["result"]["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 6);
+
+    let get_status = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "get_status",
+            "arguments": {}
+        }
+    });
+    send_jsonrpc(&mut child, &get_status).await;
+    let response = read_jsonrpc(&mut stdout).await;
+    assert_eq!(response["id"], 3);
+    assert_eq!(response["result"]["isError"], true);
+    let error = serde_json::from_str::<Value>(
+        response["result"]["content"][0]["text"].as_str().expect("missing tool error payload"),
+    )
+    .expect("tool error payload should be JSON");
+    assert_eq!(error["code"], "invalid_state");
+    assert!(
+        error["message"].as_str().unwrap().contains("worker runtime"),
+        "unexpected error payload: {error}",
+    );
+
+    drop(child.stdin.take());
+    let status = child.wait().await.unwrap();
+    assert!(status.success(), "process should stay alive until stdin close");
 }

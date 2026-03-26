@@ -1,7 +1,7 @@
 //! Handler-level dispatch and resource read tests.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rmcp::ServerHandler;
 use serde_json::json;
@@ -10,7 +10,7 @@ use multorum::mcp::transport::orchestrator::OrchestratorHandler;
 use multorum::mcp::transport::worker::WorkerHandler;
 use multorum::runtime::{
     BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, MessageKind,
-    OrchestratorService, ReplyReference, WorkerService, WorkerState,
+    OrchestratorService, ReplyReference, RuntimeError, WorkerService, WorkerState,
 };
 
 use crate::support::repo::{git, setup_repo};
@@ -686,6 +686,18 @@ fn worker_get_contract() {
 }
 
 #[test]
+fn worker_startup_role_mismatch_becomes_tool_error() {
+    let handler = WorkerHandler::from_startup_result(Err(RuntimeError::RuntimeRoleMismatch {
+        expected: "worker",
+        actual: "orchestrator",
+        repo_root: PathBuf::from("/repo"),
+    }));
+
+    let result = handler.dispatch("get_status", empty_args()).unwrap();
+    assert_tool_error_code(&result, "invalid_state");
+}
+
+#[test]
 fn worker_read_inbox() {
     let (_dir, svc) = setup_repo();
 
@@ -944,6 +956,18 @@ fn worker_resource_status() {
     let result = handler.read("multorum://worker/status").unwrap();
     let status = resource_json(&result);
     assert_eq!(status["state"], "ACTIVE");
+}
+
+#[test]
+fn worker_startup_role_mismatch_becomes_resource_error() {
+    let handler = WorkerHandler::from_startup_result(Err(RuntimeError::RuntimeRoleMismatch {
+        expected: "worker",
+        actual: "orchestrator",
+        repo_root: PathBuf::from("/repo"),
+    }));
+
+    let result = handler.read("multorum://worker/status");
+    assert!(result.is_err());
 }
 
 #[test]

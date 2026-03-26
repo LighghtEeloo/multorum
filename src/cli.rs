@@ -501,14 +501,9 @@ impl ServeCommand {
         rt.block_on(async {
             match self {
                 | Self::Orchestrator => {
-                    let service = match runtime::FsOrchestratorService::from_current_dir() {
-                        | Ok(s) => s,
-                        | Err(e) => {
-                            eprintln!("error: {e}");
-                            std::process::exit(1);
-                        }
-                    };
-                    let handler = OrchestratorHandler::new(service);
+                    let handler = OrchestratorHandler::from_startup_result(
+                        runtime::FsOrchestratorService::from_current_dir(),
+                    );
                     let transport = rmcp::transport::io::stdio();
                     match rmcp::serve_server(handler, transport).await {
                         | Ok(running) => {
@@ -521,14 +516,9 @@ impl ServeCommand {
                     }
                 }
                 | Self::Worker => {
-                    let service = match runtime::FsWorkerService::from_current_dir() {
-                        | Ok(s) => s,
-                        | Err(e) => {
-                            eprintln!("error: {e}");
-                            std::process::exit(1);
-                        }
-                    };
-                    let handler = WorkerHandler::new(service);
+                    let handler = WorkerHandler::from_startup_result(
+                        runtime::FsWorkerService::from_current_dir(),
+                    );
                     let transport = rmcp::transport::io::stdio();
                     match rmcp::serve_server(handler, transport).await {
                         | Ok(running) => {

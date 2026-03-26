@@ -27,6 +27,41 @@ use super::dto::{
 };
 use super::error::{McpErrorCode, McpToolError};
 
+/// Deferred runtime binding for one MCP handler.
+///
+/// MCP startup must complete the protocol handshake even when the
+/// current directory does not match the requested runtime role. The
+/// handler therefore advertises its static schema immediately and
+/// delays startup validation failures until the first tool or resource
+/// request that needs the runtime service.
+#[derive(Debug, Clone)]
+enum DeferredService<S> {
+    /// Ready runtime service bound to the current directory.
+    Ready(S),
+    /// Startup failure captured as an MCP-visible tool error.
+    Failed(McpToolError),
+}
+
+impl<S> DeferredService<S> {
+    /// Bind either a ready runtime service or one deferred startup
+    /// failure.
+    fn from_startup_result(result: Result<S, RuntimeError>) -> Self {
+        match result {
+            | Ok(service) => Self::Ready(service),
+            | Err(error) => Self::Failed(McpToolError::from(error)),
+        }
+    }
+
+    /// Borrow the runtime service or return the deferred startup
+    /// failure that should be surfaced to the MCP client.
+    fn get(&self) -> Result<&S, &McpToolError> {
+        match self {
+            | Self::Ready(service) => Ok(service),
+            | Self::Failed(error) => Err(error),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Server info construction
 // ---------------------------------------------------------------------------
@@ -144,18 +179,17 @@ fn dispatch_tool<T: Serialize>(
             })?;
             Ok(CallToolResult::success(vec![Annotated::new(RawContent::text(json), None)]))
         }
-        | Err(runtime_err) => {
-            let mcp_err = McpToolError::from(runtime_err);
-            let json = serde_json::json!({
-                "code": mcp_err.code.as_str(),
-                "message": mcp_err.message,
-            });
-            Ok(CallToolResult::error(vec![Annotated::new(
-                RawContent::text(json.to_string()),
-                None,
-            )]))
-        }
+        | Err(runtime_err) => Ok(tool_error_result(&McpToolError::from(runtime_err))),
     }
+}
+
+/// Construct one tool-level MCP failure payload.
+fn tool_error_result(error: &McpToolError) -> CallToolResult {
+    let json = serde_json::json!({
+        "code": error.code.as_str(),
+        "message": error.message,
+    });
+    CallToolResult::error(vec![Annotated::new(RawContent::text(json.to_string()), None)])
 }
 
 /// Serialize a runtime result into a [`ReadResourceResult`] text body.
@@ -173,6 +207,11 @@ fn resource_success<T: Serialize>(
 /// Convert one runtime error into MCP resource-read error data.
 fn runtime_to_resource_error(error: RuntimeError) -> rmcp::ErrorData {
     let mcp = McpToolError::from(error);
+    mcp_to_resource_error(&mcp)
+}
+
+/// Convert one MCP-visible tool error into resource-read error data.
+fn mcp_to_resource_error(mcp: &McpToolError) -> rmcp::ErrorData {
     let data = Some(serde_json::json!({
         "code": mcp.code.as_str(),
     }));
@@ -181,7 +220,7 @@ fn runtime_to_resource_error(error: RuntimeError) -> rmcp::ErrorData {
         | McpErrorCode::UnknownWorker
         | McpErrorCode::MessageNotFound
         | McpErrorCode::MissingWorkerRuntime => {
-            rmcp::ErrorData::resource_not_found(mcp.message, data)
+            rmcp::ErrorData::resource_not_found(mcp.message.clone(), data)
         }
         | McpErrorCode::Internal => rmcp::ErrorData::internal_error(mcp.message.clone(), data),
         | McpErrorCode::WorkerExists
@@ -191,7 +230,7 @@ fn runtime_to_resource_error(error: RuntimeError) -> rmcp::ErrorData {
         | McpErrorCode::CheckFailed
         | McpErrorCode::WriteSetViolation
         | McpErrorCode::MailboxConflict
-        | McpErrorCode::Unimplemented => rmcp::ErrorData::invalid_params(mcp.message, data),
+        | McpErrorCode::Unimplemented => rmcp::ErrorData::invalid_params(mcp.message.clone(), data),
     }
 }
 
