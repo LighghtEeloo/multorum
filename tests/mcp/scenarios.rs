@@ -138,14 +138,12 @@ async fn different_perspectives_independent_on_merge() {
     assert_tool_success(&commit_auth);
 
     // Merge auth worker.
-    let merge_auth =
-        orch.dispatch("merge_worker", json_args(json!({"worker": "auth-w"}))).unwrap();
+    let merge_auth = orch.dispatch("merge_worker", json_args(json!({"worker": "auth-w"}))).unwrap();
     assert_tool_success(&merge_auth);
     assert_eq!(tool_json(&merge_auth)["state"], "MERGED");
 
     // Data worker should still be ACTIVE (different perspective).
-    let detail_data =
-        orch.dispatch("get_worker", json_args(json!({"worker": "data-w"}))).unwrap();
+    let detail_data = orch.dispatch("get_worker", json_args(json!({"worker": "data-w"}))).unwrap();
     assert_tool_success(&detail_data);
     assert_eq!(tool_json(&detail_data)["state"], "ACTIVE");
 
@@ -160,8 +158,7 @@ async fn different_perspectives_independent_on_merge() {
         data_worker.dispatch("send_commit", json_args(json!({"head_commit": head_data}))).unwrap();
     assert_tool_success(&commit_data);
 
-    let merge_data =
-        orch.dispatch("merge_worker", json_args(json!({"worker": "data-w"}))).unwrap();
+    let merge_data = orch.dispatch("merge_worker", json_args(json!({"worker": "data-w"}))).unwrap();
     assert_tool_success(&merge_data);
     assert_eq!(tool_json(&merge_data)["state"], "MERGED");
 

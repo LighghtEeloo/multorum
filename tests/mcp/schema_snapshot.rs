@@ -28,6 +28,7 @@ fn orchestrator_tool_names_stable() {
             "forward_perspective",
             "get_status",
             "get_worker",
+            "hint_worker",
             "list_perspectives",
             "list_workers",
             "merge_worker",
@@ -99,8 +100,8 @@ fn orchestrator_tool_input_schemas_stable() {
         ]
     );
 
-    // resolve_worker and revise_worker share the same schema.
-    for name in ["resolve_worker", "revise_worker"] {
+    // resolve_worker, hint_worker, and revise_worker share the same schema.
+    for name in ["resolve_worker", "hint_worker", "revise_worker"] {
         let (_, inputs) = schemas.iter().find(|(n, _)| *n == name).unwrap();
         assert_eq!(
             inputs,

@@ -7,13 +7,13 @@
 //! to create worktrees, delete finalized workspaces, and integrate
 //! submitted commits.
 
+use super::timestamp::Timestamp;
 use std::collections::BTreeSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-use super::timestamp::Timestamp;
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -762,4 +762,3 @@ pub(super) fn validate_skip_request(
     }
     Ok(accepted)
 }
-

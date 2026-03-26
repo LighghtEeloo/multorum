@@ -183,7 +183,7 @@ fn runtime_to_resource_error(error: RuntimeError) -> rmcp::ErrorData {
         | McpErrorCode::MissingWorkerRuntime => {
             rmcp::ErrorData::resource_not_found(mcp.message, data)
         }
-        | McpErrorCode::Internal => rmcp::ErrorData::internal_error(mcp.message, data),
+        | McpErrorCode::Internal => rmcp::ErrorData::internal_error(mcp.message.clone(), data),
         | McpErrorCode::WorkerExists
         | McpErrorCode::InvalidState
         | McpErrorCode::AlreadyAcknowledged

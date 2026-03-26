@@ -9,13 +9,14 @@ use serde_json::json;
 use multorum::mcp::transport::orchestrator::OrchestratorHandler;
 use multorum::mcp::transport::worker::WorkerHandler;
 use multorum::runtime::{
-    BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService,
-    WorkerService,
+    BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, MessageKind,
+    OrchestratorService, ReplyReference, WorkerService, WorkerState,
 };
 
 use crate::support::repo::{git, setup_repo};
 use crate::support::result::{
-    assert_tool_error, assert_tool_success, empty_args, json_args, resource_json, tool_json,
+    assert_tool_error, assert_tool_error_code, assert_tool_success, empty_args, json_args,
+    resource_json, tool_json,
 };
 use crate::support::worker::{create_worker_runtime, perspective};
 
@@ -33,7 +34,7 @@ fn orchestrator_server_info() {
 
 #[test]
 fn orchestrator_tool_descriptor_count() {
-    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 15);
+    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 16);
 }
 
 #[test]
@@ -333,6 +334,41 @@ fn orchestrator_resolve_worker() {
 }
 
 #[test]
+fn orchestrator_hint_worker() {
+    let (dir, svc) = setup_repo();
+    let handler = OrchestratorHandler::new(svc);
+
+    let create = handler
+        .dispatch(
+            "create_worker",
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
+        )
+        .unwrap();
+    let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
+
+    let hint_body = dir.path().join("hint.md");
+    fs::write(&hint_body, "Gracefully block if the contract changed.\n").unwrap();
+    let result = handler
+        .dispatch(
+            "hint_worker",
+            json_args(json!({
+                "worker": "w1",
+                "body_path": hint_body.to_str().unwrap(),
+            })),
+        )
+        .unwrap();
+    assert_tool_success(&result);
+    assert!(!hint_body.exists(), "body should be moved into .multorum storage");
+
+    let worker_svc = FsWorkerService::new(&worktree).unwrap();
+    let inbox = worker_svc.read_inbox(None).unwrap();
+    let hint = inbox.iter().find(|message| message.kind == MessageKind::Hint).unwrap();
+    assert_eq!(hint.kind, MessageKind::Hint);
+    worker_svc.ack_inbox(hint.sequence).unwrap();
+    assert_eq!(worker_svc.status().unwrap().state, WorkerState::Active);
+}
+
+#[test]
 fn orchestrator_revise_worker() {
     let (dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
@@ -422,6 +458,34 @@ fn orchestrator_nonexistent_worker_returns_tool_error() {
     assert_tool_error(&result);
     let err = tool_json(&result);
     assert_eq!(err["code"], "unknown_worker");
+}
+
+#[test]
+fn orchestrator_hint_worker_rejected_for_blocked_worker() {
+    let (_dir, svc) = setup_repo();
+    let handler = OrchestratorHandler::new(svc);
+
+    let create = handler
+        .dispatch(
+            "create_worker",
+            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
+        )
+        .unwrap();
+    let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
+
+    let worker_svc = FsWorkerService::new(&worktree).unwrap();
+    worker_svc.send_report(None, ReplyReference::default(), BundlePayload::default()).unwrap();
+
+    let result = handler
+        .dispatch(
+            "hint_worker",
+            json_args(json!({
+                "worker": "w1",
+                "body_text": "Pause and report your current head commit.",
+            })),
+        )
+        .unwrap();
+    assert_tool_error_code(&result, "invalid_state");
 }
 
 #[test]

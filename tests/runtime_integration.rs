@@ -166,6 +166,23 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     worker.ack_inbox(inbox[0].sequence).unwrap();
     assert_eq!(worker.status().unwrap().state, WorkerState::Active);
 
+    let hint_body = repo.path().join("hint.md");
+    fs::write(&hint_body, "New API detail: gracefully block if the schema drifts.\n").unwrap();
+    orchestrator
+        .hint_worker(
+            provision.worker_id.clone(),
+            ReplyReference { in_reply_to: Some(inbox[0].sequence) },
+            BundlePayload { body_path: Some(hint_body.clone()), ..BundlePayload::default() },
+        )
+        .unwrap();
+    assert!(!hint_body.exists(), "hint body should be moved into the inbox bundle");
+
+    let hinted = worker.read_inbox(Some(inbox[0].sequence)).unwrap();
+    assert_eq!(hinted.len(), 1);
+    assert_eq!(hinted[0].kind, MessageKind::Hint);
+    worker.ack_inbox(hinted[0].sequence).unwrap();
+    assert_eq!(worker.status().unwrap().state, WorkerState::Active);
+
     let report_body = provision.worktree_path.join("report.md");
     fs::write(&report_body, "Need clarification.\n").unwrap();
     let report = worker
@@ -198,12 +215,41 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
         .unwrap();
     assert!(!resolve_body.exists(), "resolve body should be moved into the inbox bundle");
 
-    let follow_up = worker.read_inbox(inbox.last().map(|message| message.sequence)).unwrap();
+    let follow_up = worker.read_inbox(hinted.last().map(|message| message.sequence)).unwrap();
     assert_eq!(follow_up.len(), 1);
     assert_eq!(follow_up[0].kind, MessageKind::Resolve);
     assert!(follow_up[0].bundle_path.is_absolute());
     worker.ack_inbox(follow_up[0].sequence).unwrap();
     assert_eq!(worker.status().unwrap().state, WorkerState::Active);
+}
+
+#[test]
+fn hint_worker_requires_active_state() {
+    let (repo, orchestrator, _) = setup_repo();
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
+
+    worker.send_report(None, ReplyReference::default(), BundlePayload::default()).unwrap();
+    let hint_body = repo.path().join("hint.md");
+    fs::write(&hint_body, "Please pause and report your current head.\n").unwrap();
+
+    let error = orchestrator
+        .hint_worker(
+            provision.worker_id,
+            ReplyReference::default(),
+            BundlePayload { body_path: Some(hint_body.clone()), ..BundlePayload::default() },
+        )
+        .unwrap_err();
+
+    assert!(hint_body.exists(), "hint body must remain in place after rejection");
+    assert!(matches!(
+        error,
+        RuntimeError::InvalidState {
+            operation: "publish hint bundle",
+            expected: "ACTIVE",
+            actual: WorkerState::Blocked,
+        }
+    ));
 }
 
 #[test]

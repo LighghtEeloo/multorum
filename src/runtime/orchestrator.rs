@@ -125,6 +125,15 @@ pub trait OrchestratorService {
         &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;
 
+    /// Publish an advisory `hint` bundle to an active worker inbox.
+    ///
+    /// Hints carry new context without forcing a lifecycle transition.
+    /// Note: If the orchestrator wants the worker to stop gracefully, it
+    /// should send a hint asking the worker to publish a blocker report.
+    fn hint_worker(
+        &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
+    ) -> Result<PublishedBundle>;
+
     /// Publish a `revise` bundle to the worker inbox.
     fn revise_worker(
         &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
@@ -261,7 +270,8 @@ impl FsOrchestratorService {
             .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
         let state_accepted = matches!(
             (kind, worker.state),
-            (MessageKind::Resolve, WorkerState::Blocked)
+            (MessageKind::Hint, WorkerState::Active)
+                | (MessageKind::Resolve, WorkerState::Blocked)
                 | (MessageKind::Revise, WorkerState::Committed)
         );
         if state_accepted {
@@ -279,11 +289,13 @@ impl FsOrchestratorService {
 
         Err(RuntimeError::InvalidState {
             operation: match kind {
+                | MessageKind::Hint => "publish hint bundle",
                 | MessageKind::Resolve => "publish resolve bundle",
                 | MessageKind::Revise => "publish revise bundle",
                 | _ => "publish inbox bundle",
             },
             expected: match kind {
+                | MessageKind::Hint => "ACTIVE",
                 | MessageKind::Resolve => "BLOCKED",
                 | MessageKind::Revise => "COMMITTED",
                 | _ => "a state that accepts inbox publication",
@@ -719,6 +731,13 @@ impl OrchestratorService for FsOrchestratorService {
     ) -> Result<PublishedBundle> {
         tracing::trace!(worker_id = %worker_id, "publishing resolve bundle to worker inbox");
         self.publish_worker_inbox(&worker_id, MessageKind::Resolve, reply, payload)
+    }
+
+    fn hint_worker(
+        &self, worker_id: WorkerId, reply: ReplyReference, payload: BundlePayload,
+    ) -> Result<PublishedBundle> {
+        tracing::trace!(worker_id = %worker_id, "publishing hint bundle to worker inbox");
+        self.publish_worker_inbox(&worker_id, MessageKind::Hint, reply, payload)
     }
 
     fn revise_worker(

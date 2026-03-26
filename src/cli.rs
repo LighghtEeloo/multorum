@@ -352,6 +352,23 @@ pub enum WorkerCommand {
         reply: ReplyReferenceArgs,
     },
 
+    /// Publish an advisory `hint` bundle to an active worker inbox.
+    ///
+    /// Use this to pass new project information or ask the worker to
+    /// gracefully block itself by sending a report.
+    Hint {
+        /// Worker identity to notify.
+        worker_id: WorkerId,
+
+        /// Optional payload for the `hint` bundle.
+        #[command(flatten)]
+        payload: BundlePayloadArgs,
+
+        /// Optional reply metadata for the `hint` bundle.
+        #[command(flatten)]
+        reply: ReplyReferenceArgs,
+    },
+
     /// Publish a `revise` bundle to a committed worker inbox.
     Revise {
         /// Worker identity to revise.
@@ -622,6 +639,14 @@ impl WorkerCommand {
             }
             | Self::Resolve { worker_id, payload, reply } => {
                 let result = services.orchestrator()?.resolve_worker(
+                    worker_id,
+                    reply.into_runtime(),
+                    payload.into_runtime(),
+                )?;
+                println!("{result:#?}");
+            }
+            | Self::Hint { worker_id, payload, reply } => {
+                let result = services.orchestrator()?.hint_worker(
                     worker_id,
                     reply.into_runtime(),
                     payload.into_runtime(),

@@ -113,7 +113,7 @@ impl FsWorkerService {
                 entry.state = WorkerState::Active;
                 self.fs.store_state(&state_file)?;
             }
-            | MessageKind::Report | MessageKind::Commit => {}
+            | MessageKind::Hint | MessageKind::Report | MessageKind::Commit => {}
         }
 
         Ok(())

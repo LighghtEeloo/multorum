@@ -100,6 +100,14 @@ impl OrchestratorHandler {
                     extract_payload(&args),
                 ))
             }
+            | "hint_worker" => {
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
+                dispatch_tool(self.service.hint_worker(
+                    worker_id,
+                    extract_reply(&args),
+                    extract_payload(&args),
+                ))
+            }
             | "revise_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 dispatch_tool(self.service.revise_worker(

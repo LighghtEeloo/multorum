@@ -202,6 +202,11 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
             inputs: REPLY_BUNDLE_INPUTS,
         },
         ToolDescriptor {
+            name: "hint_worker",
+            description: "Publish an advisory hint bundle to an active worker inbox; path-backed payload files are moved into .multorum storage.",
+            inputs: REPLY_BUNDLE_INPUTS,
+        },
+        ToolDescriptor {
             name: "revise_worker",
             description: "Publish a revise bundle to a committed worker inbox; path-backed payload files are moved into .multorum storage.",
             inputs: REPLY_BUNDLE_INPUTS,

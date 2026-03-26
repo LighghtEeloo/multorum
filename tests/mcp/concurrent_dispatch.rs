@@ -20,7 +20,7 @@ use crate::support::worker::create_worker_runtime;
 async fn concurrent_list_operations() {
     let (_dir, client) = orchestrator_duplex().await;
     let (tools, resources) = tokio::join!(client.list_all_tools(), client.list_all_resources());
-    assert_eq!(tools.unwrap().len(), 15);
+    assert_eq!(tools.unwrap().len(), 16);
     assert_eq!(resources.unwrap().len(), 3);
     client.cancel().await.unwrap();
 }
@@ -44,14 +44,15 @@ async fn concurrent_tool_calls() {
 #[tokio::test]
 async fn concurrent_create_different_workers() {
     let (_dir, client) = orchestrator_duplex().await;
-    let (w1, w2) = tokio::join!(
-        client.call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(
-            json!({"perspective": "AuthImplementor", "worker": "cw1"})
-        )),),
-        client.call_tool(CallToolRequestParams::new("create_worker").with_arguments(json_args(
-            json!({"perspective": "AuthImplementor", "worker": "cw2"})
-        )),),
-    );
+    let (w1, w2) =
+        tokio::join!(
+            client.call_tool(CallToolRequestParams::new("create_worker").with_arguments(
+                json_args(json!({"perspective": "AuthImplementor", "worker": "cw1"}))
+            ),),
+            client.call_tool(CallToolRequestParams::new("create_worker").with_arguments(
+                json_args(json!({"perspective": "AuthImplementor", "worker": "cw2"}))
+            ),),
+        );
     assert_tool_success(&w1.unwrap());
     assert_tool_success(&w2.unwrap());
 

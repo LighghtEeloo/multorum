@@ -30,6 +30,11 @@ pub struct Sequence(pub u64);
 pub enum MessageKind {
     /// Initial task assignment published during worker creation.
     Task,
+    /// Orchestrator hint for an active worker.
+    ///
+    /// Note: Hints are advisory follow-up context. They do not change
+    /// worker lifecycle state on publication or acknowledgement.
+    Hint,
     /// Worker blocker report.
     Report,
     /// Orchestrator response to a blocker.
@@ -48,6 +53,7 @@ impl MessageKind {
     pub(crate) fn slug(self) -> &'static str {
         match self {
             | Self::Task => "task",
+            | Self::Hint => "hint",
             | Self::Report => "report",
             | Self::Resolve => "resolve",
             | Self::Revise => "revise",
@@ -94,13 +100,17 @@ impl std::fmt::Display for ProtocolVersion {
 }
 
 impl Serialize for ProtocolVersion {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(
+        &self, serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())
     }
 }
 
 impl<'de> Deserialize<'de> for ProtocolVersion {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
         let version_str = s.strip_prefix(Self::PREFIX).ok_or_else(|| {
             serde::de::Error::custom(format!(
