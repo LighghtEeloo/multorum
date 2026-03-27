@@ -92,7 +92,6 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::Unimplemented(_) => McpErrorCode::Unimplemented,
             | RuntimeError::Bundle(_)
             | RuntimeError::MissingSubmittedHeadCommit { .. }
-            | RuntimeError::NoNewCommit { .. }
             | RuntimeError::WorkerHeadMismatch { .. }
             | RuntimeError::Vcs(_)
             | RuntimeError::Rulebook(_)

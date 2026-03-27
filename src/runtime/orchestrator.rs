@@ -853,12 +853,6 @@ impl OrchestratorService for FsOrchestratorService {
         let worktree_path = worker.worktree_path.clone();
         let write_set = group.write_set.clone();
 
-        if head_commit == base_commit {
-            return Err(RuntimeError::NoNewCommit {
-                worker_id: worker_id.clone(),
-                head_commit: head_commit.clone(),
-            });
-        }
         let worker_head = self.fs.vcs().head_commit(&worktree_path)?;
         if worker_head != head_commit {
             return Err(RuntimeError::WorkerHeadMismatch {
