@@ -114,6 +114,121 @@ Before a worker result is allowed to land, Multorum verifies that the worker tou
 
 Some project checks may be skippable if the orchestrator accepts evidence. The write-scope check is not skippable, because once that becomes optional the entire model collapses into decorative fraud.
 
+
+## Installation
+
+```bash
+cargo install multorum
+```
+
+## Using Multorum with MCP and Skills
+
+If your orchestrator is an MCP-capable agent, you can run the whole Multorum loop through tool calls instead of ad-hoc shell choreography.
+
+<details>
+<summary><strong>MCP installation guide</strong></summary>
+
+### 1) Add the orchestrator MCP server
+
+Add this to your MCP host config. `cwd` must be the canonical workspace root.
+
+```json
+{
+  "mcpServers": {
+    "multorum-orchestrator": {
+      "command": "/absolute/path/to/multorum",
+      "args": ["serve", "orchestrator"],
+      "cwd": "/absolute/path/to/your/repo"
+    }
+  }
+}
+```
+
+### 2) Add a worker MCP server
+
+Repeat for each worker worktree. `cwd` must point at that specific worktree, not the canonical root.
+
+```json
+{
+  "mcpServers": {
+    "multorum-worker": {
+      "command": "/absolute/path/to/multorum",
+      "args": ["serve", "worker"],
+      "cwd": "/absolute/path/to/worker-worktree"
+    }
+  }
+}
+```
+
+### 3) Reload and verify
+
+Reload your MCP host. If it reports an unmanaged repository or root mismatch, `cwd` is pointed at the wrong directory for that server role.
+</details>
+
+<details>
+<summary><strong>Skills installation guide</strong></summary>
+
+Multorum ships two skills that encode the orchestrator and worker roles as reusable agent prompts. Each skill is a complete operational guide: the agent reads the skill once and then drives the entire session through CLI commands or MCP tool calls without needing further instruction.
+
+### Skill files
+
+```
+.agents/skills/
+  multorum-orchestrator/
+    SKILL.md          # orchestrator operational guide (loaded as system prompt)
+    agents/
+      openai.yaml     # OpenAI-compatible agent manifest
+  multorum-worker/
+    SKILL.md          # worker operational guide (loaded as system prompt)
+    agents/
+      openai.yaml     # OpenAI-compatible agent manifest
+```
+
+### Claude Code
+
+Claude Code discovers skills automatically from the `.agents/skills/` directory when opened in the repository. No manual installation step is needed.
+
+**Invoke the orchestrator skill** from the canonical workspace:
+
+```
+/multorum-orchestrator
+```
+
+This loads `multorum-orchestrator/SKILL.md` as the session context. The agent then uses `multorum rulebook ...`, `multorum perspective ...`, and `multorum worker ...` CLI commands, or the orchestrator MCP surface if configured.
+
+**Invoke the worker skill** from inside a provisioned worker worktree:
+
+```
+/multorum-worker
+```
+
+This loads `multorum-worker/SKILL.md` as the session context. The agent then uses `multorum local ...` commands or the worker MCP surface if configured.
+
+The session must be opened from the correct directory. Invoking `/multorum-orchestrator` from a worker worktree, or `/multorum-worker` from the canonical workspace, produces the wrong runtime binding. Open two separate Claude Code sessions: one rooted at the canonical workspace for orchestration, one rooted at each worker worktree for worker execution.
+
+### OpenAI-compatible agents
+
+Each skill includes an `agents/openai.yaml` manifest for OpenAI-compatible agent runtimes. Register each manifest with your runtime and supply `SKILL.md` as the system prompt:
+
+| Role | Manifest | System prompt |
+|------|----------|---------------|
+| Orchestrator | `.agents/skills/multorum-orchestrator/agents/openai.yaml` | `.agents/skills/multorum-orchestrator/SKILL.md` |
+| Worker | `.agents/skills/multorum-worker/agents/openai.yaml` | `.agents/skills/multorum-worker/SKILL.md` |
+
+Configure each agent with the MCP server that matches its role:
+- The orchestrator agent gets the `multorum-orchestrator` MCP server (see MCP installation above) bound to the canonical workspace.
+- Each worker agent gets the `multorum-worker` MCP server bound to its specific worktree.
+
+### Role discipline after installation
+
+Keep the role separation strict:
+- The orchestrator agent creates workers, manages the rulebook, reads outboxes, resolves blockers, and merges or discards submissions. It never edits inside a worker worktree directly.
+- Each worker agent reads its inbox, performs the assigned task within its declared write set, and submits reports or commits. It never coordinates with other workers directly.
+
+All judgment and routing flow through the orchestrator. That separation is the entire point.
+
+</details>
+
 ## What Multorum Is Not
 
 Multorum is not a merge tool with a better attitude. It is not a chat protocol pretending to be a runtime. It is not a replacement for orchestration logic. It is not a system that assumes parallel work will behave nicely if everyone expresses themselves clearly.
