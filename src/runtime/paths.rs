@@ -6,10 +6,14 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
+use crate::vcs::CanonicalCommitHash;
+
 use super::{MailboxDirection, RuntimeError, WorkerId};
 
 /// Canonical gitignored directory name for managed worker worktrees.
 const WORKTREE_DIRECTORY_NAME: &str = "tr";
+/// Number of canonical head-commit characters stored in audit entry ids.
+const AUDIT_HEAD_PREFIX_LEN: usize = 6;
 
 /// Root path helper for a Multorum workspace.
 #[derive(Debug, Clone)]
@@ -60,9 +64,36 @@ impl MultorumPaths {
         self.multorum_root().join("audit")
     }
 
-    /// Audit entry for one merged worker.
-    pub fn audit_entry(&self, worker_id: &WorkerId) -> PathBuf {
-        self.audit().join(format!("{}.toml", worker_id.as_str()))
+    /// Stable audit entry id for one merged worker submission.
+    ///
+    /// Format: `<worker>-<head-prefix6>`.
+    ///
+    /// Note: Worker ids are intentionally reusable after finalization,
+    /// so audit paths must also include immutable commit identity to
+    /// avoid clobbering previously committed audit entries.
+    pub fn audit_entry_id(
+        &self, worker_id: &WorkerId, head_commit: &CanonicalCommitHash,
+    ) -> Result<String, RuntimeError> {
+        let head_prefix = head_commit
+            .as_str()
+            .get(..AUDIT_HEAD_PREFIX_LEN)
+            .ok_or_else(|| {
+                RuntimeError::CheckFailed(format!(
+                    "audit entry id requires at least {AUDIT_HEAD_PREFIX_LEN} head-commit characters: {}",
+                    head_commit.as_str()
+                ))
+            })?;
+        Ok(format!("{}-{head_prefix}", worker_id.as_str()))
+    }
+
+    /// Audit entry metadata path for one merged worker submission.
+    pub fn audit_entry(&self, audit_entry_id: &str) -> PathBuf {
+        self.audit().join(format!("{audit_entry_id}.toml"))
+    }
+
+    /// Audit rationale bundle directory for one merged worker submission.
+    pub fn audit_bundle(&self, audit_entry_id: &str) -> PathBuf {
+        self.audit().join(audit_entry_id)
     }
 
     /// Path helper for the managed worker worktree.

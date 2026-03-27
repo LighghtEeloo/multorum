@@ -79,6 +79,12 @@ fn short_commit(commit: &str) -> String {
     commit.chars().take(12).collect()
 }
 
+fn audit_entry_id(worker: &str, head_commit: &str) -> String {
+    let head_prefix =
+        head_commit.get(..6).expect("runtime fixture commits must be at least 6 characters long");
+    format!("{worker}-{head_prefix}")
+}
+
 fn read_state_toml(dir: &Path) -> Value {
     let path = dir.canonicalize().unwrap().join(".multorum/orchestrator/state.toml");
     toml::from_str(&fs::read_to_string(path).unwrap()).unwrap()
@@ -964,7 +970,7 @@ fn merge_accepts_empty_worker_commit_with_non_empty_submission_payload() {
         .path()
         .canonicalize()
         .unwrap()
-        .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()));
+        .join(format!(".multorum/audit/{}.toml", audit_entry_id(result.worker_id.as_str(), &head)));
     let entry: toml::Value =
         toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
     let changed = entry["changed_files"].as_array().unwrap();
@@ -981,7 +987,7 @@ fn merge_writes_audit_entry() {
     git(&result.worktree_path, &["add", "src/owned.rs"]);
     git(&result.worktree_path, &["commit", "-m", "feat: update owned"]);
     let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
-    worker.send_commit(head, BundlePayload::default()).unwrap();
+    worker.send_commit(head.clone(), BundlePayload::default()).unwrap();
 
     let rationale = BundlePayload {
         body_text: Some("Worker updated owned.rs with improved logic.".to_owned()),
@@ -995,7 +1001,7 @@ fn merge_writes_audit_entry() {
         .path()
         .canonicalize()
         .unwrap()
-        .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()));
+        .join(format!(".multorum/audit/{}.toml", audit_entry_id(result.worker_id.as_str(), &head)));
     assert!(audit_toml_path.exists(), "audit entry TOML missing");
     let entry: toml::Value =
         toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
@@ -1006,11 +1012,10 @@ fn merge_writes_audit_entry() {
     assert_eq!(changed[0].as_str().unwrap(), "src/owned.rs");
 
     // Verify the rationale body was written.
-    let body_path = dir
-        .path()
-        .canonicalize()
-        .unwrap()
-        .join(format!(".multorum/audit/{}/body.md", result.worker_id.as_str()));
+    let body_path = dir.path().canonicalize().unwrap().join(format!(
+        ".multorum/audit/{}/body.md",
+        audit_entry_id(result.worker_id.as_str(), &head)
+    ));
     assert!(body_path.exists(), "audit rationale body missing");
     assert!(fs::read_to_string(&body_path).unwrap().contains("improved logic"));
 }
@@ -1025,7 +1030,7 @@ fn merge_writes_audit_entry_without_rationale() {
     git(&result.worktree_path, &["add", "src/owned.rs"]);
     git(&result.worktree_path, &["commit", "-m", "feat: update owned"]);
     let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
-    worker.send_commit(head, BundlePayload::default()).unwrap();
+    worker.send_commit(head.clone(), BundlePayload::default()).unwrap();
 
     orchestrator.merge_worker(result.worker_id.clone(), vec![], BundlePayload::default()).unwrap();
 
@@ -1034,7 +1039,7 @@ fn merge_writes_audit_entry_without_rationale() {
         .path()
         .canonicalize()
         .unwrap()
-        .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()));
+        .join(format!(".multorum/audit/{}.toml", audit_entry_id(result.worker_id.as_str(), &head)));
     assert!(audit_toml_path.exists(), "audit entry TOML missing");
     let entry: toml::Value =
         toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
@@ -1042,6 +1047,42 @@ fn merge_writes_audit_entry_without_rationale() {
         entry.get("rationale_body").is_none(),
         "rationale_body should be absent when no payload is supplied"
     );
+}
+
+#[test]
+fn merge_rejects_existing_audit_entry_id_without_integrating_the_worker_commit() {
+    let (dir, orchestrator, base_head) = setup_repo();
+    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    let worker = FsWorkerService::new(&result.worktree_path).unwrap();
+    fs::write(result.worktree_path.join("src/owned.rs"), "pub fn owned() -> i32 { 17 }\n").unwrap();
+    git(&result.worktree_path, &["add", "src/owned.rs"]);
+    git(&result.worktree_path, &["commit", "-m", "incr: stage audit id collision"]);
+    let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
+    worker.send_commit(head.clone(), BundlePayload::default()).unwrap();
+
+    let entry_id = audit_entry_id(result.worker_id.as_str(), &head);
+    let audit_entry_path = dir.path().join(format!(".multorum/audit/{entry_id}.toml"));
+    fs::write(&audit_entry_path, "worker = \"existing\"\n").unwrap();
+
+    let error = orchestrator
+        .merge_worker(result.worker_id.clone(), vec![], BundlePayload::default())
+        .unwrap_err();
+
+    match error {
+        | RuntimeError::CheckFailed(message) => {
+            assert!(message.contains("audit entry id already exists"));
+            assert!(message.contains(&entry_id));
+        }
+        | other => panic!("expected CheckFailed for audit id collision, got: {other:?}"),
+    }
+    assert_eq!(git(dir.path(), &["rev-parse", "HEAD"]), base_head);
+    assert_eq!(worker.status().unwrap().state, WorkerState::Committed);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/owned.rs")).unwrap(),
+        "pub fn owned() -> i32 { 1 }\n"
+    );
+    assert!(audit_entry_path.exists(), "pre-existing audit entry must be preserved");
 }
 
 #[test]
@@ -1054,7 +1095,7 @@ fn merge_rejects_invalid_audit_payload_without_integrating_the_worker_commit() {
     git(&result.worktree_path, &["add", "src/owned.rs"]);
     git(&result.worktree_path, &["commit", "-m", "incr: stage invalid audit payload"]);
     let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
-    worker.send_commit(head, BundlePayload::default()).unwrap();
+    worker.send_commit(head.clone(), BundlePayload::default()).unwrap();
 
     let exclusion_before = read_exclusion_set(dir.path());
     let rationale_body = dir.path().join("rationale.md");
@@ -1081,7 +1122,12 @@ fn merge_rejects_invalid_audit_payload_without_integrating_the_worker_commit() {
     assert_eq!(read_exclusion_set(dir.path()), exclusion_before);
     assert!(rationale_body.exists(), "invalid audit payload must not be consumed");
     assert!(
-        !dir.path().join(format!(".multorum/audit/{}.toml", result.worker_id.as_str())).exists(),
+        !dir.path()
+            .join(format!(
+                ".multorum/audit/{}.toml",
+                audit_entry_id(result.worker_id.as_str(), &head)
+            ))
+            .exists(),
         "audit entry must not be visible after merge rejection"
     );
 }
@@ -1096,7 +1142,7 @@ fn merge_rejects_duplicate_audit_artifact_names_without_integrating_the_worker_c
     git(&result.worktree_path, &["add", "src/owned.rs"]);
     git(&result.worktree_path, &["commit", "-m", "incr: stage duplicate artifacts"]);
     let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
-    worker.send_commit(head, BundlePayload::default()).unwrap();
+    worker.send_commit(head.clone(), BundlePayload::default()).unwrap();
 
     let exclusion_before = read_exclusion_set(dir.path());
     let artifact_a = dir.path().join("audit-a/log.txt");
@@ -1129,7 +1175,12 @@ fn merge_rejects_duplicate_audit_artifact_names_without_integrating_the_worker_c
     assert!(artifact_a.exists(), "duplicate artifact validation must not consume sources");
     assert!(artifact_b.exists(), "duplicate artifact validation must not consume sources");
     assert!(
-        !dir.path().join(format!(".multorum/audit/{}.toml", result.worker_id.as_str())).exists(),
+        !dir.path()
+            .join(format!(
+                ".multorum/audit/{}.toml",
+                audit_entry_id(result.worker_id.as_str(), &head)
+            ))
+            .exists(),
         "audit entry must not be visible after merge rejection"
     );
 }

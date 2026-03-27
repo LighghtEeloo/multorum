@@ -276,8 +276,8 @@ pub struct MergeResult {
 /// Persisted audit entry written after a successful merge.
 ///
 /// Each entry records the full merge context and the orchestrator's
-/// rationale. Stored under `.multorum/audit/<worker>.toml` and committed
-/// to version control alongside the repository.
+/// rationale. Stored under `.multorum/audit/<worker>-<head-prefix6>.toml`
+/// and committed to version control alongside the repository.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditEntry {
     /// Merged worker identity.

@@ -659,7 +659,14 @@ impl RuntimeFs {
         let exclusion = Self::collect_exclusion_set(updated_state);
         Self::write_path_list(&staged_exclusion_path, &exclusion)?;
 
-        let final_bundle_root = self.paths.audit().join(worker.worker_id.as_str());
+        let audit_entry_id = self.paths.audit_entry_id(&worker.worker_id, head_commit)?;
+        let final_audit_entry = self.paths.audit_entry(&audit_entry_id);
+        if final_audit_entry.exists() {
+            return Err(RuntimeError::CheckFailed(format!(
+                "audit entry id already exists: {audit_entry_id}"
+            )));
+        }
+        let final_bundle_root = self.paths.audit_bundle(&audit_entry_id);
         let mut rationale_body = None;
         let mut rationale_artifacts = Vec::new();
         let mut promotions = Vec::new();
@@ -701,7 +708,7 @@ impl RuntimeFs {
 
         promotions.push(PreparedPromotion::new(
             staged_audit_entry,
-            self.paths.audit_entry(&worker.worker_id),
+            final_audit_entry,
             &staging_root,
             "backup-audit-entry.toml",
         ));
