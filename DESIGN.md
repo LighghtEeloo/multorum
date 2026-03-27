@@ -445,7 +445,7 @@ All non-terminal state transitions belong to the worker: it writes `BLOCKED` whe
 
 The orchestrator may also issue `hint` while a worker is `ACTIVE`. A hint is advisory rather than transitional: it carries new information or asks the worker to take a follow-up action such as reporting a blocker, but publishing or acknowledging the hint does not change lifecycle state on its own.
 
-For analysis-only tasks that intentionally produce no mergeable code commit, workers should conclude with `local report` that includes the completion summary and evidence. This transitions to `BLOCKED` so the orchestrator can make the final judgment (`discard`, follow-up `resolve`, or replacement task). `local commit` is reserved for submitting a concrete `head_commit` intended for merge evaluation.
+For analysis-only tasks that intentionally produce no code diff, workers should still submit through the normal commit/merge path: create an empty commit (for example `git commit --allow-empty`), then publish it with `local commit` and attach evidence in `body.md` and optional artifacts. The orchestrator can merge that submission normally, preserving a reviewable audit trail and an explicit lifecycle completion.
 
 Once one worker in a bidding group reaches `MERGED`, every sibling in that group becomes `DISCARDED`.
 
@@ -534,6 +534,8 @@ Before a worker's commit reaches the canonical codebase, it must pass two gates.
 ### Scope Enforcement
 
 Multorum verifies that every touched file is inside the worker's compiled write set. This check cannot be skipped, waived, or overridden. It is the authoritative enforcement point for write ownership.
+
+An intentionally empty worker commit is valid: it touches no files, so scope enforcement passes with an empty changed-file set. This supports analysis-only merges that carry evidence in bundle content rather than code diffs.
 
 Client-side hooks may serve as early warnings in worker worktrees, but they are not authoritative.
 
@@ -656,8 +658,8 @@ This section lists the instructions that the orchestrator and workers may issue,
 - `multorum local status` — Return the projected status for the current worktree.
 - `multorum local inbox [--after <sequence>]` — List inbox messages for the current worker. No lifecycle transition.
 - `multorum local ack <sequence>` — Acknowledge one inbox message. Acknowledging `task`, `resolve`, or `revise` transitions the worker into `ACTIVE`.
-- `multorum local report [--head-commit <commit>] [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a blocker report from the current worktree. `--reply-to` correlates the report with an earlier inbox sequence number. The optional payload carries blocker details and evidence. Analysis-only tasks with no mergeable code commit should use this command to return results for orchestrator judgment. Transition: `ACTIVE` to `BLOCKED`.
-- `multorum local commit --head-commit <commit> [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a completed worker submission from the current worktree. The optional payload carries submission evidence. Use this only when submitting a concrete `head_commit` for merge evaluation. Transition: `ACTIVE` to `COMMITTED`.
+- `multorum local report [--head-commit <commit>] [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a blocker report from the current worktree. `--reply-to` correlates the report with an earlier inbox sequence number. The optional payload carries blocker details and evidence. Transition: `ACTIVE` to `BLOCKED`.
+- `multorum local commit --head-commit <commit> [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a completed worker submission from the current worktree. The optional payload carries submission evidence. For analysis-only outcomes with no code diff, submit an intentionally empty commit (`git commit --allow-empty`) and publish that `head_commit`. Transition: `ACTIVE` to `COMMITTED`.
 
 ### Query
 

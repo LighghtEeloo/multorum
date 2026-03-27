@@ -931,9 +931,16 @@ impl OrchestratorService for FsOrchestratorService {
         )?;
 
         self.fs.vcs().ensure_clean_workspace(self.fs.workspace_root())?;
-        self.fs.vcs().begin_integration(self.fs.workspace_root(), &head_commit)?;
+        let empty_submission = changed_files.is_empty();
+        if !empty_submission {
+            self.fs.vcs().begin_integration(self.fs.workspace_root(), &head_commit)?;
+        }
         if let Err(error) = staged_merge.promote() {
-            let abort_error = self.fs.vcs().abort_integration(self.fs.workspace_root()).err();
+            let abort_error = if empty_submission {
+                None
+            } else {
+                self.fs.vcs().abort_integration(self.fs.workspace_root()).err()
+            };
             staged_merge.cleanup();
             return Err(abort_error.map(RuntimeError::from).unwrap_or(error));
         }
@@ -941,7 +948,11 @@ impl OrchestratorService for FsOrchestratorService {
             self.fs.vcs().finalize_integration(self.fs.workspace_root(), &head_commit)
         {
             let rollback_error = staged_merge.rollback().err();
-            let abort_error = self.fs.vcs().abort_integration(self.fs.workspace_root()).err();
+            let abort_error = if empty_submission {
+                None
+            } else {
+                self.fs.vcs().abort_integration(self.fs.workspace_root()).err()
+            };
             staged_merge.cleanup();
             if let Some(abort_error) = abort_error {
                 tracing::error!(

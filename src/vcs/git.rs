@@ -304,7 +304,7 @@ impl VersionControl for GitVcs {
         &self, workspace_root: &Path, commit: &CanonicalCommitHash,
     ) -> Result<()> {
         let mut command = self.git_command(workspace_root);
-        command.arg("commit").arg("--reuse-message").arg(commit.as_str());
+        command.arg("commit").arg("--allow-empty").arg("--reuse-message").arg(commit.as_str());
         self.run_command(command, "finalize integrated commit").map(|_| ())
     }
 

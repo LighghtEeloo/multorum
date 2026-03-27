@@ -922,6 +922,56 @@ fn exclusion_set_clears_after_merge() {
 }
 
 #[test]
+fn merge_accepts_empty_worker_commit_with_non_empty_submission_payload() {
+    let (dir, orchestrator, _head) = setup_repo();
+    let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    let worker = FsWorkerService::new(&result.worktree_path).unwrap();
+    let evidence = result.worktree_path.join("analysis-evidence.txt");
+    fs::write(&evidence, "analysis completed: no code changes required\n").unwrap();
+
+    git(
+        &result.worktree_path,
+        &["commit", "--allow-empty", "-m", "docs: analysis-only worker submission"],
+    );
+    let head = git(&result.worktree_path, &["rev-parse", "HEAD"]);
+
+    worker
+        .send_commit(
+            head.clone(),
+            BundlePayload {
+                body_text: Some("analysis-only result with no code diff".to_owned()),
+                body_path: None,
+                artifacts: vec![evidence.clone()],
+            },
+        )
+        .unwrap();
+    assert!(
+        !evidence.exists(),
+        "path-backed artifact should be moved into the worker outbox bundle"
+    );
+
+    let merged = orchestrator
+        .merge_worker(result.worker_id.clone(), vec![], BundlePayload::default())
+        .unwrap();
+    assert_eq!(merged.state, WorkerState::Merged);
+    assert_eq!(
+        git(dir.path(), &["log", "-1", "--format=%s"]),
+        "docs: analysis-only worker submission"
+    );
+
+    let audit_toml_path = dir
+        .path()
+        .canonicalize()
+        .unwrap()
+        .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()));
+    let entry: toml::Value =
+        toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
+    let changed = entry["changed_files"].as_array().unwrap();
+    assert!(changed.is_empty(), "empty worker commit should record no changed files");
+}
+
+#[test]
 fn merge_writes_audit_entry() {
     let (dir, orchestrator, _head) = setup_repo();
     let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();

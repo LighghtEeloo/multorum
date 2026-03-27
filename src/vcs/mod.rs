@@ -80,11 +80,15 @@ pub trait VersionControl: std::fmt::Debug + Send + Sync {
     /// persistence fails.
     fn begin_integration(&self, workspace_root: &Path, commit: &CanonicalCommitHash) -> Result<()>;
 
-    /// Finalize a previously-begun canonical integration.
+    /// Finalize canonical integration for one submitted worker commit.
     ///
     /// Implementations must preserve the submitted worker commit message
     /// and equivalent metadata so the resulting canonical commit matches
     /// the normal merge path.
+    ///
+    /// Note: The runtime may call this even when no patch was applied in
+    /// [`VersionControl::begin_integration`], for example when integrating
+    /// an intentionally empty worker commit.
     fn finalize_integration(
         &self, workspace_root: &Path, commit: &CanonicalCommitHash,
     ) -> Result<()>;
