@@ -100,6 +100,7 @@ Operate from the canonical workspace root. Treat Multorum as reactive infrastruc
 4. Create one worker per perspective by default. Create multiple workers from the same perspective only when you intentionally want a bidding group.
 5. Read worker outbox traffic, acknowledge consumed bundles, and review evidence before deciding whether to resolve, revise, discard, delete, or merge.
 6. Merge only from `COMMITTED`, and skip checks only when the rulebook marks them skippable and the submitted evidence justifies that trust.
+7. Write merge-time audit rationale as self-contained findings in `.multorum/audit/`; do not rely on references to worker outbox paths because worker worktrees and outboxes are runtime state that may be deleted after merge confirmation.
 
 ## Task writing
 

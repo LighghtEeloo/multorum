@@ -86,11 +86,11 @@ const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ),
     optional_string_input(
         "body_text",
-        "Optional inline Markdown content written into the audit rationale body.",
+        "Optional inline Markdown content written into the audit rationale body. Prefer self-contained findings instead of references to worker outbox paths.",
     ),
     optional_string_input(
         "body_path",
-        "Optional Markdown file to move into the audit rationale body.",
+        "Optional Markdown file to move into the audit rationale body. Prefer self-contained findings instead of references to worker outbox paths.",
     ),
     optional_string_list_input(
         "artifacts",
@@ -173,7 +173,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "merge_worker",
-            description: "Run the pre-merge pipeline and merge a worker submission.",
+            description: "Run the pre-merge pipeline and merge a worker submission. Audit rationale should be self-contained because worker runtime state may be deleted after merge confirmation.",
             inputs: MERGE_WORKER_INPUTS,
         },
         ToolDescriptor {

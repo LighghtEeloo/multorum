@@ -464,6 +464,10 @@ pub enum WorkerCommand {
         skip_checks: Vec<String>,
 
         /// Optional audit rationale payload.
+        ///
+        /// Prefer self-contained findings in this payload instead of
+        /// references to worker outbox paths, because worker runtime
+        /// state may be deleted after merge confirmation.
         #[command(flatten)]
         payload: BundlePayloadArgs,
     },

@@ -551,6 +551,8 @@ Workers may submit evidence with their reports or commits to support the case fo
 
 After a successful merge, Multorum writes an audit entry to `.multorum/audit/<worker>.toml`. The entry records the worker, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is a bundle attached to the `merge` command via `--body-text`, `--body-path`, and `--artifact` flags. When supplied, Multorum writes the rationale as a bundle directory (see [Bundles](#bundles)) alongside the TOML record under the same audit directory.
 
+Audit rationale should be self-contained. Record actual findings in the audit bundle body and artifacts rather than references to worker outbox paths, because worker worktrees and outboxes are runtime state and may be deleted after merge confirmation.
+
 ---
 
 ## MCP Surface
@@ -648,7 +650,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 - `multorum worker hint <worker> [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a `hint` bundle to an active worker inbox. `--reply-to` correlates the hint with an earlier outbox sequence number. The optional payload carries new project information or asks the worker to stop gracefully by issuing `report`. No lifecycle transition.
 - `multorum worker resolve <worker> [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a `resolve` bundle to a blocked worker inbox. `--reply-to` correlates the resolve with an earlier outbox sequence number. The optional payload carries resolution context for the worker. The worker returns to `ACTIVE` when it acknowledges that inbox message.
 - `multorum worker revise <worker> [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a `revise` bundle to a committed worker inbox. `--reply-to` correlates the revision with an earlier outbox sequence number. The optional payload carries revision context for the worker. The worker returns to `ACTIVE` when it acknowledges that inbox message.
-- `multorum worker merge <worker> [--skip-check <check>]... [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. The optional payload arguments attach an audit rationale. Transition: `COMMITTED` to `MERGED`.
+- `multorum worker merge <worker> [--skip-check <check>]... [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. The optional payload arguments attach an audit rationale; this rationale should contain self-contained findings instead of references to worker outbox paths. Transition: `COMMITTED` to `MERGED`.
 - `multorum worker discard <worker>` — Finalize a worker without integration. Allowed from `ACTIVE`, `BLOCKED`, or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
 - `multorum worker delete <worker>` — Delete the worktree and remove the worker's entry from `state.toml`. If the worker is the last member of its bidding group, the group entry is also removed. Allowed only from `MERGED` or `DISCARDED`.
 
