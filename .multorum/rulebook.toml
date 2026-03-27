@@ -25,13 +25,14 @@ InterfaceTest.path = "tests/interface_integration.rs"
 ProjectSurfaceFiles = "CargoToml | CargoLock | Readme | DesignDoc | AgentsGuide | RulebookFile | MultorumGitignore | CrateRoot | CliSurface | BinaryEntry | InterfaceTest"
 
 # Policy compiler and rulebook model.
-FilesetSrc.path = "src/fileset/**"
-PerspectiveSrc.path = "src/perspective/**"
-RulebookSrc.path = "src/rulebook/**"
+SchemaMod.path = "src/schema/mod.rs"
+FilesetSrc.path = "src/schema/fileset/**"
+PerspectiveSrc.path = "src/schema/perspective/**"
+RulebookSrc.path = "src/schema/rulebook/**"
 FilesetTests.path = "tests/fileset_integration.rs"
 PerspectiveTests.path = "tests/perspective_integration.rs"
 RulebookTests.path = "tests/rulebook_integration.rs"
-PolicyFiles = "FilesetSrc | PerspectiveSrc | RulebookSrc | FilesetTests | PerspectiveTests | RulebookTests"
+PolicyFiles = "SchemaMod | FilesetSrc | PerspectiveSrc | RulebookSrc | FilesetTests | PerspectiveTests | RulebookTests"
 
 # Worker/orchestrator runtime and git integration.
 RuntimeSrc.path = "src/runtime/**"
@@ -69,6 +70,11 @@ write = "RuntimeFiles"
 
 # Owns the MCP layer. It reads the runtime surface as stable context because
 # transport and resource code is tightly coupled to runtime APIs.
+#
+# Runtime and MCP maintenance are intentionally serialized: when a refactor
+# changes runtime contracts first, the follow-up MCP work should run after the
+# runtime change lands instead of pretending the two roles can write
+# concurrently.
 [perspective.Mcp]
 read = "ProjectSurfaceFiles | RuntimeFiles"
 write = "McpFiles"
