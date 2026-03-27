@@ -393,7 +393,7 @@ Once one worker in a bidding group reaches `MERGED`, every sibling in that group
 | ACTIVE | BLOCKED | worker issues `report` |
 | ACTIVE | COMMITTED | worker issues `commit` |
 | ACTIVE | DISCARDED | orchestrator issues `discard` |
-| ACTIVE | ACTIVE | worker issues `hint` |
+| ACTIVE | ACTIVE | orchestrator publishes `hint` |
 | BLOCKED | ACTIVE | worker acknowledges `resolve` |
 | BLOCKED | DISCARDED | orchestrator issues `discard` |
 | COMMITTED | ACTIVE | worker acknowledges `revise` |
