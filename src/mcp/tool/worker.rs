@@ -1,67 +1,50 @@
 //! Worker MCP tool surface.
 
-use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor, ToolInputType};
+use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor};
 
-const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::optional(
+use super::{
+    optional_integer_input, optional_string_input, optional_string_list_input,
+    required_integer_input, required_string_input,
+};
+
+const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[optional_integer_input(
     "after",
     "Optional sequence number; only inbox bundles after it are returned.",
-    ToolInputType::Integer,
 )];
 
-const ACK_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
-    "sequence",
-    "Inbox sequence number to acknowledge.",
-    ToolInputType::Integer,
-)];
+const ACK_INPUTS: &[ToolInputDescriptor] =
+    &[required_integer_input("sequence", "Inbox sequence number to acknowledge.")];
 
 const REPORT_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor::optional(
+    optional_string_input(
         "head_commit",
         "Optional git commit hash relevant to the blocker report.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
-        "reply_to",
-        "Optional mailbox sequence number answered by this report.",
-        ToolInputType::Integer,
-    ),
-    ToolInputDescriptor::optional(
+    optional_integer_input("reply_to", "Optional mailbox sequence number answered by this report."),
+    optional_string_input(
         "body_text",
         "Optional inline Markdown content written into the report body.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
-        "body_path",
-        "Optional Markdown file to move into the report body.",
-        ToolInputType::String,
-    ),
-    ToolInputDescriptor::optional(
+    optional_string_input("body_path", "Optional Markdown file to move into the report body."),
+    optional_string_list_input(
         "artifacts",
         "Optional files to move into the report artifacts directory.",
-        ToolInputType::StringList,
     ),
 ];
 
 const COMMIT_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor::required(
-        "head_commit",
-        "Git commit hash submitted by the worker.",
-        ToolInputType::String,
-    ),
-    ToolInputDescriptor::optional(
+    required_string_input("head_commit", "Git commit hash submitted by the worker."),
+    optional_string_input(
         "body_text",
         "Optional inline Markdown content written into the commit bundle body.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
+    optional_string_input(
         "body_path",
         "Optional Markdown file to move into the commit bundle body.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
+    optional_string_list_input(
         "artifacts",
         "Optional files to move into the commit bundle artifacts directory.",
-        ToolInputType::StringList,
     ),
 ];
 

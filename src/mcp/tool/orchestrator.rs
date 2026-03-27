@@ -1,150 +1,100 @@
 //! Orchestrator MCP tool surface.
 
-use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor, ToolInputType};
+use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor};
 
-const GET_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
-    "worker",
-    "Runtime worker identity to inspect.",
-    ToolInputType::String,
-)];
+use super::{
+    optional_boolean_input, optional_integer_input, optional_string_input,
+    optional_string_list_input, required_integer_input, required_string_input,
+    required_string_list_input,
+};
+
+const GET_WORKER_INPUTS: &[ToolInputDescriptor] =
+    &[required_string_input("worker", "Runtime worker identity to inspect.")];
 
 const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor::required(
-        "worker",
-        "Runtime worker identity whose outbox should be read.",
-        ToolInputType::String,
-    ),
-    ToolInputDescriptor::optional(
+    required_string_input("worker", "Runtime worker identity whose outbox should be read."),
+    optional_integer_input(
         "after",
         "Optional sequence number; only outbox bundles after it are returned.",
-        ToolInputType::Integer,
     ),
 ];
 
 const ACK_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor::required(
-        "worker",
-        "Runtime worker identity whose outbox owns the message.",
-        ToolInputType::String,
-    ),
-    ToolInputDescriptor::required(
-        "sequence",
-        "Outbox sequence number to acknowledge.",
-        ToolInputType::Integer,
-    ),
+    required_string_input("worker", "Runtime worker identity whose outbox owns the message."),
+    required_integer_input("sequence", "Outbox sequence number to acknowledge."),
 ];
 
 const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor::required(
-        "perspective",
-        "Compiled perspective to instantiate.",
-        ToolInputType::String,
-    ),
-    ToolInputDescriptor::optional(
+    required_string_input("perspective", "Compiled perspective to instantiate."),
+    optional_string_input(
         "worker",
         "Optional orchestrator-selected runtime worker identity. When omitted, Multorum allocates a default perspective-based identity.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
+    optional_boolean_input(
         "overwriting_worktree",
         "Optional flag to replace an existing finalized workspace for the same explicit worker.",
-        ToolInputType::Boolean,
     ),
-    ToolInputDescriptor::optional(
+    optional_string_input(
         "body_text",
         "Optional inline Markdown content written into the seeded task bundle body.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
+    optional_string_input(
         "body_path",
         "Optional Markdown file to move into the seeded task bundle body.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
+    optional_string_list_input(
         "artifacts",
         "Optional files to move into the seeded task bundle artifacts directory.",
-        ToolInputType::StringList,
     ),
 ];
 
 const VALIDATE_PERSPECTIVES_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor::required(
+    required_string_list_input(
         "perspectives",
         "Perspective names to validate for conflict-freedom.",
-        ToolInputType::StringList,
     ),
-    ToolInputDescriptor::optional(
-        "no_live",
-        "Skip checking against active bidding groups.",
-        ToolInputType::Boolean,
-    ),
+    optional_boolean_input("no_live", "Skip checking against active bidding groups."),
 ];
 
-const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
+const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[required_string_input(
     "perspective",
     "Perspective whose blocked bidding group should move to HEAD.",
-    ToolInputType::String,
 )];
 
 const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor::required(
-        "worker",
-        "Runtime worker identity that owns the inbox.",
-        ToolInputType::String,
-    ),
-    ToolInputDescriptor::optional(
-        "reply_to",
-        "Optional mailbox sequence number answered by this bundle.",
-        ToolInputType::Integer,
-    ),
-    ToolInputDescriptor::optional(
+    required_string_input("worker", "Runtime worker identity that owns the inbox."),
+    optional_integer_input("reply_to", "Optional mailbox sequence number answered by this bundle."),
+    optional_string_input(
         "body_text",
         "Optional inline Markdown content written into the bundle body.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
-        "body_path",
-        "Optional Markdown file to move into the bundle body.",
-        ToolInputType::String,
-    ),
-    ToolInputDescriptor::optional(
+    optional_string_input("body_path", "Optional Markdown file to move into the bundle body."),
+    optional_string_list_input(
         "artifacts",
         "Optional files to move into the bundle artifacts directory.",
-        ToolInputType::StringList,
     ),
 ];
 
-const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] = &[ToolInputDescriptor::required(
-    "worker",
-    "Runtime worker identity to act on.",
-    ToolInputType::String,
-)];
+const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] =
+    &[required_string_input("worker", "Runtime worker identity to act on.")];
 
 const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
-    ToolInputDescriptor::required(
-        "worker",
-        "Runtime worker identity to merge.",
-        ToolInputType::String,
-    ),
-    ToolInputDescriptor::optional(
+    required_string_input("worker", "Runtime worker identity to merge."),
+    optional_string_list_input(
         "skip_checks",
         "Optional project-defined checks to skip based on trusted worker evidence.",
-        ToolInputType::StringList,
     ),
-    ToolInputDescriptor::optional(
+    optional_string_input(
         "body_text",
         "Optional inline Markdown content written into the audit rationale body.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
+    optional_string_input(
         "body_path",
         "Optional Markdown file to move into the audit rationale body.",
-        ToolInputType::String,
     ),
-    ToolInputDescriptor::optional(
+    optional_string_list_input(
         "artifacts",
         "Optional files to move into the audit rationale artifacts directory.",
-        ToolInputType::StringList,
     ),
 ];
 

@@ -268,13 +268,12 @@ impl FsOrchestratorService {
         let (group, worker) = state
             .find_worker(worker_id)
             .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
-        let state_accepted = matches!(
-            (kind, worker.state),
-            (MessageKind::Hint, WorkerState::Active)
-                | (MessageKind::Resolve, WorkerState::Blocked)
-                | (MessageKind::Revise, WorkerState::Committed)
-        );
-        if state_accepted {
+        let Some(expected_state) = kind.required_worker_state_for_inbox_publication() else {
+            unreachable!(
+                "worker inbox publication only accepts orchestrator-authored follow-up bundles"
+            );
+        };
+        if worker.state == expected_state {
             return self.fs.publish_bundle(
                 &worker.worktree_path,
                 MailboxDirection::Inbox,
@@ -288,18 +287,8 @@ impl FsOrchestratorService {
         }
 
         Err(RuntimeError::InvalidState {
-            operation: match kind {
-                | MessageKind::Hint => "publish hint bundle",
-                | MessageKind::Resolve => "publish resolve bundle",
-                | MessageKind::Revise => "publish revise bundle",
-                | _ => "publish inbox bundle",
-            },
-            expected: match kind {
-                | MessageKind::Hint => "ACTIVE",
-                | MessageKind::Resolve => "BLOCKED",
-                | MessageKind::Revise => "COMMITTED",
-                | _ => "a state that accepts inbox publication",
-            },
+            operation: inbox_publish_operation(kind),
+            expected: expected_state.as_str(),
             actual: worker.state,
         })
     }
@@ -1016,40 +1005,14 @@ fn boundary_conflict(
     candidate_name: &PerspectiveName, candidate: &CompiledPerspective,
     active_name: &PerspectiveName, active: &CompiledPerspective,
 ) -> Option<RuntimeError> {
-    let write_write =
-        candidate.write().intersection(active.write()).cloned().collect::<BTreeSet<_>>();
-    if !write_write.is_empty() {
-        return Some(RuntimeError::ConflictWithActiveBiddingGroup {
+    BoundaryOverlap::detect(candidate, active).map(|overlap| {
+        RuntimeError::ConflictWithActiveBiddingGroup {
             perspective: candidate_name.clone(),
             blocking_perspective: active_name.clone(),
-            relation: "write/write overlap",
-            files: write_write.into_iter().collect(),
-        });
-    }
-
-    let candidate_write_active_read =
-        candidate.write().intersection(active.read()).cloned().collect::<BTreeSet<_>>();
-    if !candidate_write_active_read.is_empty() {
-        return Some(RuntimeError::ConflictWithActiveBiddingGroup {
-            perspective: candidate_name.clone(),
-            blocking_perspective: active_name.clone(),
-            relation: "candidate write overlaps active read",
-            files: candidate_write_active_read.into_iter().collect(),
-        });
-    }
-
-    let candidate_read_active_write =
-        candidate.read().intersection(active.write()).cloned().collect::<BTreeSet<_>>();
-    if !candidate_read_active_write.is_empty() {
-        return Some(RuntimeError::ConflictWithActiveBiddingGroup {
-            perspective: candidate_name.clone(),
-            blocking_perspective: active_name.clone(),
-            relation: "candidate read overlaps active write",
-            files: candidate_read_active_write.into_iter().collect(),
-        });
-    }
-
-    None
+            relation: overlap.relation.runtime_relation(),
+            files: overlap.files,
+        }
+    })
 }
 
 /// Return a `PerspectiveConflict` if two boundaries overlap.
@@ -1057,37 +1020,94 @@ fn boundary_conflict_info(
     a_name: &PerspectiveName, a: &CompiledPerspective, b_name: &PerspectiveName,
     b: &CompiledPerspective,
 ) -> Option<PerspectiveConflict> {
-    let write_write = a.write().intersection(b.write()).cloned().collect::<BTreeSet<_>>();
-    if !write_write.is_empty() {
-        return Some(PerspectiveConflict {
-            perspective: a_name.clone(),
-            blocking_perspective: b_name.clone(),
-            relation: "write/write overlap",
-            files: write_write.into_iter().collect(),
-        });
+    BoundaryOverlap::detect(a, b).map(|overlap| PerspectiveConflict {
+        perspective: a_name.clone(),
+        blocking_perspective: b_name.clone(),
+        relation: overlap.relation.validation_relation(),
+        files: overlap.files,
+    })
+}
+
+/// Stable operation label for orchestrator-authored inbox bundles.
+fn inbox_publish_operation(kind: MessageKind) -> &'static str {
+    match kind {
+        | MessageKind::Hint => "publish hint bundle",
+        | MessageKind::Resolve => "publish resolve bundle",
+        | MessageKind::Revise => "publish revise bundle",
+        | MessageKind::Task | MessageKind::Report | MessageKind::Commit => "publish inbox bundle",
+    }
+}
+
+/// One concrete overlap that violates the bidding-group invariant.
+///
+/// Note: Worker creation and perspective validation both stop at the
+/// first detected overlap because any single overlap is already enough
+/// to reject the candidate concurrency shape.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BoundaryOverlap {
+    files: Vec<PathBuf>,
+    relation: BoundaryOverlapRelation,
+}
+
+impl BoundaryOverlap {
+    /// Detect the first overlap between two compiled boundaries.
+    fn detect(left: &CompiledPerspective, right: &CompiledPerspective) -> Option<Self> {
+        Self::from_sets(
+            BoundaryOverlapRelation::WriteWrite,
+            left.write().intersection(right.write()).cloned().collect(),
+        )
+        .or_else(|| {
+            Self::from_sets(
+                BoundaryOverlapRelation::LeftWriteRightRead,
+                left.write().intersection(right.read()).cloned().collect(),
+            )
+        })
+        .or_else(|| {
+            Self::from_sets(
+                BoundaryOverlapRelation::LeftReadRightWrite,
+                left.read().intersection(right.write()).cloned().collect(),
+            )
+        })
     }
 
-    let a_write_b_read = a.write().intersection(b.read()).cloned().collect::<BTreeSet<_>>();
-    if !a_write_b_read.is_empty() {
-        return Some(PerspectiveConflict {
-            perspective: a_name.clone(),
-            blocking_perspective: b_name.clone(),
-            relation: "write overlaps read",
-            files: a_write_b_read.into_iter().collect(),
-        });
+    /// Materialize one overlap from the matching file set.
+    fn from_sets(relation: BoundaryOverlapRelation, files: BTreeSet<PathBuf>) -> Option<Self> {
+        if files.is_empty() {
+            return None;
+        }
+        Some(Self { relation, files: files.into_iter().collect() })
+    }
+}
+
+/// Direction of one boundary overlap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BoundaryOverlapRelation {
+    /// Both perspectives attempt to write the same files.
+    WriteWrite,
+    /// The left perspective writes files the right perspective reads.
+    LeftWriteRightRead,
+    /// The left perspective reads files the right perspective writes.
+    LeftReadRightWrite,
+}
+
+impl BoundaryOverlapRelation {
+    /// Relation string used by runtime create-worker errors.
+    const fn runtime_relation(self) -> &'static str {
+        match self {
+            | Self::WriteWrite => "write/write overlap",
+            | Self::LeftWriteRightRead => "candidate write overlaps active read",
+            | Self::LeftReadRightWrite => "candidate read overlaps active write",
+        }
     }
 
-    let a_read_b_write = a.read().intersection(b.write()).cloned().collect::<BTreeSet<_>>();
-    if !a_read_b_write.is_empty() {
-        return Some(PerspectiveConflict {
-            perspective: a_name.clone(),
-            blocking_perspective: b_name.clone(),
-            relation: "read overlaps write",
-            files: a_read_b_write.into_iter().collect(),
-        });
+    /// Relation string used by perspective validation output.
+    const fn validation_relation(self) -> &'static str {
+        match self {
+            | Self::WriteWrite => "write/write overlap",
+            | Self::LeftWriteRightRead => "write overlaps read",
+            | Self::LeftReadRightWrite => "read overlaps write",
+        }
     }
-
-    None
 }
 
 /// Convert an `UpperCamelCase` name to `kebab-case`.
@@ -1105,7 +1125,7 @@ fn camel_to_kebab(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
 
     use tempfile::TempDir;
@@ -1272,5 +1292,38 @@ mod tests {
         let first_detail = orchestrator.get_worker(first.worker_id).unwrap();
         let second_detail = orchestrator.get_worker(second.worker_id).unwrap();
         assert_eq!(first_detail.base_commit, second_detail.base_commit);
+    }
+
+    fn compiled_perspective(read: &[&str], write: &[&str]) -> CompiledPerspective {
+        CompiledPerspective::from_materialized_sets(
+            read.iter().map(PathBuf::from).collect(),
+            write.iter().map(PathBuf::from).collect(),
+        )
+    }
+
+    #[test]
+    fn boundary_overlap_detects_runtime_relations_once() {
+        let left = compiled_perspective(&["src/stable.rs"], &["src/shared.rs"]);
+        let right = compiled_perspective(&["src/shared.rs"], &["src/other.rs"]);
+
+        let overlap = BoundaryOverlap::detect(&left, &right).unwrap();
+        assert_eq!(overlap.relation, BoundaryOverlapRelation::LeftWriteRightRead);
+        assert_eq!(overlap.files, vec![PathBuf::from("src/shared.rs")]);
+    }
+
+    #[test]
+    fn boundary_conflict_info_uses_shared_overlap_detector() {
+        let left = compiled_perspective(&["src/stable.rs"], &["src/shared.rs"]);
+        let right = compiled_perspective(&["src/shared.rs"], &["src/other.rs"]);
+
+        let conflict = boundary_conflict_info(
+            &PerspectiveName::new("Left").unwrap(),
+            &left,
+            &PerspectiveName::new("Right").unwrap(),
+            &right,
+        )
+        .unwrap();
+        assert_eq!(conflict.relation, "write overlaps read");
+        assert_eq!(conflict.files, vec![PathBuf::from("src/shared.rs")]);
     }
 }

@@ -16,7 +16,7 @@ use super::{
     error::{Result, RuntimeError},
     mailbox::{AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence},
     project::CurrentProject,
-    state::{MailboxMessageView, WorkerContractView, WorkerState, WorkerStatus},
+    state::{MailboxMessageView, WorkerContractView, WorkerStatus},
     storage::RuntimeFs,
 };
 
@@ -97,31 +97,31 @@ impl FsWorkerService {
     }
 
     fn update_state_after_ack(&self, message: &AckRef) -> Result<()> {
-        match message.message.kind {
-            | MessageKind::Task | MessageKind::Resolve | MessageKind::Revise => {
-                let mut state_file = self.fs.load_state()?;
-                let group =
-                    state_file.find_worker_group_mut(&message.message.worker_id).ok_or_else(
-                        || RuntimeError::UnknownWorker(message.message.worker_id.to_string()),
-                    )?;
-                let entry = group.find_worker_mut(&message.message.worker_id).unwrap();
-                if entry.worktree_path != self.worktree_root {
-                    return Err(RuntimeError::MissingWorkerRuntime(
-                        self.worktree_root.display().to_string(),
-                    ));
-                }
-                entry.state = WorkerState::Active;
-                self.fs.store_state(&state_file)?;
+        if let Some(next_state) = message.message.kind.worker_state_after_inbox_ack() {
+            let mut state_file = self.fs.load_state()?;
+            let group =
+                state_file.find_worker_group_mut(&message.message.worker_id).ok_or_else(|| {
+                    RuntimeError::UnknownWorker(message.message.worker_id.to_string())
+                })?;
+            let entry = group.find_worker_mut(&message.message.worker_id).unwrap();
+            if entry.worktree_path != self.worktree_root {
+                return Err(RuntimeError::MissingWorkerRuntime(
+                    self.worktree_root.display().to_string(),
+                ));
             }
-            | MessageKind::Hint | MessageKind::Report | MessageKind::Commit => {}
+            entry.state = next_state;
+            self.fs.store_state(&state_file)?;
         }
 
         Ok(())
     }
 
     fn update_submission_state(
-        &self, new_state: WorkerState, head_commit: Option<CanonicalCommitHash>,
+        &self, kind: MessageKind, head_commit: Option<CanonicalCommitHash>,
     ) -> Result<()> {
+        let Some(new_state) = kind.worker_state_after_outbox_publication() else {
+            unreachable!("worker submission state updates require a worker-authored outbox kind");
+        };
         let contract = self.contract_view()?;
         let mut state_file = self.fs.load_state()?;
         let group = state_file
@@ -198,7 +198,7 @@ impl WorkerService for FsWorkerService {
             head_commit,
             payload,
         )?;
-        self.update_submission_state(WorkerState::Blocked, None)?;
+        self.update_submission_state(MessageKind::Report, None)?;
         tracing::info!(
             worktree_root = %self.worktree_root.display(),
             kind = ?MessageKind::Report,
@@ -224,7 +224,7 @@ impl WorkerService for FsWorkerService {
             Some(head_commit.clone()),
             payload,
         )?;
-        self.update_submission_state(WorkerState::Committed, Some(head_commit.clone()))?;
+        self.update_submission_state(MessageKind::Commit, Some(head_commit.clone()))?;
         tracing::info!(
             worktree_root = %self.worktree_root.display(),
             head_commit = %head_commit,

@@ -78,6 +78,49 @@ impl WorkerState {
     }
 }
 
+impl MessageKind {
+    /// Worker state required before the orchestrator may publish this
+    /// message kind to the worker inbox.
+    ///
+    /// Note: Only orchestrator-authored follow-up bundles participate
+    /// in this gate. Worker-authored kinds and the initial `TASK`
+    /// bundle are handled elsewhere.
+    pub(crate) const fn required_worker_state_for_inbox_publication(self) -> Option<WorkerState> {
+        match self {
+            | Self::Hint => Some(WorkerState::Active),
+            | Self::Resolve => Some(WorkerState::Blocked),
+            | Self::Revise => Some(WorkerState::Committed),
+            | Self::Task | Self::Report | Self::Commit => None,
+        }
+    }
+
+    /// Worker state transition applied after the worker acknowledges an
+    /// inbox message of this kind.
+    ///
+    /// Note: Only inbox messages that explicitly unblock or re-activate
+    /// work carry lifecycle transitions. Advisory hints leave the
+    /// current worker state unchanged.
+    pub(crate) const fn worker_state_after_inbox_ack(self) -> Option<WorkerState> {
+        match self {
+            | Self::Task | Self::Resolve | Self::Revise => Some(WorkerState::Active),
+            | Self::Hint | Self::Report | Self::Commit => None,
+        }
+    }
+
+    /// Worker state transition applied after the worker publishes an
+    /// outbox message of this kind.
+    ///
+    /// Note: Only worker-authored progress reports and commit
+    /// submissions advance the persisted lifecycle state.
+    pub(crate) const fn worker_state_after_outbox_publication(self) -> Option<WorkerState> {
+        match self {
+            | Self::Report => Some(WorkerState::Blocked),
+            | Self::Commit => Some(WorkerState::Committed),
+            | Self::Task | Self::Hint | Self::Resolve | Self::Revise => None,
+        }
+    }
+}
+
 impl std::fmt::Display for WorkerState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
@@ -370,7 +413,7 @@ impl TranscriptView {
 mod tests {
     use serde_json::json;
 
-    use super::WorkerState;
+    use super::{MessageKind, WorkerState};
 
     #[test]
     fn worker_state_serializes_as_lowercase() {
@@ -383,5 +426,40 @@ mod tests {
             serde_json::from_value::<WorkerState>(json!("discarded")).unwrap(),
             WorkerState::Discarded
         );
+    }
+
+    #[test]
+    fn inbox_publication_policy_matches_worker_lifecycle() {
+        assert_eq!(
+            MessageKind::Hint.required_worker_state_for_inbox_publication(),
+            Some(WorkerState::Active)
+        );
+        assert_eq!(
+            MessageKind::Resolve.required_worker_state_for_inbox_publication(),
+            Some(WorkerState::Blocked)
+        );
+        assert_eq!(
+            MessageKind::Revise.required_worker_state_for_inbox_publication(),
+            Some(WorkerState::Committed)
+        );
+        assert_eq!(MessageKind::Task.required_worker_state_for_inbox_publication(), None);
+    }
+
+    #[test]
+    fn mailbox_lifecycle_transitions_are_centralized_by_message_kind() {
+        assert_eq!(MessageKind::Task.worker_state_after_inbox_ack(), Some(WorkerState::Active));
+        assert_eq!(MessageKind::Resolve.worker_state_after_inbox_ack(), Some(WorkerState::Active));
+        assert_eq!(MessageKind::Revise.worker_state_after_inbox_ack(), Some(WorkerState::Active));
+        assert_eq!(MessageKind::Hint.worker_state_after_inbox_ack(), None);
+
+        assert_eq!(
+            MessageKind::Report.worker_state_after_outbox_publication(),
+            Some(WorkerState::Blocked)
+        );
+        assert_eq!(
+            MessageKind::Commit.worker_state_after_outbox_publication(),
+            Some(WorkerState::Committed)
+        );
+        assert_eq!(MessageKind::Hint.worker_state_after_outbox_publication(), None);
     }
 }
