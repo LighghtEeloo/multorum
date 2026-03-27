@@ -205,7 +205,7 @@ The write-set scope check is always mandatory and cannot be configured away.
 `rulebook init` creates a sparse template:
 
 ```toml
-# Define shared ownership vocabulary first.
+# Define shared file ownership vocabulary first.
 # `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
 [fileset]
 
@@ -278,7 +278,7 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
   exclusion-set.txt      # materialized orchestrator exclusion set
 ```
 
-`state.toml` is the orchestrator's single runtime state file. It records every bidding group and every worker within it. Each group entry carries the perspective name, base commit, and compiled boundary (read and write sets as concrete file lists). Each worker entry within a group carries the worker, lifecycle state, and submitted head commit where applicable.
+`state.toml` is the orchestrator's single runtime state file. It records every bidding group and every worker within it. Each group entry carries the perspective name, base commit, and compiled boundary (read and write sets as concrete file lists). Each worker entry within a group carries the worker, lifecycle state, worktree path, and submitted head commit where applicable.
 
 `rulebook init` creates `state.toml` as an empty file. Subsequent operations update it:
 
@@ -297,7 +297,7 @@ Workers also update their own entries directly:
 
 The orchestrator writes only the terminal states `MERGED` and `DISCARDED`. Once an entry reaches either terminal state, the worker must treat it as read-only.
 
-`exclusion-set.txt` is a flat projection of `state.toml`: the union of all read and write sets from groups that still carry a boundary. A pre-commit hook in the canonical workspace reads it and rejects commits that touch any listed file. Multorum regenerates it whenever `state.toml` changes. When no groups carry a boundary the file is empty.
+`exclusion-set.txt` is a flat projection of `state.toml`: the union of all read and write sets from groups that still have live workers. A pre-commit hook in the canonical workspace reads it and rejects commits that touch any listed file. Multorum regenerates it whenever `state.toml` changes. When no groups carry a boundary the file is empty.
 
 ### Audit Trail
 
