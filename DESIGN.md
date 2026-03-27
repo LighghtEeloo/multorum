@@ -371,15 +371,15 @@ The merge audit trail lives under `.multorum/audit/`, a sibling of `orchestrator
 
 ```text
 .multorum/audit/
-  <worker>.toml        # per-worker TOML metadata record
-  <worker>/            # optional rationale bundle
+  <audit-entry-id>/
+    entry.toml
     body.md
     artifacts/
 ```
 
 Audit entries are committed project history. They sit outside the `orchestrator/` subtree and travel with the repository.
 
-Each entry is written atomically when `merge` succeeds and contains the worker, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The rationale is a bundle — a `body.md` and optional `artifacts/` — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. When the orchestrator supplies rationale, Multorum writes it as a bundle subdirectory alongside the TOML record. Audit entries are append-only; Multorum never modifies or deletes them.
+Each entry is written atomically when `merge` succeeds and contains the worker, perspective, base commit, integrated head commit, the list of changed files, which checks ran or were skipped, and the orchestrator-supplied rationale. The audit entry id format is `<worker>-<head-prefix6>`, where `<head-prefix6>` is the first six characters of the integrated worker head commit. The rationale is a bundle — a `body.md` and optional `artifacts/` — attached by the orchestrator at merge time to explain what the worker accomplished and why the merge was accepted. Multorum writes `entry.toml` and rationale files under the same audit-entry-id directory. Audit entries are append-only; Multorum never modifies or deletes them.
 
 ### Git Worktrees
 
@@ -549,7 +549,7 @@ Workers may submit evidence with their reports or commits to support the case fo
 
 ### Audit
 
-After a successful merge, Multorum writes an audit entry to `.multorum/audit/<worker>.toml`. The entry records the worker, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is a bundle attached to the `merge` command via `--body-text`, `--body-path`, and `--artifact` flags. When supplied, Multorum writes the rationale as a bundle directory (see [Bundles](#bundles)) alongside the TOML record under the same audit directory.
+After a successful merge, Multorum writes an audit entry to `.multorum/audit/<worker>-<head-prefix6>/entry.toml`. The entry records the worker, perspective, base commit, integrated head commit, changed files, checks ran, checks skipped, and the orchestrator's rationale. The rationale is a bundle attached to the `merge` command via `--body-text`, `--body-path`, and `--artifact` flags. When supplied, Multorum writes rationale files under `.multorum/audit/<worker>-<head-prefix6>/` (see [Bundles](#bundles)).
 
 Audit rationale should be self-contained. Record actual findings in the audit bundle body and artifacts rather than references to worker outbox paths, because worker worktrees and outboxes are runtime state and may be deleted after merge confirmation.
 

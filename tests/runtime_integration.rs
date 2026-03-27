@@ -966,11 +966,10 @@ fn merge_accepts_empty_worker_commit_with_non_empty_submission_payload() {
         "docs: analysis-only worker submission"
     );
 
-    let audit_toml_path = dir
-        .path()
-        .canonicalize()
-        .unwrap()
-        .join(format!(".multorum/audit/{}.toml", audit_entry_id(result.worker_id.as_str(), &head)));
+    let audit_toml_path = dir.path().canonicalize().unwrap().join(format!(
+        ".multorum/audit/{}/entry.toml",
+        audit_entry_id(result.worker_id.as_str(), &head)
+    ));
     let entry: toml::Value =
         toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
     let changed = entry["changed_files"].as_array().unwrap();
@@ -997,11 +996,10 @@ fn merge_writes_audit_entry() {
     orchestrator.merge_worker(result.worker_id.clone(), vec![], rationale).unwrap();
 
     // Verify the audit TOML entry exists and contains expected fields.
-    let audit_toml_path = dir
-        .path()
-        .canonicalize()
-        .unwrap()
-        .join(format!(".multorum/audit/{}.toml", audit_entry_id(result.worker_id.as_str(), &head)));
+    let audit_toml_path = dir.path().canonicalize().unwrap().join(format!(
+        ".multorum/audit/{}/entry.toml",
+        audit_entry_id(result.worker_id.as_str(), &head)
+    ));
     assert!(audit_toml_path.exists(), "audit entry TOML missing");
     let entry: toml::Value =
         toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
@@ -1035,11 +1033,10 @@ fn merge_writes_audit_entry_without_rationale() {
     orchestrator.merge_worker(result.worker_id.clone(), vec![], BundlePayload::default()).unwrap();
 
     // Audit entry exists even without rationale.
-    let audit_toml_path = dir
-        .path()
-        .canonicalize()
-        .unwrap()
-        .join(format!(".multorum/audit/{}.toml", audit_entry_id(result.worker_id.as_str(), &head)));
+    let audit_toml_path = dir.path().canonicalize().unwrap().join(format!(
+        ".multorum/audit/{}/entry.toml",
+        audit_entry_id(result.worker_id.as_str(), &head)
+    ));
     assert!(audit_toml_path.exists(), "audit entry TOML missing");
     let entry: toml::Value =
         toml::from_str(&fs::read_to_string(&audit_toml_path).unwrap()).unwrap();
@@ -1062,7 +1059,8 @@ fn merge_rejects_existing_audit_entry_id_without_integrating_the_worker_commit()
     worker.send_commit(head.clone(), BundlePayload::default()).unwrap();
 
     let entry_id = audit_entry_id(result.worker_id.as_str(), &head);
-    let audit_entry_path = dir.path().join(format!(".multorum/audit/{entry_id}.toml"));
+    let audit_entry_path = dir.path().join(format!(".multorum/audit/{entry_id}/entry.toml"));
+    fs::create_dir_all(audit_entry_path.parent().unwrap()).unwrap();
     fs::write(&audit_entry_path, "worker = \"existing\"\n").unwrap();
 
     let error = orchestrator
@@ -1124,7 +1122,7 @@ fn merge_rejects_invalid_audit_payload_without_integrating_the_worker_commit() {
     assert!(
         !dir.path()
             .join(format!(
-                ".multorum/audit/{}.toml",
+                ".multorum/audit/{}/entry.toml",
                 audit_entry_id(result.worker_id.as_str(), &head)
             ))
             .exists(),
@@ -1177,7 +1175,7 @@ fn merge_rejects_duplicate_audit_artifact_names_without_integrating_the_worker_c
     assert!(
         !dir.path()
             .join(format!(
-                ".multorum/audit/{}.toml",
+                ".multorum/audit/{}/entry.toml",
                 audit_entry_id(result.worker_id.as_str(), &head)
             ))
             .exists(),

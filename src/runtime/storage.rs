@@ -660,13 +660,14 @@ impl RuntimeFs {
         Self::write_path_list(&staged_exclusion_path, &exclusion)?;
 
         let audit_entry_id = self.paths.audit_entry_id(&worker.worker_id, head_commit)?;
+        let final_audit_root = self.paths.audit_entry_root(&audit_entry_id);
         let final_audit_entry = self.paths.audit_entry(&audit_entry_id);
-        if final_audit_entry.exists() {
+        if final_audit_root.exists() {
             return Err(RuntimeError::CheckFailed(format!(
                 "audit entry id already exists: {audit_entry_id}"
             )));
         }
-        let final_bundle_root = self.paths.audit_bundle(&audit_entry_id);
+        let final_bundle_root = final_audit_root.clone();
         let mut rationale_body = None;
         let mut rationale_artifacts = Vec::new();
         let mut promotions = Vec::new();

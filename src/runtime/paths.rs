@@ -14,6 +14,8 @@ use super::{MailboxDirection, RuntimeError, WorkerId};
 const WORKTREE_DIRECTORY_NAME: &str = "tr";
 /// Number of canonical head-commit characters stored in audit entry ids.
 const AUDIT_HEAD_PREFIX_LEN: usize = 6;
+/// Canonical audit metadata file name stored under one entry directory.
+const AUDIT_ENTRY_FILE_NAME: &str = "entry.toml";
 
 /// Root path helper for a Multorum workspace.
 #[derive(Debug, Clone)]
@@ -86,14 +88,19 @@ impl MultorumPaths {
         Ok(format!("{}-{head_prefix}", worker_id.as_str()))
     }
 
-    /// Audit entry metadata path for one merged worker submission.
-    pub fn audit_entry(&self, audit_entry_id: &str) -> PathBuf {
-        self.audit().join(format!("{audit_entry_id}.toml"))
+    /// Audit entry root directory for one merged worker submission.
+    ///
+    /// Note: Audit metadata and rationale payload share the same entry
+    /// root so one audit id never maps to multiple top-level paths.
+    pub fn audit_entry_root(&self, audit_entry_id: &str) -> PathBuf {
+        self.audit().join(audit_entry_id)
     }
 
-    /// Audit rationale bundle directory for one merged worker submission.
-    pub fn audit_bundle(&self, audit_entry_id: &str) -> PathBuf {
-        self.audit().join(audit_entry_id)
+    /// Audit metadata path for one merged worker submission.
+    ///
+    /// Stored at `.multorum/audit/<audit-entry-id>/entry.toml`.
+    pub fn audit_entry(&self, audit_entry_id: &str) -> PathBuf {
+        self.audit_entry_root(audit_entry_id).join(AUDIT_ENTRY_FILE_NAME)
     }
 
     /// Path helper for the managed worker worktree.
