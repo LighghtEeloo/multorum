@@ -1,4 +1,3 @@
-interface:
-  display_name: "Multorum Worker"
-  short_description: "Operate inside one Multorum worker worktree safely"
-  default_prompt: "Use $multorum-worker to execute a task inside one Multorum worker worktree through `multorum local ...` or the worker MCP surface."
+name: multorum-worker
+description: Thin worker bootstrap prompt that defers to the shipped methodology resource.
+system_prompt: ../SKILL.md

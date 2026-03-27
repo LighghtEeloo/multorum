@@ -553,6 +553,8 @@ After a successful merge, Multorum writes an audit entry to `.multorum/audit/<wo
 
 Multorum exposes the runtime model over the Model Context Protocol as a transport projection, not as a separate source of truth. The filesystem-backed runtime remains canonical.
 
+High-level role guidance is shipped with the binary itself. The CLI prints that guidance through `multorum methodology <role>`, and each MCP server exposes the same Markdown through a role-specific `methodology` resource. Repository-local skill files may exist as thin wrappers, but they are not a second documentation source.
+
 ### Server Modes
 
 The MCP surface is split into two stdio servers:
@@ -575,7 +577,9 @@ Tool results are JSON payloads. Runtime failures remain tool-level failures rath
 
 ### Resources
 
-MCP resources expose read-only projections of runtime state and are returned as JSON.
+MCP resources expose read-only projections of runtime state.
+
+Most resources return JSON snapshots. The role methodology resources return Markdown because they are advisory operating guides meant for direct agent or human consumption.
 
 Concrete resources should list only currently implemented projections. Parameterized URIs belong in resource templates rather than in the concrete resource list.
 
@@ -585,6 +589,7 @@ Concrete:
 
 | URI | Description |
 |---|---|
+| `multorum://orchestrator/methodology` | High-level orchestrator operating methodology shipped with Multorum. |
 | `multorum://orchestrator/status` | Full orchestrator snapshot: active perspectives and workers. |
 | `multorum://orchestrator/perspectives` | Compiled perspective summaries from the current rulebook. |
 | `multorum://orchestrator/workers` | Worker summary listing for the current runtime. |
@@ -602,6 +607,7 @@ Concrete:
 
 | URI | Description |
 |---|---|
+| `multorum://worker/methodology` | High-level worker operating methodology shipped with Multorum. |
 | `multorum://worker/contract` | Immutable worker contract for the active perspective. |
 | `multorum://worker/inbox` | Inbox mailbox listing for the active worker. |
 | `multorum://worker/status` | Projected worker lifecycle status. |
@@ -657,6 +663,8 @@ This section lists the instructions that the orchestrator and workers may issue,
 
 ### Utility
 
+- `multorum methodology orchestrator` — Print the high-level orchestrator methodology as Markdown. This command is self-contained and does not require a managed repository.
+- `multorum methodology worker` — Print the high-level worker methodology as Markdown. This command is self-contained and does not require a managed repository.
 - `multorum util completion <shell>` — Emit shell completions to stdout. Supported shells: `bash`, `zsh`, `fish`, `elvish`, `powershell`.
 
 After running the command, source the output in your shell profile to enable tab completion.

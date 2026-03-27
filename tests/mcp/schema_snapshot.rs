@@ -148,6 +148,7 @@ fn orchestrator_resource_uris_stable() {
     assert_eq!(
         uris,
         vec![
+            "multorum://orchestrator/methodology",
             "multorum://orchestrator/perspectives",
             "multorum://orchestrator/status",
             "multorum://orchestrator/workers",
@@ -252,7 +253,12 @@ fn worker_resource_uris_stable() {
     uris.sort();
     assert_eq!(
         uris,
-        vec!["multorum://worker/contract", "multorum://worker/inbox", "multorum://worker/status",]
+        vec![
+            "multorum://worker/contract",
+            "multorum://worker/inbox",
+            "multorum://worker/methodology",
+            "multorum://worker/status",
+        ]
     );
 }
 

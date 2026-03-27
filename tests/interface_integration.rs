@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use multorum::cli::{Cli, Command, RuntimeCommand, WorkerCommand};
+use multorum::cli::{Cli, Command, MethodologyRoleArg, RuntimeCommand, WorkerCommand};
 use multorum::mcp::McpServer;
 
 #[test]
@@ -33,6 +33,18 @@ fn cli_create_accepts_optional_worker_id() {
             assert_eq!(perspective.as_str(), "AuthImplementor");
             assert_eq!(worker_id.unwrap().as_str(), "custom-worker-7");
             assert!(overwriting_worktree);
+        }
+        | command => panic!("unexpected command: {command:?}"),
+    }
+}
+
+#[test]
+fn cli_methodology_parses_top_level_role_selector() {
+    let cli = Cli::try_parse_from(["multorum", "methodology", "worker"]).unwrap();
+
+    match cli.command {
+        | Command::Methodology { role } => {
+            assert_eq!(role, MethodologyRoleArg::Worker);
         }
         | command => panic!("unexpected command: {command:?}"),
     }
@@ -74,6 +86,15 @@ fn orchestrator_mcp_delete_descriptor_requires_worker_id() {
 }
 
 #[test]
+fn orchestrator_mcp_exposes_methodology_resource() {
+    let server = McpServer::orchestrator();
+    assert!(server.resources.iter().any(|resource| {
+        resource.uri == "multorum://orchestrator/methodology"
+            && resource.mime_type == "text/markdown"
+    }));
+}
+
+#[test]
 fn cli_merge_accepts_worker_id_and_skip_checks() {
     let cli = Cli::try_parse_from([
         "multorum",
@@ -107,5 +128,13 @@ fn orchestrator_mcp_merge_descriptor_uses_merge_name() {
 
     assert!(merge.inputs.iter().any(|input| {
         input.name == "worker" && input.required && input.description.contains("merge")
+    }));
+}
+
+#[test]
+fn worker_mcp_exposes_methodology_resource() {
+    let server = McpServer::worker("worker-7".parse().unwrap());
+    assert!(server.resources.iter().any(|resource| {
+        resource.uri == "multorum://worker/methodology" && resource.mime_type == "text/markdown"
     }));
 }

@@ -75,6 +75,12 @@ pub struct ResourceDescriptor {
     pub uri: &'static str,
     /// Human-readable summary of the resource contents.
     pub description: &'static str,
+    /// MIME type surfaced to MCP clients for this resource.
+    ///
+    /// Note: Most Multorum resources are JSON snapshots, but the
+    /// methodology resources deliberately use `text/markdown` so MCP
+    /// clients can render the advisory guide as human-readable text.
+    pub mime_type: &'static str,
 }
 
 /// Description of one parameterized exposed MCP resource template.
@@ -84,4 +90,6 @@ pub struct ResourceTemplateDescriptor {
     pub uri_template: &'static str,
     /// Human-readable summary of the template contents.
     pub description: &'static str,
+    /// MIME type surfaced to MCP clients for instances of this template.
+    pub mime_type: &'static str,
 }

@@ -13,14 +13,15 @@ use rmcp::model::{
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler};
 
+use crate::methodology::{MethodologyDocument, MethodologyRole};
 use crate::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService, WorkerId};
 
 use super::{
     DeferredService, args_or_empty, dispatch_tool, extract_payload, extract_reply,
     list_resource_templates_result, list_resources_result, list_tools_result,
     mcp_to_resource_error, optional_bool, optional_str, optional_string_list, optional_u64,
-    required_str, required_u64, resource_success, runtime_to_resource_error, server_info,
-    tool_error_result, validate_tool_arguments,
+    required_str, required_u64, resource_success, resource_text_success, runtime_to_resource_error,
+    server_info, tool_error_result, validate_tool_arguments,
 };
 
 /// MCP server handler for the orchestrator surface.
@@ -156,6 +157,13 @@ impl OrchestratorHandler {
 
     /// Dispatch one resource read to the runtime by URI.
     pub fn read(&self, uri: &str) -> Result<ReadResourceResult, ErrorData> {
+        if uri == "multorum://orchestrator/methodology" {
+            return resource_text_success(
+                uri,
+                MethodologyDocument::new(MethodologyRole::Orchestrator).markdown().to_string(),
+                "text/markdown",
+            );
+        }
         let service = match self.service.get() {
             | Ok(service) => service,
             | Err(error) => return Err(mcp_to_resource_error(error)),

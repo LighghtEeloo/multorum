@@ -126,7 +126,7 @@ fn to_rmcp_tool(descriptor: &ToolDescriptor) -> Tool {
 fn to_rmcp_resource(descriptor: &ResourceDescriptor) -> Resource {
     let mut raw = RawResource::new(descriptor.uri, descriptor.uri);
     raw.description = Some(descriptor.description.to_string());
-    raw.mime_type = Some("application/json".into());
+    raw.mime_type = Some(descriptor.mime_type.into());
     Annotated::new(raw, None)
 }
 
@@ -135,7 +135,7 @@ fn to_rmcp_resource(descriptor: &ResourceDescriptor) -> Resource {
 fn to_rmcp_resource_template(descriptor: &ResourceTemplateDescriptor) -> ResourceTemplate {
     let raw = RawResourceTemplate::new(descriptor.uri_template, descriptor.uri_template)
         .with_description(descriptor.description)
-        .with_mime_type("application/json");
+        .with_mime_type(descriptor.mime_type);
     Annotated::new(raw, None)
 }
 
@@ -199,9 +199,14 @@ fn resource_success<T: Serialize>(
     let json = serde_json::to_string_pretty(value).map_err(|e| {
         rmcp::ErrorData::internal_error(format!("failed to serialize resource: {e}"), None)
     })?;
-    Ok(ReadResourceResult::new(vec![
-        ResourceContents::text(json, uri).with_mime_type("application/json"),
-    ]))
+    resource_text_success(uri, json, "application/json")
+}
+
+/// Return one text resource body with the given MIME type.
+fn resource_text_success(
+    uri: &str, text: String, mime_type: &str,
+) -> Result<ReadResourceResult, rmcp::ErrorData> {
+    Ok(ReadResourceResult::new(vec![ResourceContents::text(text, uri).with_mime_type(mime_type)]))
 }
 
 /// Convert one runtime error into MCP resource-read error data.

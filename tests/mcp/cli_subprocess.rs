@@ -126,6 +126,17 @@ async fn cli_orchestrator_list_tools() {
     let tools = response["result"]["tools"].as_array().unwrap();
     assert_eq!(tools.len(), 16);
 
+    let list_resources = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "resources/list"
+    });
+    send_jsonrpc(&mut child, &list_resources).await;
+    let response = read_jsonrpc(&mut stdout).await;
+    assert_eq!(response["id"], 3);
+    let resources = response["result"]["resources"].as_array().unwrap();
+    assert_eq!(resources.len(), 4);
+
     drop(child.stdin.take());
     let status = child.wait().await.unwrap();
     assert!(status.success());
@@ -168,9 +179,23 @@ async fn cli_worker_role_mismatch_is_deferred_until_tool_call() {
     let tools = response["result"]["tools"].as_array().unwrap();
     assert_eq!(tools.len(), 6);
 
-    let get_status = json!({
+    let read_methodology = json!({
         "jsonrpc": "2.0",
         "id": 3,
+        "method": "resources/read",
+        "params": {
+            "uri": "multorum://worker/methodology"
+        }
+    });
+    send_jsonrpc(&mut child, &read_methodology).await;
+    let response = read_jsonrpc(&mut stdout).await;
+    assert_eq!(response["id"], 3);
+    let methodology = response["result"]["contents"][0]["text"].as_str().unwrap();
+    assert!(methodology.contains("# Multorum Worker Methodology"));
+
+    let get_status = json!({
+        "jsonrpc": "2.0",
+        "id": 4,
         "method": "tools/call",
         "params": {
             "name": "get_status",
@@ -179,7 +204,7 @@ async fn cli_worker_role_mismatch_is_deferred_until_tool_call() {
     });
     send_jsonrpc(&mut child, &get_status).await;
     let response = read_jsonrpc(&mut stdout).await;
-    assert_eq!(response["id"], 3);
+    assert_eq!(response["id"], 4);
     assert_eq!(response["result"]["isError"], true);
     let error = serde_json::from_str::<Value>(
         response["result"]["content"][0]["text"].as_str().expect("missing tool error payload"),

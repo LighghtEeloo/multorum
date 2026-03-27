@@ -11,13 +11,17 @@
 //! - `worker` addresses orchestrator-side operations on concrete workers.
 //! - `local` addresses worker-local operations from inside a worker
 //!   worktree.
+//! - `methodology` prints the high-level role guidance shipped with the
+//!   binary so agents can bootstrap themselves without repository-local
+//!   skill files.
 
 use std::path::PathBuf;
 
-use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 
 use crate::{
+    methodology::{MethodologyDocument, MethodologyRole},
     runtime::{
         self, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerId,
         WorkerService,
@@ -42,6 +46,9 @@ impl Cli {
     pub fn run() {
         let cli = Self::parse();
         match cli.command {
+            | Command::Methodology { role } => {
+                println!("{}", MethodologyDocument::new(role.into()).markdown());
+            }
             | Command::Util { command } => command.execute(),
             | Command::Serve { command } => command.execute(),
             | Command::Runtime(RuntimeCommand::Init) => {
@@ -187,6 +194,16 @@ impl ReplyReferenceArgs {
 /// Utility commands are self-contained and never need runtime services.
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Print high-level methodology for one runtime role.
+    ///
+    /// This command is self-contained and does not require a managed
+    /// repository. It is intended for agents that need bootstrap
+    /// guidance before they begin calling the runtime surface.
+    Methodology {
+        /// Role whose methodology should be printed.
+        role: MethodologyRoleArg,
+    },
+
     /// Runtime commands that operate on a Multorum repository.
     #[command(flatten)]
     Runtime(RuntimeCommand),
@@ -218,6 +235,24 @@ pub enum ServeCommand {
     /// Run from inside a worker worktree. Exposes worker tools and
     /// resources over stdio using the Model Context Protocol.
     Worker,
+}
+
+/// CLI selector for one shipped methodology document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum MethodologyRoleArg {
+    /// Print the orchestrator methodology.
+    Orchestrator,
+    /// Print the worker methodology.
+    Worker,
+}
+
+impl From<MethodologyRoleArg> for MethodologyRole {
+    fn from(value: MethodologyRoleArg) -> Self {
+        match value {
+            | MethodologyRoleArg::Orchestrator => MethodologyRole::Orchestrator,
+            | MethodologyRoleArg::Worker => MethodologyRole::Worker,
+        }
+    }
 }
 
 /// Commands that require a Multorum repository and runtime services.

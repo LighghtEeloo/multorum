@@ -39,7 +39,7 @@ fn orchestrator_tool_descriptor_count() {
 
 #[test]
 fn orchestrator_resource_descriptor_count() {
-    assert_eq!(multorum::mcp::resource::orchestrator::descriptors().len(), 3);
+    assert_eq!(multorum::mcp::resource::orchestrator::descriptors().len(), 4);
 }
 
 #[test]
@@ -530,6 +530,15 @@ fn orchestrator_resource_status() {
 }
 
 #[test]
+fn orchestrator_resource_methodology() {
+    let (_dir, svc) = setup_repo();
+    let handler = OrchestratorHandler::new(svc);
+    let result = handler.read("multorum://orchestrator/methodology").unwrap();
+    let text = crate::support::result::resource_text(&result);
+    assert!(text.contains("# Multorum Orchestrator Methodology"));
+}
+
+#[test]
 fn orchestrator_resource_perspectives() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::new(svc);
@@ -659,7 +668,7 @@ fn worker_tool_descriptor_count() {
 
 #[test]
 fn worker_resource_descriptor_count() {
-    assert_eq!(multorum::mcp::resource::worker::descriptors().len(), 3);
+    assert_eq!(multorum::mcp::resource::worker::descriptors().len(), 4);
 }
 
 #[test]
@@ -932,6 +941,18 @@ fn worker_resource_contract() {
     let result = handler.read("multorum://worker/contract").unwrap();
     let contract = resource_json(&result);
     assert_eq!(contract["perspective"], "AuthImplementor");
+}
+
+#[test]
+fn worker_resource_methodology() {
+    let (_dir, svc) = setup_repo();
+    let (_, worktree) = create_worker_runtime(&svc);
+    let worker_svc = FsWorkerService::new(&worktree).unwrap();
+    let handler = WorkerHandler::new(worker_svc);
+
+    let result = handler.read("multorum://worker/methodology").unwrap();
+    let text = crate::support::result::resource_text(&result);
+    assert!(text.contains("# Multorum Worker Methodology"));
 }
 
 #[test]

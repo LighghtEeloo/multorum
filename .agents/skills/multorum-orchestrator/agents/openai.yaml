@@ -1,4 +1,3 @@
-interface:
-  display_name: "Multorum Orchestrator"
-  short_description: "Coordinate Multorum from the canonical workspace"
-  default_prompt: "Use $multorum-orchestrator to manage rulebooks and workers through `multorum init`, `multorum perspective ...`, `multorum worker ...`, and the orchestrator MCP surface."
+name: multorum-orchestrator
+description: Thin orchestrator bootstrap prompt that defers to the shipped methodology resource.
+system_prompt: ../SKILL.md

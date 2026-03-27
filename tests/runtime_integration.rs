@@ -1031,9 +1031,7 @@ fn merge_rejects_invalid_audit_payload_without_integrating_the_worker_commit() {
     assert_eq!(read_exclusion_set(dir.path()), exclusion_before);
     assert!(rationale_body.exists(), "invalid audit payload must not be consumed");
     assert!(
-        !dir.path()
-            .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()))
-            .exists(),
+        !dir.path().join(format!(".multorum/audit/{}.toml", result.worker_id.as_str())).exists(),
         "audit entry must not be visible after merge rejection"
     );
 }
@@ -1081,9 +1079,7 @@ fn merge_rejects_duplicate_audit_artifact_names_without_integrating_the_worker_c
     assert!(artifact_a.exists(), "duplicate artifact validation must not consume sources");
     assert!(artifact_b.exists(), "duplicate artifact validation must not consume sources");
     assert!(
-        !dir.path()
-            .join(format!(".multorum/audit/{}.toml", result.worker_id.as_str()))
-            .exists(),
+        !dir.path().join(format!(".multorum/audit/{}.toml", result.worker_id.as_str())).exists(),
         "audit entry must not be visible after merge rejection"
     );
 }
