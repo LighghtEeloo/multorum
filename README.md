@@ -1,10 +1,8 @@
 # Multorum
 
-Multorum lets one orchestrator run multiple workers on the same repository at the same time without turning the codebase into a landfill of branch collisions, accidental overlap, and heroic merge folklore.
+Multorum is the infrastructure for orchestrated parallel development on a single repository with isolated workspaces, explicit file ownership, and conflict freedom enforced by construction. It doesn't care about the specific workflow, agentic tooling, or development process you use. It is a general-purpose tool for making parallel work safe and efficient, regardless of how you choose to organize it.
 
-Each worker gets a full checkout of the repo. It can read everything, build everything, test everything, and inspect the system like a grown-up. But when it writes, it writes only inside a declared scope. It gets the whole map, and exactly one knife.
-
-That split is the entire trick.
+## An Infrastructure, NOT an Agentic System
 
 Multorum is not an agent. It does not plan, negotiate, ideate, or otherwise hallucinate that it is management. It is infrastructure for orchestrated parallel work: isolated workspaces, explicit ownership, and hard guarantees that workers do not quietly sabotage each other.
 
@@ -16,13 +14,16 @@ Multorum is not an agent. It does not plan, negotiate, ideate, or otherwise hall
 
 ## Y?
 
-Parallel development usually goes wrong in one of two boring ways.
+Problem: parallel development breaks in two ways.
 
-Either everyone edits freely and you discover the damage later, when the branches come back from the dead and start eating each other. Or everyone is locked into such a tiny sandbox that they lose the context needed to do competent work, which is a fantastic way to mass-produce local correctness and global nonsense.
+- Either people work freely and pay for it later in merge hell, or..
+- ..They are boxed into such narrow sandboxes that they lose the context needed to do good work.
 
-Multorum takes the less idiotic route. Workers execute against the full repository, but they author only within a declared write set. So they keep the context they need, while the orchestrator keeps the control it needs.
+Multorum is built to avoid that tradeoff. Each worker keeps the full repository as readable context, but authorship is constrained to an explicit write scope, so the system preserves both global understanding and local isolation.
 
-No vibes. No handshake deal. No “please try not to touch that.”
+No vibes. No handshake deal. No "please try not to touch that."
+
+Our approach is meant to be correct by construction. Coordination is not left to etiquette, guesswork, or cleanup after the fact; it is encoded directly into the model. The orchestrator remains the sole authority, scopes are declared up front, and conflicting access patterns are rejected before work begins rather than repaired later. So the project is not trying to create magical autonomous teamwork. It is trying to make parallel work mechanically safe, inspectable, and disciplined by design.
 
 > For a detailed design reference, see [DESIGN.md](DESIGN.md).
 
@@ -229,11 +230,11 @@ All judgment and routing flow through the orchestrator. That separation is the e
 
 </details>
 
-## What Multorum Is Not
+## Again, Multorum Is NOT a Vibe-Drown Agentic Orchestration System
 
 Multorum is not a merge tool with a better attitude. It is not a chat protocol pretending to be a runtime. It is not a replacement for orchestration logic. It is not a system that assumes parallel work will behave nicely if everyone expresses themselves clearly.
 
-It assumes the opposite, because it has met software projects.
+It assumes the opposite, because it believes in the power of hard boundaries and mechanical guarantees.
 
 ## In Conclusion (❁´◡`❁)
 
