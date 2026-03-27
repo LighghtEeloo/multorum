@@ -391,7 +391,7 @@ git worktree add .multorum/tr/<worker> <base-commit>
 
 Workers in the same bidding group share the same base commit, set when the first worker in the group is created. Workers in different bidding groups may have different base commits.
 
-If a worker is reused after that worker reaches `MERGED` or `DISCARDED`, Multorum removes the finalized worktree first and creates a fresh workspace at the same path. Reuse means "create a new worker here", not "reopen old state".
+After a worker reaches `MERGED` or `DISCARDED`, its identity may be reused for a new worker. Reuse is always "create a new worker here", not "reopen old state". When reusing an explicit worker id (`--worker <worker>`) and the finalized workspace still exists, `worker create` requires `--overwriting-worktree` to replace that preserved worktree. If the finalized workspace was already deleted, reuse does not require the overwrite flag.
 
 ### Worker Runtime Surface
 
@@ -444,6 +444,8 @@ create ─────────► ACTIVE ──────►┼───�
 All non-terminal state transitions belong to the worker: it writes `BLOCKED` when it issues `local report`, `COMMITTED` when it issues `local commit`, and `ACTIVE` when it `local ack` a `task`, `resolve`, or `revise` inbox message. The orchestrator's part in the resolve and revise arcs is to publish the inbox message; the transition fires only when the worker acknowledges it. The orchestrator writes a worker's state only to finalize: `MERGED` via `worker merge` and `DISCARDED` via `worker discard`. A worker must not update its entry once finalized.
 
 The orchestrator may also issue `hint` while a worker is `ACTIVE`. A hint is advisory rather than transitional: it carries new information or asks the worker to take a follow-up action such as reporting a blocker, but publishing or acknowledging the hint does not change lifecycle state on its own.
+
+For analysis-only tasks that intentionally produce no mergeable code commit, workers should conclude with `local report` that includes the completion summary and evidence. This transitions to `BLOCKED` so the orchestrator can make the final judgment (`discard`, follow-up `resolve`, or replacement task). `local commit` is reserved for submitting a concrete `head_commit` intended for merge evaluation.
 
 Once one worker in a bidding group reaches `MERGED`, every sibling in that group becomes `DISCARDED`.
 
@@ -636,7 +638,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 
 ### Orchestrator Worker Commands
 
-- `multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Compile the perspective boundary from the current rulebook against the working tree. If a bidding group for this perspective already exists, join it. Otherwise, form a new group with base commit set to HEAD and check conflict-freedom against all active bidding groups. Create the worker worktree and materialize the runtime surface, seeding the initial `task` inbox bundle with the optional payload. `--worker` sets an explicit worker identity; when omitted, Multorum derives one from the perspective name. `--overwriting-worktree` replaces an existing finalized workspace for the same explicit worker. Transition: new worker enters `ACTIVE`.
+- `multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Compile the perspective boundary from the current rulebook against the working tree. If a bidding group for this perspective already exists, join it. Otherwise, form a new group with base commit set to HEAD and check conflict-freedom against all active bidding groups. Create the worker worktree and materialize the runtime surface, seeding the initial `task` inbox bundle with the optional payload. `--worker` sets an explicit worker identity; when omitted, Multorum derives one from the perspective name. Reusing an explicit worker id is allowed only after that worker is finalized; if its finalized worktree still exists, pass `--overwriting-worktree` to replace it. Transition: new worker enters `ACTIVE`.
 - `multorum worker list` — List active workers.
 - `multorum worker show <worker>` — Return one worker in detail.
 - `multorum worker outbox <worker> [--after <sequence>]` — List worker-authored bundles from that worker's outbox. No lifecycle transition.
@@ -654,8 +656,8 @@ This section lists the instructions that the orchestrator and workers may issue,
 - `multorum local status` — Return the projected status for the current worktree.
 - `multorum local inbox [--after <sequence>]` — List inbox messages for the current worker. No lifecycle transition.
 - `multorum local ack <sequence>` — Acknowledge one inbox message. Acknowledging `task`, `resolve`, or `revise` transitions the worker into `ACTIVE`.
-- `multorum local report [--head-commit <commit>] [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a blocker report from the current worktree. `--reply-to` correlates the report with an earlier inbox sequence number. The optional payload carries blocker details and evidence. Transition: `ACTIVE` to `BLOCKED`.
-- `multorum local commit --head-commit <commit> [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a completed worker submission from the current worktree. The optional payload carries submission evidence. Transition: `ACTIVE` to `COMMITTED`.
+- `multorum local report [--head-commit <commit>] [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a blocker report from the current worktree. `--reply-to` correlates the report with an earlier inbox sequence number. The optional payload carries blocker details and evidence. Analysis-only tasks with no mergeable code commit should use this command to return results for orchestrator judgment. Transition: `ACTIVE` to `BLOCKED`.
+- `multorum local commit --head-commit <commit> [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a completed worker submission from the current worktree. The optional payload carries submission evidence. Use this only when submitting a concrete `head_commit` for merge evaluation. Transition: `ACTIVE` to `COMMITTED`.
 
 ### Query
 
