@@ -229,9 +229,4 @@ impl WorkerPaths {
     pub fn mailbox_ack(&self, direction: MailboxDirection) -> PathBuf {
         self.mailbox(direction).join("ack")
     }
-
-    /// Runtime artifacts root.
-    pub fn artifacts(&self) -> PathBuf {
-        self.multorum_root().join("artifacts")
-    }
 }

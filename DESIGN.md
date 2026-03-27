@@ -343,7 +343,6 @@ Every worker worktree has its own `.multorum/` directory, separate from the orch
   outbox/
     new/
     ack/
-  artifacts/
 ```
 
 These files are runtime-only and must never be committed. Multorum installs local ignore rules in each worktree to keep them outside version control.

@@ -537,7 +537,6 @@ impl RuntimeFs {
         fs::create_dir_all(worker_paths.inbox_ack())?;
         fs::create_dir_all(worker_paths.outbox_new())?;
         fs::create_dir_all(worker_paths.outbox_ack())?;
-        fs::create_dir_all(worker_paths.artifacts())?;
 
         self.write_worker_contract(worker, group)?;
         self.materialize_worker_boundary(worker, group)?;
