@@ -282,7 +282,7 @@ The rulebook is committed to version control and versioned alongside the code it
 
 When the repository's shape changes — new modules appear, subsystems are reorganized, ownership boundaries shift — update the rulebook to match. Add new file sets for new regions. Adjust perspective boundaries when responsibilities move. Remove file sets and perspectives that no longer correspond to real work.
 
-The orchestrator activates the committed rulebook with `rulebook install`. Changes to the TOML file on disk have no effect until they are committed and installed. Active workers continue under their pinned snapshots; their boundaries update only when the orchestrator installs a new rulebook or forwards their bidding group to HEAD.
+Multorum has no separate rulebook activation step. Operations that compile policy (`perspective list`, `perspective validate`, `worker create`, and `perspective forward`) read `.multorum/rulebook.toml` from the current working tree when they run. Rulebook edits on disk therefore affect subsequent operations immediately, even before commit. For reproducible orchestration decisions, commit rulebook edits before creating workers. Active workers still run under their pinned snapshots, and their materialized boundaries change only when the orchestrator forwards the bidding group to HEAD.
 
 When expanding a perspective's boundary for a live bidding group, the recompiled boundary must be a superset of the current one. Reduction is rejected because it would break the contract that live workers were created under. If a perspective needs to shrink, finalize its active workers first.
 
