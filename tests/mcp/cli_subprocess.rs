@@ -62,10 +62,11 @@ async fn handshake(
     response
 }
 
-fn spawn_orchestrator(dir: &std::path::Path) -> Child {
+fn spawn_orchestrator(workspace_root: &std::path::Path, launch_cwd: &std::path::Path) -> Child {
     Command::new(env!("CARGO_BIN_EXE_multorum"))
-        .args(["serve", "orchestrator"])
-        .current_dir(dir)
+        .args(["serve", "orchestrator", "--workspace-root"])
+        .arg(workspace_root)
+        .current_dir(launch_cwd)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -73,10 +74,11 @@ fn spawn_orchestrator(dir: &std::path::Path) -> Child {
         .expect("failed to spawn multorum binary")
 }
 
-fn spawn_worker(dir: &std::path::Path) -> Child {
+fn spawn_worker(worktree_root: &std::path::Path, launch_cwd: &std::path::Path) -> Child {
     Command::new(env!("CARGO_BIN_EXE_multorum"))
-        .args(["serve", "worker"])
-        .current_dir(dir)
+        .args(["serve", "worker", "--worktree-root"])
+        .arg(worktree_root)
+        .current_dir(launch_cwd)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -91,7 +93,8 @@ fn spawn_worker(dir: &std::path::Path) -> Child {
 #[tokio::test]
 async fn cli_orchestrator_handshake() {
     let (dir, _svc) = setup_repo();
-    let mut child = spawn_orchestrator(dir.path());
+    let launch_cwd = tempfile::tempdir().unwrap();
+    let mut child = spawn_orchestrator(dir.path(), launch_cwd.path());
     let child_stdout = child.stdout.take().unwrap();
     let mut stdout = BufReader::new(child_stdout);
 
@@ -108,7 +111,8 @@ async fn cli_orchestrator_handshake() {
 #[tokio::test]
 async fn cli_orchestrator_list_tools() {
     let (dir, _svc) = setup_repo();
-    let mut child = spawn_orchestrator(dir.path());
+    let launch_cwd = tempfile::tempdir().unwrap();
+    let mut child = spawn_orchestrator(dir.path(), launch_cwd.path());
     let child_stdout = child.stdout.take().unwrap();
     let mut stdout = BufReader::new(child_stdout);
 
@@ -145,7 +149,8 @@ async fn cli_orchestrator_list_tools() {
 #[tokio::test]
 async fn cli_orchestrator_clean_shutdown() {
     let (dir, _svc) = setup_repo();
-    let mut child = spawn_orchestrator(dir.path());
+    let launch_cwd = tempfile::tempdir().unwrap();
+    let mut child = spawn_orchestrator(dir.path(), launch_cwd.path());
     let child_stdout = child.stdout.take().unwrap();
     let mut stdout = BufReader::new(child_stdout);
 
@@ -158,9 +163,10 @@ async fn cli_orchestrator_clean_shutdown() {
 }
 
 #[tokio::test]
-async fn cli_worker_role_mismatch_is_deferred_until_tool_call() {
+async fn cli_worker_invalid_worktree_root_is_deferred_until_tool_call() {
     let (dir, _svc) = setup_repo();
-    let mut child = spawn_worker(dir.path());
+    let launch_cwd = tempfile::tempdir().unwrap();
+    let mut child = spawn_worker(dir.path(), launch_cwd.path());
     let child_stdout = child.stdout.take().unwrap();
     let mut stdout = BufReader::new(child_stdout);
 
@@ -210,7 +216,7 @@ async fn cli_worker_role_mismatch_is_deferred_until_tool_call() {
         response["result"]["content"][0]["text"].as_str().expect("missing tool error payload"),
     )
     .expect("tool error payload should be JSON");
-    assert_eq!(error["code"], "invalid_state");
+    assert_eq!(error["code"], "missing_worker_runtime");
     assert!(
         error["message"].as_str().unwrap().contains("worker runtime"),
         "unexpected error payload: {error}",

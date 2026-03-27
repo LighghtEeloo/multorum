@@ -226,15 +226,31 @@ pub enum Command {
 pub enum ServeCommand {
     /// Start the orchestrator MCP server.
     ///
-    /// Run from the workspace root. Exposes orchestrator tools and
-    /// resources over stdio using the Model Context Protocol.
-    Orchestrator,
+    /// Exposes orchestrator tools and resources over stdio using the
+    /// Model Context Protocol.
+    ///
+    /// Note: MCP startup binds runtime identity from this explicit path
+    /// instead of process `cwd` so host sandboxes cannot silently point
+    /// the server at the wrong repository.
+    Orchestrator {
+        /// Canonical root of the managed Multorum workspace.
+        #[arg(long)]
+        workspace_root: PathBuf,
+    },
 
     /// Start a worker MCP server.
     ///
-    /// Run from inside a worker worktree. Exposes worker tools and
-    /// resources over stdio using the Model Context Protocol.
-    Worker,
+    /// Exposes worker tools and resources over stdio using the Model
+    /// Context Protocol.
+    ///
+    /// Note: MCP startup binds runtime identity from this explicit path
+    /// instead of process `cwd` so host sandboxes cannot silently point
+    /// the server at the wrong worker runtime.
+    Worker {
+        /// Absolute path to the managed worker worktree root.
+        #[arg(long)]
+        worktree_root: PathBuf,
+    },
 }
 
 /// CLI selector for one shipped methodology document.
@@ -516,9 +532,9 @@ impl ServeCommand {
 
         rt.block_on(async {
             match self {
-                | Self::Orchestrator => {
+                | Self::Orchestrator { workspace_root } => {
                     let handler = OrchestratorHandler::from_startup_result(
-                        runtime::FsOrchestratorService::from_current_dir(),
+                        runtime::FsOrchestratorService::new(workspace_root),
                     );
                     let transport = rmcp::transport::io::stdio();
                     match rmcp::serve_server(handler, transport).await {
@@ -531,9 +547,9 @@ impl ServeCommand {
                         }
                     }
                 }
-                | Self::Worker => {
+                | Self::Worker { worktree_root } => {
                     let handler = WorkerHandler::from_startup_result(
-                        runtime::FsWorkerService::from_current_dir(),
+                        runtime::FsWorkerService::new(worktree_root),
                     );
                     let transport = rmcp::transport::io::stdio();
                     match rmcp::serve_server(handler, transport).await {
