@@ -2,15 +2,15 @@
 
 Multorum is the infrastructure for orchestrated parallel development on a single repository with isolated workspaces, explicit file ownership, and conflict freedom enforced by construction. It doesn't care about the specific workflow, agentic tooling, or development process you use. It is a general-purpose tool for making parallel work safe and efficient, regardless of how you choose to organize it.
 
-## An Infrastructure, NOT an Agentic System
-
-Multorum is not an agent. It does not plan, negotiate, ideate, or otherwise hallucinate that it is management. It is infrastructure for orchestrated parallel work: isolated workspaces, explicit ownership, and hard guarantees that workers do not quietly sabotage each other.
-
 > Belua multorum es capitums!
 > 
 > <p align="center">
 >   <img src="assets/multorum-20260325.png" alt="Multorum logo" width="40%">
 > </p>
+
+## Definition by Negation
+
+Multorum is not an agent. It does not plan, negotiate, ideate, or otherwise hallucinate that it is management. It is infrastructure for orchestrated parallel work: isolated workspaces, explicit ownership, and hard guarantees that workers do not quietly sabotage each other.
 
 ## Y?
 
