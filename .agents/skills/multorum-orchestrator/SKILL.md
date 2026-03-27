@@ -18,7 +18,7 @@ Coordinate the system from the canonical workspace root. Treat Multorum as react
 
 ## Compose And Update The Rulebook
 
-The orchestrator owns `.multorum/rulebook.toml` and edits it directly in the canonical workspace. In the current implementation, `multorum rulebook init` bootstraps the committed files and runtime directories, and the live runtime operations consult the rulebook that is currently on disk.
+The orchestrator owns `.multorum/rulebook.toml` and edits it directly in the canonical workspace. In the current implementation, `multorum init` bootstraps the committed files and runtime directories, and the live runtime operations consult the rulebook that is currently on disk.
 
 Use this flow:
 
@@ -199,7 +199,7 @@ The transport reserves worker sub-resources such as `/contract`, `/transcript`, 
 ### CLI commands
 
 ```bash
-multorum rulebook init
+multorum init
 multorum perspective list
 multorum perspective validate <perspective>...
 multorum perspective forward <perspective>

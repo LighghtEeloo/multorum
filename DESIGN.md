@@ -202,7 +202,7 @@ The write-set scope check is always mandatory and cannot be configured away.
 
 ### Default Template
 
-`rulebook init` creates a sparse template:
+`multorum init` creates a sparse template:
 
 ```toml
 # Define shared file ownership vocabulary first.
@@ -330,13 +330,13 @@ orchestrator/
 tr/
 ```
 
-Multorum verifies these entries during `rulebook init` and warns if they are missing.
+Multorum verifies these entries during `multorum init` and warns if they are missing.
 
 The runtime directory names are intentionally short. `tr/` keeps managed worktree paths compact, and `state.toml` consolidates all bidding group and worker state into a single file so the control plane stays shallow.
 
 ### Orchestrator Runtime Surface
 
-The orchestrator's control plane lives under `.multorum/orchestrator/`, created during `rulebook init`:
+The orchestrator's control plane lives under `.multorum/orchestrator/`, created during `multorum init`:
 
 ```text
 .multorum/orchestrator/
@@ -346,7 +346,7 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
 
 `state.toml` is the orchestrator's single runtime state file. It records every bidding group and every worker within it. Each group entry carries the perspective name, base commit, and compiled boundary (read and write sets as concrete file lists). Each worker entry within a group carries the worker, lifecycle state, worktree path, and submitted head commit where applicable.
 
-`rulebook init` creates `state.toml` as an empty file. Subsequent operations update it:
+`multorum init` creates `state.toml` as an empty file. Subsequent operations update it:
 
 - `worker create` forming a new group adds a group entry with perspective, base commit (HEAD), compiled boundary, and the first worker entry.
 - `worker create` joining an existing group adds a worker entry to that group.
@@ -618,9 +618,9 @@ MCP-visible error codes are stable protocol values, independent of Rust enum var
 
 This section lists the instructions that the orchestrator and workers may issue, in the form of CLI commands. MCP tools mirror the same runtime operations with typed arguments.
 
-### Rulebook
+### Initialization
 
-- `multorum rulebook init` — Initialize `.multorum/`, write the default committed artifacts if absent, prepare `.multorum/.gitignore`, and create orchestrator runtime directories.
+- `multorum init` — Initialize `.multorum/`, write the default committed artifacts if absent, prepare `.multorum/.gitignore`, and create orchestrator runtime directories.
 
 ### Perspective
 

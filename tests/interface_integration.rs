@@ -4,6 +4,16 @@ use multorum::cli::{Cli, Command, RuntimeCommand, WorkerCommand};
 use multorum::mcp::McpServer;
 
 #[test]
+fn cli_init_parses_top_level_runtime_command() {
+    let cli = Cli::try_parse_from(["multorum", "init"]).unwrap();
+
+    match cli.command {
+        | Command::Runtime(RuntimeCommand::Init) => {}
+        | command => panic!("unexpected command: {command:?}"),
+    }
+}
+
+#[test]
 fn cli_create_accepts_optional_worker_id() {
     let cli = Cli::try_parse_from([
         "multorum",

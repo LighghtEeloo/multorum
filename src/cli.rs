@@ -6,7 +6,7 @@
 //!
 //! The command surface follows the runtime model directly:
 //!
-//! - `rulebook` manages committed configuration.
+//! - `init` bootstraps `.multorum/` and the default committed artifacts.
 //! - `perspective` inspects and validates declared roles from the current rulebook.
 //! - `worker` addresses orchestrator-side operations on concrete workers.
 //! - `local` addresses worker-local operations from inside a worker
@@ -176,7 +176,7 @@ impl ReplyReferenceArgs {
 
 /// Top-level CLI commands.
 ///
-/// Runtime commands (rulebook, perspective, worker, etc.) require a
+/// Runtime commands (`init`, `perspective`, `worker`, etc.) require a
 /// Multorum repository and are flattened into the top-level namespace.
 /// Utility commands are self-contained and never need runtime services.
 #[derive(Debug, Subcommand)]
@@ -217,11 +217,13 @@ pub enum ServeCommand {
 /// Commands that require a Multorum repository and runtime services.
 #[derive(Debug, Subcommand)]
 pub enum RuntimeCommand {
-    /// Manage the project rulebook.
-    Rulebook {
-        #[command(subcommand)]
-        command: RulebookCommand,
-    },
+    /// Initialize `.multorum/` with the default committed artifacts.
+    ///
+    /// Creates `.multorum/rulebook.toml` from the checked-in default
+    /// template, ensures `.multorum/.gitignore` ignores the runtime
+    /// directories, prepares the local orchestrator runtime
+    /// directories, and creates an empty `state.toml`.
+    Init,
 
     /// Inspect and validate perspectives from the current rulebook.
     Perspective {
@@ -459,33 +461,6 @@ pub enum LocalCommand {
     },
 }
 
-/// Rulebook management subcommands.
-///
-/// Accessed via `multorum rulebook <subcommand>`.
-#[derive(Debug, Subcommand)]
-pub enum RulebookCommand {
-    /// Initialize `.multorum/` with the default committed artifacts.
-    ///
-    /// Creates `.multorum/rulebook.toml` from the checked-in default
-    /// template, ensures `.multorum/.gitignore` ignores the runtime
-    /// directories, prepares the local orchestrator runtime
-    /// directories, and creates an empty `state.toml`.
-    Init,
-}
-
-impl RulebookCommand {
-    /// Execute the rulebook instruction.
-    pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
-        match self {
-            | Self::Init => {
-                let result = services.orchestrator()?.rulebook_init()?;
-                println!("{result:#?}");
-            }
-        }
-        Ok(())
-    }
-}
-
 impl ServeCommand {
     /// Start an MCP server on stdio in the selected mode.
     pub fn execute(self) {
@@ -553,7 +528,10 @@ impl RuntimeCommand {
     /// Execute one runtime command against the given services.
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
-            | Self::Rulebook { command } => command.execute(services)?,
+            | Self::Init => {
+                let result = services.orchestrator()?.rulebook_init()?;
+                println!("{result:#?}");
+            }
             | Self::Perspective { command } => command.execute(services)?,
             | Self::Worker { command } => command.execute(services)?,
             | Self::Local { command } => command.execute(services)?,

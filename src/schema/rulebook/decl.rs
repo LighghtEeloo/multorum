@@ -14,7 +14,7 @@ use super::error::RulebookError;
 /// Canonical relative path to the committed project rulebook.
 pub const RULEBOOK_RELATIVE_PATH: &str = ".multorum/rulebook.toml";
 
-/// Checked-in default rulebook template used by `rulebook init`.
+/// Checked-in default rulebook template used by `multorum init`.
 ///
 /// Note: This template stays in `src/rulebook.default.toml` so design
 /// edits do not require touching Rust string literals.

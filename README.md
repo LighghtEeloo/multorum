@@ -195,7 +195,7 @@ Claude Code discovers skills automatically from the `.agents/skills/` directory 
 /multorum-orchestrator
 ```
 
-This loads `multorum-orchestrator/SKILL.md` as the session context. The agent then uses `multorum rulebook ...`, `multorum perspective ...`, and `multorum worker ...` CLI commands, or the orchestrator MCP surface if configured.
+This loads `multorum-orchestrator/SKILL.md` as the session context. The agent then uses `multorum init`, `multorum perspective ...`, and `multorum worker ...` CLI commands, or the orchestrator MCP surface if configured.
 
 **Invoke the worker skill** from inside a provisioned worker worktree:
 

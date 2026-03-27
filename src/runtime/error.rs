@@ -45,7 +45,7 @@ pub enum RuntimeError {
     },
 
     /// The orchestrator state file is missing.
-    #[error("no orchestrator state found; run `multorum rulebook init` first")]
+    #[error("no orchestrator state found; run `multorum init` first")]
     MissingOrchestratorState,
 
     /// The requested perspective does not exist in the current rulebook
