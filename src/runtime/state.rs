@@ -187,6 +187,12 @@ pub struct RulebookInit {
     pub rulebook_path: PathBuf,
     /// Absolute path to the committed `.multorum/.gitignore`.
     pub gitignore_path: PathBuf,
+    /// Non-fatal findings observed while initializing.
+    ///
+    /// Note: Callers should surface these to users because they often
+    /// indicate an unusual repository/runtime layout that Multorum
+    /// repaired or worked around.
+    pub warnings: Vec<String>,
 }
 
 /// Result of creating a worker.

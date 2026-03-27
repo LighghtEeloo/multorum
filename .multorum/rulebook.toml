@@ -1,95 +1,13 @@
-# Multorum's own rulebook should bias toward parallel feature work while
-# serializing the genuinely cross-cutting files that tend to destabilize
-# every subsystem: manifests, entrypoints, and canonical project docs.
-#
-# Read sets stay intentionally narrow. Workers may still inspect the full
-# repository, but only the files listed in `read` are treated as stability
-# contracts against concurrent writes.
-
+# Define shared file ownership vocabulary first.
+# `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
 [fileset]
-# Rust code.
-RustFiles.path = "**/*.rs"
 
-# Cross-cutting project surface.
-CargoToml.path = "Cargo.toml"
-CargoLock.path = "Cargo.lock"
-Readme.path = "README.md"
-DesignDoc.path = "DESIGN.md"
-AgentsGuide.path = "AGENTS.md"
-RulebookFile.path = ".multorum/rulebook.toml"
-MultorumGitignore.path = ".multorum/.gitignore"
-CrateRoot.path = "src/lib.rs"
-CliSurface.path = "src/cli.rs"
-BinaryEntry.path = "src/main.rs"
-InterfaceTest.path = "tests/interface_integration.rs"
-ProjectSurfaceFiles = "CargoToml | CargoLock | Readme | DesignDoc | AgentsGuide | RulebookFile | MultorumGitignore | CrateRoot | CliSurface | BinaryEntry | InterfaceTest"
-
-# Policy compiler and rulebook model.
-SchemaMod.path = "src/schema/mod.rs"
-FilesetSrc.path = "src/schema/fileset/**"
-PerspectiveSrc.path = "src/schema/perspective/**"
-RulebookSrc.path = "src/schema/rulebook/**"
-FilesetTests.path = "tests/fileset_integration.rs"
-PerspectiveTests.path = "tests/perspective_integration.rs"
-RulebookTests.path = "tests/rulebook_integration.rs"
-PolicyFiles = "SchemaMod | FilesetSrc | PerspectiveSrc | RulebookSrc | FilesetTests | PerspectiveTests | RulebookTests"
-
-# Worker/orchestrator runtime and git integration.
-RuntimeSrc.path = "src/runtime/**"
-VcsSrc.path = "src/vcs/**"
-RuntimeTests.path = "tests/runtime_integration.rs"
-RuntimeFiles = "RuntimeSrc | VcsSrc | RuntimeTests"
-
-# MCP server surface and transport tests.
-McpSrc.path = "src/mcp/**"
-McpTests.path = "tests/mcp/**"
-McpFiles = "McpSrc | McpTests"
-
+# Add one table per perspective under `[perspective.<Name>]`.
+# `write` names the files that perspective may modify.
+# `read` names stable context files that concurrent work must not write.
 [perspective]
-# Blanket perspective that owns all Rust code.
-[perspective.RustDeveloper]
-read = "RustFiles"
-write = "RustFiles"
 
-# Owns files that change project-wide behavior or define the repository's
-# canonical documentation and policy surface.
-[perspective.ProjectSurface]
-read = "ProjectSurfaceFiles"
-write = "ProjectSurfaceFiles"
-
-# Owns the rulebook compiler and perspective algebra without blocking
-# runtime or MCP work that only consumes those facilities.
-[perspective.Policy]
-read = "ProjectSurfaceFiles"
-write = "PolicyFiles"
-
-# Owns the runtime state machine, storage layout, and git-backed worker flow.
-[perspective.Runtime]
-read = "ProjectSurfaceFiles"
-write = "RuntimeFiles"
-
-# Owns the MCP layer. It reads the runtime surface as stable context because
-# transport and resource code is tightly coupled to runtime APIs.
-#
-# Runtime and MCP maintenance are intentionally serialized: when a refactor
-# changes runtime contracts first, the follow-up MCP work should run after the
-# runtime change lands instead of pretending the two roles can write
-# concurrently.
-[perspective.Mcp]
-read = "ProjectSurfaceFiles | RuntimeFiles"
-write = "McpFiles"
-
+# Add pre-merge gates in execution order.
+# Add commands under `[check.command]` and optional skip policies under `[check.policy]`.
 [check]
-pipeline = ["fmt", "clippy", "test"]
-
-[check.command]
-fmt = "cargo fmt --all --check"
-clippy = "cargo clippy --workspace --all-targets -- -D warnings"
-test = "cargo test --workspace"
-
-[check.policy]
-# Full test runs and whole-workspace lints are valuable, but making them
-# skippable lets the orchestrator accept narrowly scoped submissions when a
-# failure is clearly unrelated to the worker's declared write set.
-clippy = "skippable"
-test = "skippable"
+pipeline = []

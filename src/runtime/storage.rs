@@ -423,13 +423,20 @@ impl RuntimeFs {
         let gitignore_path = self.paths.multorum_gitignore();
         let rulebook_path = Rulebook::rulebook_path(self.workspace_root());
         let orchestrator_paths = self.paths.orchestrator();
+        let mut warnings = Vec::new();
 
         fs::create_dir_all(&multorum_root)?;
         fs::create_dir_all(orchestrator_paths.root())?;
         fs::create_dir_all(self.paths.audit())?;
         fs::create_dir_all(multorum_root.join("tr"))?;
 
-        self.ensure_multorum_gitignore()?;
+        let added_gitignore_entries = self.ensure_multorum_gitignore()?;
+        if !added_gitignore_entries.is_empty() {
+            warnings.push(format!(
+                "added missing entries to `.multorum/.gitignore`: {}",
+                added_gitignore_entries.join(", ")
+            ));
+        }
         if !rulebook_path.exists() {
             fs::write(&rulebook_path, Rulebook::default_template())?;
         }
@@ -451,7 +458,7 @@ impl RuntimeFs {
             "initialized rulebook workspace"
         );
 
-        Ok(RulebookInit { multorum_root, rulebook_path, gitignore_path })
+        Ok(RulebookInit { multorum_root, rulebook_path, gitignore_path, warnings })
     }
 
     // -----------------------------------------------------------------------
@@ -714,9 +721,11 @@ impl RuntimeFs {
         Ok(StagedMergeArtifacts { promotions, staging_root })
     }
 
-    fn ensure_multorum_gitignore(&self) -> Result<(), RuntimeError> {
+    fn ensure_multorum_gitignore(&self) -> Result<Vec<&'static str>, RuntimeError> {
         let gitignore_path = self.paths.multorum_gitignore();
-        let mut lines = if gitignore_path.exists() {
+        let existed = gitignore_path.exists();
+        let mut added_entries = Vec::new();
+        let mut lines = if existed {
             fs::read_to_string(&gitignore_path)?.lines().map(str::to_owned).collect::<Vec<_>>()
         } else {
             Vec::new()
@@ -725,11 +734,14 @@ impl RuntimeFs {
         for entry in MULTORUM_GITIGNORE_ENTRIES {
             if !lines.iter().any(|line| line == entry) {
                 lines.push(entry.to_owned());
+                if existed {
+                    added_entries.push(entry);
+                }
             }
         }
 
         fs::write(gitignore_path, lines.join("\n") + "\n")?;
-        Ok(())
+        Ok(added_entries)
     }
 
     // -----------------------------------------------------------------------

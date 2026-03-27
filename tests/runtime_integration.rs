@@ -107,6 +107,7 @@ fn rulebook_init_creates_default_committed_files() {
         ""
     );
     assert!(init.multorum_root.join("tr").is_dir());
+    assert!(init.warnings.is_empty());
 
     let rulebook = Rulebook::from_workspace_root(dir.path()).unwrap();
     assert!(rulebook.fileset().definitions().is_empty());
@@ -144,6 +145,8 @@ fn rulebook_init_repairs_runtime_surface_without_overwriting_existing_rulebook()
         ""
     );
     assert!(dir.path().join(".multorum/tr").is_dir());
+    assert_eq!(init.warnings.len(), 1);
+    assert!(init.warnings[0].contains(".multorum/.gitignore"));
 
     orchestrator.rulebook_init().unwrap();
     assert_eq!(fs::read_to_string(&rulebook_path).unwrap(), "[check]\npipeline = []\n");

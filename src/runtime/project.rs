@@ -43,11 +43,112 @@ pub(crate) struct CurrentProject {
     role: RuntimeRole,
 }
 
+/// Resolved workspace root and warnings for `multorum init`.
+///
+/// `multorum init` must work even when the repository does not yet
+/// satisfy the strict managed-role detection used by the rest of the
+/// runtime. This type carries the initialization target and any
+/// non-fatal findings discovered while selecting that target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct InitWorkspaceTarget {
+    workspace_root: PathBuf,
+    warnings: Vec<String>,
+}
+
+impl InitWorkspaceTarget {
+    /// Build one resolved init target with accumulated warnings.
+    pub(crate) fn new(workspace_root: PathBuf, warnings: Vec<String>) -> Self {
+        Self { workspace_root, warnings }
+    }
+
+    /// Canonical workspace root that `multorum init` should initialize.
+    pub(crate) fn workspace_root(&self) -> &Path {
+        &self.workspace_root
+    }
+
+    /// Non-fatal findings observed during target resolution.
+    pub(crate) fn warnings(&self) -> &[String] {
+        &self.warnings
+    }
+}
+
 impl CurrentProject {
     /// Discover the managed project for the current working directory.
     pub(crate) fn from_current_dir() -> Result<Self, RuntimeError> {
         let cwd = std::env::current_dir()?;
         Self::with_vcs(&cwd, Arc::new(GitVcs::new()))
+    }
+
+    /// Resolve the workspace that `multorum init` should initialize for
+    /// the current directory.
+    ///
+    /// Note: Unlike [`Self::from_current_dir`], this path intentionally
+    /// does not reject unmanaged or ambiguous marker states. It selects
+    /// the best available workspace root and reports unusual findings as
+    /// warnings so initialization can repair the committed surface.
+    pub(crate) fn init_target_from_current_dir() -> Result<InitWorkspaceTarget, RuntimeError> {
+        let cwd = std::env::current_dir()?;
+        Self::init_target_with_vcs(&cwd, Arc::new(GitVcs::new()))
+    }
+
+    /// Resolve the workspace that `multorum init` should initialize for
+    /// one path with an explicit VCS backend.
+    pub(crate) fn init_target_with_vcs(
+        path: &Path, vcs: Arc<dyn VersionControl>,
+    ) -> Result<InitWorkspaceTarget, RuntimeError> {
+        let repo_root = vcs.repository_root(path).canonicalize()?;
+        let has_rulebook = Rulebook::rulebook_path(&repo_root).exists();
+        let worker_paths = WorkerPaths::new(repo_root.clone());
+        let has_worker_contract = worker_paths.contract().exists();
+        let mut warnings = Vec::new();
+
+        let workspace_root = match worker_paths.workspace_root() {
+            | Ok(workspace_root) => {
+                if has_rulebook {
+                    warnings.push(format!(
+                        "detected worker-style repository `{}` that also has `.multorum/rulebook.toml`; using workspace root `{}` for initialization",
+                        repo_root.display(),
+                        workspace_root.display()
+                    ));
+                } else if !has_worker_contract {
+                    warnings.push(format!(
+                        "detected worker-style repository `{}` without `.multorum/contract.toml`; using workspace root `{}` for initialization",
+                        repo_root.display(),
+                        workspace_root.display()
+                    ));
+                } else {
+                    warnings.push(format!(
+                        "detected worker worktree `{}`; using workspace root `{}` for initialization",
+                        repo_root.display(),
+                        workspace_root.display()
+                    ));
+                }
+                workspace_root
+            }
+            | Err(_) => {
+                if has_worker_contract && has_rulebook {
+                    warnings.push(format!(
+                        "found both `.multorum/contract.toml` and `.multorum/rulebook.toml` at `{}`; initialization will continue at this repository root",
+                        repo_root.display()
+                    ));
+                } else if has_worker_contract {
+                    warnings.push(format!(
+                        "found `.multorum/contract.toml` at repository root `{}` without worker layout markers; initialization will continue at this repository root",
+                        repo_root.display()
+                    ));
+                }
+                repo_root.clone()
+            }
+        };
+
+        if WorkerPaths::new(workspace_root.clone()).contract().exists() {
+            warnings.push(format!(
+                "found worker contract marker at workspace root `{}`; runtime role markers are ambiguous",
+                workspace_root.display()
+            ));
+        }
+
+        Ok(InitWorkspaceTarget::new(workspace_root, warnings))
     }
 
     /// Discover the managed project for one path with an explicit VCS backend.
@@ -248,5 +349,47 @@ mod tests {
             RuntimeError::AmbiguousRuntimeRole { ref repo_root, .. }
                 if repo_root == &dir.path().canonicalize().unwrap()
         ));
+    }
+
+    #[test]
+    fn init_target_accepts_unmanaged_repository() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("src")).unwrap();
+        git(dir.path(), &["init"]);
+
+        let target =
+            CurrentProject::init_target_with_vcs(dir.path(), Arc::new(GitVcs::new())).unwrap();
+
+        assert_eq!(target.workspace_root(), dir.path().canonicalize().unwrap().as_path());
+        assert!(target.warnings().is_empty());
+    }
+
+    #[test]
+    fn init_target_resolves_worker_to_workspace_and_warns() {
+        let (dir, orchestrator) = setup_repo();
+        let worker = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+        let target =
+            CurrentProject::init_target_with_vcs(&worker.worktree_path, Arc::new(GitVcs::new()))
+                .unwrap();
+
+        assert_eq!(target.workspace_root(), dir.path().canonicalize().unwrap().as_path());
+        assert!(!target.warnings().is_empty());
+    }
+
+    #[test]
+    fn init_target_warns_on_ambiguous_root_markers() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join(".multorum")).unwrap();
+        fs::write(dir.path().join(".multorum/rulebook.toml"), "[check]\npipeline = []\n").unwrap();
+        fs::write(dir.path().join(".multorum/contract.toml"), "").unwrap();
+        git(dir.path(), &["init"]);
+
+        let target =
+            CurrentProject::init_target_with_vcs(dir.path(), Arc::new(GitVcs::new())).unwrap();
+
+        assert_eq!(target.workspace_root(), dir.path().canonicalize().unwrap().as_path());
+        assert_eq!(target.warnings().len(), 2);
+        assert!(target.warnings()[0].contains("both"));
     }
 }

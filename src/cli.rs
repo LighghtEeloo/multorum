@@ -44,6 +44,12 @@ impl Cli {
         match cli.command {
             | Command::Util { command } => command.execute(),
             | Command::Serve { command } => command.execute(),
+            | Command::Runtime(RuntimeCommand::Init) => {
+                if let Err(error) = RuntimeCommand::execute_init_from_current_dir() {
+                    eprintln!("error: {error}");
+                    std::process::exit(1);
+                }
+            }
             | Command::Runtime(command) => {
                 let services = match CliServices::from_current_dir() {
                     | Ok(services) => services,
@@ -525,12 +531,28 @@ impl UtilCommand {
 }
 
 impl RuntimeCommand {
+    /// Execute `multorum init` from any repository state.
+    ///
+    /// This path intentionally bypasses strict managed-role detection so
+    /// it can bootstrap unmanaged repositories and repair ambiguous
+    /// marker layouts.
+    pub fn execute_init_from_current_dir() -> runtime::Result<()> {
+        let target = runtime::project::CurrentProject::init_target_from_current_dir()?;
+        let service = runtime::FsOrchestratorService::new(target.workspace_root().to_path_buf())?;
+        let mut result = service.rulebook_init()?;
+        result.warnings.extend(target.warnings().iter().cloned());
+        for warning in &result.warnings {
+            eprintln!("warning: {warning}");
+        }
+        println!("{result:#?}");
+        Ok(())
+    }
+
     /// Execute one runtime command against the given services.
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
             | Self::Init => {
-                let result = services.orchestrator()?.rulebook_init()?;
-                println!("{result:#?}");
+                Self::execute_init_from_current_dir()?;
             }
             | Self::Perspective { command } => command.execute(services)?,
             | Self::Worker { command } => command.execute(services)?,
