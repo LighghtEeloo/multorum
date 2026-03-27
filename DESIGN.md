@@ -220,6 +220,72 @@ The write-set scope check is always mandatory and cannot be configured away.
 pipeline = []
 ```
 
+### Writing a Good Rulebook
+
+A rulebook succeeds when perspectives can run concurrently without the orchestrator constantly mediating boundary violations. The goal is a vocabulary of file sets and perspectives that maps naturally onto the work the project actually does, not a bureaucratic overlay that fights it.
+
+#### Build the File-Set Vocabulary First
+
+Start from primitives. Each primitive binds a glob to a name that describes a region of the repository in terms the team already uses: `AuthFiles`, `ApiHandlers`, `MigrationScripts`. Then use compound expressions to carve those regions into subsets that match how work is actually divided: specs versus implementation, tests versus production code.
+
+Good file-set names read like a domain vocabulary. They describe what lives in the region, not how it will be used. `AuthFiles` is better than `AuthWorkerScope` because the same region may appear in multiple perspectives with different roles.
+
+Keep primitive globs specific enough that they do not silently swallow unrelated files as the repository grows. `src/auth/**` is better than `**/*auth*` because the latter will match `docs/auth-migration-plan.md` and anything else that happens to contain the substring.
+
+Order definitions so that primitives come first and compounds follow, grouped by subsystem. A reader should be able to scan the `[fileset]` table top-to-bottom and understand the repository's ownership map without jumping around.
+
+#### Design Perspectives Around Parallel Work
+
+A perspective is a role, not a task. Name it for the kind of work it authorizes, not for the specific ticket being worked. `AuthImplementor` is a role that can be reused across many tasks. `FixLoginBug` is a one-shot label that tells the next reader nothing about the boundary it controls.
+
+Each perspective declares two things:
+
+- **write**: the closed set of existing files this role may modify. Workers cannot create files outside it. If a task genuinely needs a new file, the orchestrator must create the file and update the rulebook before the worker can proceed.
+- **read**: the files that must remain stable while this role is active. This is not a visibility filter — workers can still read the entire repository. The read set tells Multorum which files concurrent work must not disturb, and tells the worker what the orchestrator considers stable context.
+
+The conflict-free invariant operates at the bidding-group level: for any two distinct active groups, their write sets must be disjoint, and neither may write into the other's read set. Design perspectives so that the ones you intend to run concurrently satisfy this naturally. If two perspectives cannot run at the same time because their write sets overlap, they are not actually parallel work — they are sequential work wearing a parallel costume.
+
+Keep read sets narrow. Listing every file in the repository as a read dependency blocks all concurrent writes, which defeats the purpose. Include only the files that the worker genuinely depends on as stable context: specs, interfaces, shared types, configuration. The project's own rulebook demonstrates this — perspectives read `ProjectSurfaceFiles` (manifests, docs, entrypoints) rather than the entire tree.
+
+#### Partition Rather Than Overlap
+
+The most useful rulebook pattern is partition: split a subsystem into non-overlapping write sets using set difference. The design document's running example shows this:
+
+```toml
+AuthSpecs = "AuthFiles & SpecFiles"
+AuthTests = "AuthFiles & TestFiles"
+
+[perspective.AuthImplementor]
+write = "AuthFiles - AuthSpecs - AuthTests"
+
+[perspective.AuthTester]
+write = "AuthTests"
+```
+
+`AuthImplementor` writes production auth code. `AuthTester` writes auth tests. Their write sets are disjoint by construction because one subtracts what the other owns. Both read the specs, so the specs stay stable while either role is active.
+
+When perspectives must share awareness of a region without writing to it, put the shared files in the read set of both. When one perspective produces files that another consumes, the consumer reads them and the producer writes them — never both writing.
+
+#### Configure the Check Pipeline for the Project
+
+The check pipeline is the last gate before a worker's commit reaches the canonical codebase. Declare checks in the order they should run. Fast, cheap checks go first — formatting, linting — so expensive ones like full test suites only run on code that already passes basic hygiene.
+
+Mark a check `skippable` only when the orchestrator can reasonably judge from worker-submitted evidence that the check would pass. Full test suites and whole-workspace lints are common candidates: a worker whose changes are confined to one module can submit evidence that the relevant tests pass, and the orchestrator can decide whether to trust it. Format checks are usually not worth skipping because they are fast and deterministic.
+
+The mandatory write-set scope check is not declared in the pipeline. It always runs first and cannot be configured away. The pipeline contains only the project-defined checks that follow it.
+
+Every declared check must appear exactly once in the pipeline, every pipeline entry must have a corresponding command, and no command may be empty. These constraints are enforced at compilation time.
+
+#### Evolve the Rulebook Incrementally
+
+The rulebook is committed to version control and versioned alongside the code it governs. Treat it as living infrastructure, not as a one-time configuration.
+
+When the repository's shape changes — new modules appear, subsystems are reorganized, ownership boundaries shift — update the rulebook to match. Add new file sets for new regions. Adjust perspective boundaries when responsibilities move. Remove file sets and perspectives that no longer correspond to real work.
+
+The orchestrator activates the committed rulebook with `rulebook install`. Changes to the TOML file on disk have no effect until they are committed and installed. Active workers continue under their pinned snapshots; their boundaries update only when the orchestrator installs a new rulebook or forwards their bidding group to HEAD.
+
+When expanding a perspective's boundary for a live bidding group, the recompiled boundary must be a superset of the current one. Reduction is rejected because it would break the contract that live workers were created under. If a perspective needs to shrink, finalize its active workers first.
+
 ---
 
 ## Workspace Model

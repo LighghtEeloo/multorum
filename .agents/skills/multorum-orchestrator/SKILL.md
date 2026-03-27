@@ -16,9 +16,9 @@ Coordinate the system from the canonical workspace root. Treat Multorum as react
 - Treat new files, missing permissions, and cross-perspective edits as orchestrator work. Update the canonical workspace and rulebook, install the rulebook, then decide whether the blocked bidding group should be forwarded or discarded.
 - Remember that workers are addressed by `worker`, not by perspective name. Multiple workers from the same perspective form one bidding group, and at most one of them may merge.
 
-## Edit The Rulebook Directly
+## Compose And Update The Rulebook
 
-The orchestrator owns `.multorum/rulebook.toml` and should edit it directly in the canonical workspace. This is the normal way to add files to perspectives, define new perspectives, adjust boundaries, or configure checks. The workflow is always:
+The orchestrator owns `.multorum/rulebook.toml` and edits it directly in the canonical workspace. The activation workflow is always:
 
 1. Edit `.multorum/rulebook.toml` in the canonical workspace.
 2. Commit the change (along with any new source files the rulebook references).
@@ -27,6 +27,122 @@ The orchestrator owns `.multorum/rulebook.toml` and should edit it directly in t
 Editing the file on disk alone does nothing. The rulebook is activated from the committed `HEAD`, not from the working tree. Until the edit is committed and installed, the previous active rulebook remains in force and all workers continue under their pinned snapshots.
 
 After install, active workers' read and write set boundaries are refreshed to match the new rulebook, but their pinned code snapshot does not move. To update a bidding group's code snapshot, use `multorum perspective forward <perspective>` explicitly.
+
+### Build The File-Set Vocabulary
+
+The `[fileset]` table defines the project's ownership vocabulary. Start with primitives that bind globs to names describing repository regions, then compose compounds from those names using set algebra.
+
+Primitives use `.path` to bind a glob:
+
+```toml
+[fileset]
+AuthFiles.path = "auth/**"
+SpecFiles.path = "**/*.spec.md"
+TestFiles.path = "**/test/**"
+```
+
+Compounds combine names with `|` (union), `&` (intersection), and `-` (difference):
+
+```toml
+AuthSpecs = "AuthFiles & SpecFiles"
+AuthTests = "AuthFiles & TestFiles"
+```
+
+Name file sets for what lives in the region, not how they will be used. `AuthFiles` is better than `AuthWorkerScope` because the same region may appear in multiple perspectives with different roles.
+
+Keep globs specific. `src/auth/**` is better than `**/*auth*` — the latter will silently match unrelated files like `docs/auth-migration-plan.md` as the repository grows.
+
+Order definitions with primitives first, compounds after, grouped by subsystem. A reader should be able to scan the table top-to-bottom and understand the ownership map without jumping around. Use TOML comments to label groups:
+
+```toml
+[fileset]
+# Cross-cutting project surface.
+CargoToml.path = "Cargo.toml"
+Readme.path = "README.md"
+DesignDoc.path = "DESIGN.md"
+ProjectSurface = "CargoToml | Readme | DesignDoc"
+
+# Auth subsystem.
+AuthFiles.path = "src/auth/**"
+AuthTests.path = "tests/auth/**"
+```
+
+### Design Perspectives For Concurrent Work
+
+A perspective is a reusable role, not a one-shot task label. Name it for the kind of work it authorizes. `AuthImplementor` can be reused across many tasks. `FixLoginBug` tells the next reader nothing about the boundary it controls.
+
+Each perspective declares:
+
+- `write` — the closed set of existing files this role may modify. Workers cannot create files outside it.
+- `read` — the files that must remain stable while this role is active. Not a visibility filter; workers can still read the entire repository.
+
+Design perspectives so the ones you intend to run concurrently have disjoint write sets and do not write into each other's read sets. If two perspectives cannot run at the same time because their write sets overlap, they are sequential work — do not pretend otherwise.
+
+The most useful pattern is partition by set difference:
+
+```toml
+[perspective.AuthImplementor]
+read  = "AuthSpecs"
+write = "AuthFiles - AuthSpecs - AuthTests"
+
+[perspective.AuthTester]
+read  = "AuthSpecs"
+write = "AuthTests"
+```
+
+`AuthImplementor` writes production code, `AuthTester` writes tests, and their write sets are disjoint by construction. Both read the specs, so the specs stay stable while either role is active.
+
+Keep read sets narrow. Listing every file as a read dependency blocks all concurrent writes, which defeats the purpose. Include only the files the worker genuinely depends on as stable context: specs, interfaces, shared types, manifests. The project's own rulebook demonstrates this — perspectives read `ProjectSurfaceFiles` (manifests, docs, entrypoints) rather than the entire tree.
+
+When one perspective produces files that another consumes, the consumer reads them and the producer writes them. Never both writing.
+
+Before creating workers, validate the perspectives you plan to run concurrently:
+
+```bash
+multorum perspective validate AuthImplementor AuthTester
+```
+
+### Configure The Check Pipeline
+
+Declare checks in the order they should run. Put fast, cheap checks first so expensive ones only run on code that already passes basic hygiene:
+
+```toml
+[check]
+pipeline = ["fmt", "clippy", "test"]
+
+[check.command]
+fmt = "cargo fmt --all --check"
+clippy = "cargo clippy --workspace --all-targets -- -D warnings"
+test = "cargo test --workspace"
+
+[check.policy]
+clippy = "skippable"
+test = "skippable"
+```
+
+Mark a check `skippable` only when worker-submitted evidence can reasonably justify skipping it. Full test suites and whole-workspace lints are common candidates. Format checks are usually not worth skipping — they are fast and deterministic.
+
+The mandatory write-set scope check is not declared in the pipeline. It always runs first and cannot be configured away.
+
+Every declared check must appear exactly once in the pipeline, every pipeline entry must have a corresponding command, and no command may be empty. Run `multorum rulebook validate` after editing to catch structural errors before installing.
+
+### Update The Rulebook For Live Sessions
+
+When the repository's shape changes or a worker reports a boundary blocker, update the rulebook to match. Common update scenarios:
+
+**Adding a file to an existing perspective.** If the file is new, create it in the canonical workspace. Then either widen the perspective's glob to include it or add a new file set and reference it in the perspective's write expression. Commit, install, and forward the bidding group if workers are live.
+
+**Adding a new perspective.** Define any new file sets it needs, then add the `[perspective.<Name>]` table. Validate against existing active perspectives before creating workers:
+
+```bash
+multorum perspective validate ExistingPerspective NewPerspective
+```
+
+**Narrowing a perspective.** Reduction is rejected while a bidding group is live because it would break the contract workers were created under. Finalize active workers first (discard or merge), then commit and install the narrower rulebook.
+
+**Removing a perspective.** Finalize all workers from that perspective, then remove its table from the rulebook. Commit and install.
+
+Always run `multorum rulebook validate` before installing to catch errors early. When live workers exist, validate the new rulebook against active bidding groups before installing to avoid surprises.
 
 ## Treat The Filesystem Runtime As Canonical
 
