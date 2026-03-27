@@ -1,6 +1,6 @@
 ---
 name: "multorum-worker"
-description: "Execute work inside one Multorum worker worktree while respecting the worker contract, read set, write set, mailbox protocol, and worker state machine. Use when Codex is acting as a provisioned worker and must consume inbox messages, acknowledge them, report blockers, attach evidence, and submit a commit through the worker MCP surface or the worker-local Multorum CLI."
+description: "Execute work inside one Multorum worker worktree while respecting the worker contract, read set, write set, mailbox protocol, and worker state machine. Use when acting as a provisioned worker and must consume inbox messages, acknowledge them, report blockers, attach evidence, and submit a commit through the worker-local CLI or the worker MCP surface."
 ---
 
 # Multorum Worker
@@ -11,7 +11,7 @@ Operate inside one provisioned worker worktree. Treat the current worker contrac
 
 - Read freely across the codebase when needed for understanding, but write only inside the compiled write set.
 - Treat the read set as guidance plus a stability promise, not as a hard filesystem wall.
-- Never create a new file on your own. If the task needs one, send a `report`. The orchestrator will edit the rulebook, create the file in the canonical workspace, install, forward, and resolve.
+- Never create a new file on your own. If the task needs one, send a `report`. The orchestrator will edit the rulebook, create the file in the canonical workspace, forward the bidding group if needed, and resolve.
 - Never edit files outside the write set, even if the change looks trivial or obviously correct. If the real fix is outside your write set, report it. Do not patch it anyway. The orchestrator will either adjust your boundary, create a different worker, or re-scope the task.
 - Never coordinate with other workers directly. All judgment flows through the orchestrator. If another worker owns files you need changed, report the dependency to the orchestrator. Do not ask for direct patches or cross-worker messaging.
 - Remember that the runtime identity is the `worker` from `contract.toml`, even when multiple workers share the same perspective in one bidding group.
@@ -23,11 +23,15 @@ Each worker worktree contains a local `.multorum/` runtime surface with the immu
 
 The worker CLI and MCP server are real filesystem-backed frontends over that runtime. Some read-only projections are still intentionally unimplemented over MCP, so inspect the on-disk files directly when needed.
 
-## Prefer MCP For Worker Control
+## Prefer The Worker CLI, Use MCP When It Is Correctly Bound
 
-The worker role needs inbox and contract access, so MCP is the preferred interface when available.
+Use the worker-local CLI as the default interface. It runs directly against the canonical filesystem-backed runtime in the current worktree, which keeps mailbox and contract inspection explicit.
 
-When publishing through MCP, prefer `body_text` for the human-readable report or commit summary. Use `body` only when you already have a Markdown file on disk that should become `body.md`.
+Use worker MCP when the host is clearly bound to the managed worker worktree and typed tool calls materially help. Treat MCP as a transport projection, not as a different worker runtime.
+
+If MCP reports that the current repository is unmanaged or otherwise appears to be bound to the wrong root, stop trying to route worker control through that host and fall back to the CLI.
+
+When publishing through MCP, prefer `body_text` for the human-readable report or commit summary. Use `body_path` only when you already have a Markdown file on disk that should become `body.md`.
 
 When you publish a report or commit with a body path or artifact path, treat that path as consumed. Multorum moves the file into its `.multorum/` runtime storage on successful publication instead of copying it.
 

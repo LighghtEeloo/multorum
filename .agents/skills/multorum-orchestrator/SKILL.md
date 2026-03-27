@@ -1,6 +1,6 @@
 ---
 name: "multorum-orchestrator"
-description: "Coordinate a Multorum session from the canonical workspace. Use when Codex is acting as the orchestrator and must manage rulebooks, create or inspect workers, answer blockers, request revisions, discard work, delete finalized worktrees, or merge submissions through the Multorum CLI or the orchestrator MCP surface."
+description: "Coordinate a Multorum session from the canonical workspace. Use when acting as the orchestrator and must edit the rulebook, create or inspect workers, answer blockers, request revisions, discard work, delete finalized worktrees, or merge submissions through the Multorum CLI or the orchestrator MCP surface."
 ---
 
 # Multorum Orchestrator
@@ -13,20 +13,22 @@ Coordinate the system from the canonical workspace root. Treat Multorum as react
 - Decompose tasks so active workers do not depend on each other's unpublished output.
 - Respect the safety property at the bidding-group level: a file may be written by exactly one active bidding group or read by many, never both.
 - Treat the read set as a stability contract and the write set as an absolute ownership boundary.
-- Treat new files, missing permissions, and cross-perspective edits as orchestrator work. Update the canonical workspace and rulebook, install the rulebook, then decide whether the blocked bidding group should be forwarded or discarded.
+- Treat new files, missing permissions, and cross-perspective edits as orchestrator work. Update the canonical workspace and rulebook, then decide whether the blocked bidding group should be forwarded or discarded.
 - Remember that workers are addressed by `worker`, not by perspective name. Multiple workers from the same perspective form one bidding group, and at most one of them may merge.
 
 ## Compose And Update The Rulebook
 
-The orchestrator owns `.multorum/rulebook.toml` and edits it directly in the canonical workspace. The activation workflow is always:
+The orchestrator owns `.multorum/rulebook.toml` and edits it directly in the canonical workspace. In the current implementation, `multorum rulebook init` bootstraps the committed files and runtime directories, and the live runtime operations consult the rulebook that is currently on disk.
+
+Use this flow:
 
 1. Edit `.multorum/rulebook.toml` in the canonical workspace.
-2. Commit the change (along with any new source files the rulebook references).
-3. Run `multorum rulebook install` to activate the committed rulebook.
+2. Create any canonical files the new boundary refers to.
+3. Run `multorum perspective validate ...` when concurrency assumptions matter.
+4. Create workers or forward blocked bidding groups using the updated rulebook.
+5. Commit the rulebook change when you want repository history to record the new ownership model.
 
-Editing the file on disk alone does nothing. The rulebook is activated from the committed `HEAD`, not from the working tree. Until the edit is committed and installed, the previous active rulebook remains in force and all workers continue under their pinned snapshots.
-
-After install, active workers' read and write set boundaries are refreshed to match the new rulebook, but their pinned code snapshot does not move. To update a bidding group's code snapshot, use `multorum perspective forward <perspective>` explicitly.
+Rulebook edits do not rewrite live worker contracts by themselves. New bidding groups compile from the current rulebook at creation time. Existing blocked bidding groups pick up updated boundaries only when the orchestrator runs `multorum perspective forward <perspective>`, which recompiles that perspective against the current workspace and moves the group's pinned base to `HEAD`.
 
 ### Build The File-Set Vocabulary
 
@@ -124,13 +126,13 @@ Mark a check `skippable` only when worker-submitted evidence can reasonably just
 
 The mandatory write-set scope check is not declared in the pipeline. It always runs first and cannot be configured away.
 
-Every declared check must appear exactly once in the pipeline, every pipeline entry must have a corresponding command, and no command may be empty. Run `multorum rulebook validate` after editing to catch structural errors before installing.
+Every declared check must appear exactly once in the pipeline, every pipeline entry must have a corresponding command, and no command may be empty. Use `multorum perspective validate ...` to check that the perspectives you intend to run together still satisfy the conflict-free invariant after a rulebook edit.
 
 ### Update The Rulebook For Live Sessions
 
 When the repository's shape changes or a worker reports a boundary blocker, update the rulebook to match. Common update scenarios:
 
-**Adding a file to an existing perspective.** If the file is new, create it in the canonical workspace. Then either widen the perspective's glob to include it or add a new file set and reference it in the perspective's write expression. Commit, install, and forward the bidding group if workers are live.
+**Adding a file to an existing perspective.** If the file is new, create it in the canonical workspace. Then either widen the perspective's glob to include it or add a new file set and reference it in the perspective's write expression. Validate the updated perspective map, then forward the blocked bidding group if workers are live and need the new boundary.
 
 **Adding a new perspective.** Define any new file sets it needs, then add the `[perspective.<Name>]` table. Validate against existing active perspectives before creating workers:
 
@@ -138,11 +140,11 @@ When the repository's shape changes or a worker reports a boundary blocker, upda
 multorum perspective validate ExistingPerspective NewPerspective
 ```
 
-**Narrowing a perspective.** Reduction is rejected while a bidding group is live because it would break the contract workers were created under. Finalize active workers first (discard or merge), then commit and install the narrower rulebook.
+**Narrowing a perspective.** Reduction is rejected while a bidding group is live because it would break the contract workers were created under. Finalize active workers first (discard or merge), then update the rulebook and validate the new concurrency shape before creating fresh workers.
 
-**Removing a perspective.** Finalize all workers from that perspective, then remove its table from the rulebook. Commit and install.
+**Removing a perspective.** Finalize all workers from that perspective, then remove its table from the rulebook and commit the cleanup when ready.
 
-Always run `multorum rulebook validate` before installing to catch errors early. When live workers exist, validate the new rulebook against active bidding groups before installing to avoid surprises.
+Always validate the perspectives you care about after a rulebook edit and before creating or forwarding workers. When live workers exist, treat `multorum perspective validate ...` as the preflight check for whether the intended concurrent shape is still legal.
 
 ## Treat The Filesystem Runtime As Canonical
 
@@ -152,9 +154,11 @@ Some MCP projections remain intentionally unimplemented. Do not assume a resourc
 
 ## Prefer The Exposed Surfaces
 
-Use the CLI as the default surface for canonical-workspace work: editing the rulebook, committing and installing it, forwarding perspectives, inspecting Git state, and reading `.multorum/` directly. Those operations already live in the shell and filesystem, so the CLI keeps the workflow explicit.
+Use the CLI as the default surface for canonical-workspace work: editing the rulebook, validating perspective combinations, forwarding perspectives, inspecting Git state, and reading `.multorum/` directly. Those operations already live in the shell and filesystem, so the CLI keeps the workflow explicit and grounded in the canonical runtime.
 
-Use orchestrator MCP when it materially helps with typed worker-management calls or read-only runtime snapshots. Fall back to the CLI whenever the MCP projection is missing or the shell shape is clearer.
+Use orchestrator MCP when it materially helps with typed worker-management calls or read-only runtime snapshots. Treat MCP as a transport projection over the filesystem-backed runtime, not as a separate control plane.
+
+If an MCP host reports an unmanaged project for `/` or another unexpected root, or otherwise appears to be bound outside the canonical workspace, stop trying to force MCP through that host and fall back to the CLI.
 
 When you publish a bundle with a body path or artifact path, treat those paths as transferred ownership. Successful publication moves the files into Multorum-managed `.multorum/` storage instead of copying them.
 
@@ -167,16 +171,14 @@ multorum serve orchestrator
 ### Orchestrator MCP tools
 
 - `rulebook_init`
-- `rulebook_validate`
-- `rulebook_install`
-- `rulebook_uninstall`
 - `list_perspectives`
-- `forward_perspective`
 - `list_workers`
 - `get_worker`
 - `read_worker_outbox`
 - `ack_worker_outbox_message`
 - `create_worker`
+- `forward_perspective`
+- `hint_worker`
 - `resolve_worker`
 - `revise_worker`
 - `discard_worker`
@@ -187,7 +189,6 @@ multorum serve orchestrator
 ### Orchestrator MCP resources
 
 - `multorum://orchestrator/status`
-- `multorum://orchestrator/rulebook/active`
 - `multorum://orchestrator/perspectives`
 - `multorum://orchestrator/workers`
 - `multorum://orchestrator/workers/{worker}`
@@ -199,16 +200,15 @@ The transport reserves worker sub-resources such as `/contract`, `/transcript`, 
 
 ```bash
 multorum rulebook init
-multorum rulebook validate
-multorum rulebook install
-multorum rulebook uninstall
 multorum perspective list
+multorum perspective validate <perspective>...
 multorum perspective forward <perspective>
 multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--body-text <text> | --body-path <file>] [--artifact FILE ...]
 multorum worker list
 multorum worker show <worker>
 multorum worker outbox <worker> [--after <sequence>]
 multorum worker ack <worker> <sequence>
+multorum worker hint <worker> [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact FILE ...]
 multorum worker resolve <worker> [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact FILE ...]
 multorum worker revise <worker> [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact FILE ...]
 multorum worker discard <worker>
@@ -220,12 +220,12 @@ multorum status
 ## Run The Session Deliberately
 
 1. Inspect current state with `get_status` or `multorum status`.
-2. Validate the `HEAD` rulebook before installing whenever live workers make conflicts possible.
+2. Validate the perspective combinations you intend to run whenever a rulebook edit or live workers make conflicts possible.
 3. Enumerate perspectives before assigning work so the task matches an existing ownership boundary.
 4. Create one worker per perspective by default. Create multiple workers from the same perspective only when you intentionally want a bidding group evaluating the same boundary from the same pinned snapshot.
 5. Attach an initial task bundle when the worker needs nontrivial instructions or evidence files.
 6. Read worker outbox traffic, acknowledge each consumed bundle, and review the worker detail plus any attached artifacts before deciding whether to resolve, revise, discard, delete, or merge.
-7. When a blocked perspective needs a new file or newer pinned base, install the updated rulebook and use `multorum perspective forward <perspective>` only if every live worker in that bidding group is `BLOCKED`.
+7. When a blocked perspective needs a new file or newer pinned base, update the canonical workspace and current rulebook, then use `multorum perspective forward <perspective>` only if every live worker in that bidding group is `BLOCKED`.
 8. Merge only from `COMMITTED`, and skip checks only when the rulebook marks them `skippable` and the worker submitted evidence you trust.
 
 ## Write Better Worker Tasks
@@ -237,7 +237,7 @@ Each initial task or follow-up bundle should state:
 - the acceptance checks the worker should run or attach as evidence
 - the situations that require an immediate `report` instead of improvisation
 
-Do not ask a worker to create new files unless the active rulebook already declares them. When a blocked worker reports that a new file is needed, update the canonical workspace and rulebook first, install the rulebook, and forward that perspective only if the whole live bidding group is blocked. Do not rely on "figure out the right place" when the change may cross perspective boundaries.
+Do not ask a worker to create new files unless the active rulebook already declares them. When a blocked worker reports that a new file is needed, update the canonical workspace and current rulebook first, then forward that perspective only if the whole live bidding group is blocked. Do not rely on "figure out the right place" when the change may cross perspective boundaries.
 When attaching a task body, evidence log, or other artifact by path, do not plan to reuse the original path after publication unless you created a separate copy yourself.
 
 ## Resolve, Revise, Merge, And Delete Correctly
@@ -256,7 +256,7 @@ When attaching a task body, evidence log, or other artifact by path, do not plan
 ## Example Command Shapes
 
 ```bash
-multorum rulebook validate
+multorum perspective validate AuthImplementor AuthTester
 multorum worker create AuthImplementor --body-path task.md --artifact spec.md
 multorum worker outbox auth-implementor-1 --after 6
 multorum worker ack auth-implementor-1 7
@@ -276,8 +276,8 @@ Use `--skip-check` only for checks that the rulebook marks as skippable and only
 Workers cannot create new files or edit outside their write set. When a worker reports this kind of blocker, the orchestrator must act:
 
 1. Edit `.multorum/rulebook.toml` to add the file to the perspective's write set (and create the file in the canonical workspace if it does not yet exist).
-2. Commit the rulebook and file changes.
-3. Run `multorum rulebook install`.
+2. Validate the perspectives that matter for the session.
+3. Commit the rulebook and file changes when you want the repository history updated.
 4. Run `multorum perspective forward <perspective>` for the whole bidding group (not just one worker). Every live worker in that bidding group must be `BLOCKED` for forwarding to succeed.
 5. Run `multorum worker resolve <worker>` to unblock the worker.
 
@@ -285,14 +285,14 @@ Never tell a worker to create files ad hoc in its worktree or to patch files out
 
 ### Forwarding A Bidding Group To A Newer Base
 
-`multorum rulebook install` activates the committed rulebook and refreshes live workers' declared boundaries, but it does not move their pinned code snapshot. To bring workers onto the newer base:
+Updating `.multorum/rulebook.toml` changes what future creates and forwards consult, but it does not itself move a live bidding group's pinned code snapshot. To bring workers onto the newer base:
 
 - Every live worker in the bidding group must be `BLOCKED`.
 - Run `multorum perspective forward <perspective>`. This applies to the whole bidding group, not individual workers.
 - Forwarding preserves each worker's progress from the `head_commit` recorded in their latest blocking report.
 - If a worker's blocking report lacks `head_commit`, forwarding is rejected. Resolve the worker with a message asking for a new report that includes the committed `head_commit`, then retry the forward.
 
-You must forward an existing live bidding group before creating additional same-perspective workers from a newer active rulebook. Multorum rejects creation when the live group is pinned to an older base.
+You must forward an existing live bidding group before treating it as though it now owns the newer boundary and base. Do not assume that editing the rulebook alone has updated the worker contract already in flight.
 
 ### Bidding Group Completion
 
@@ -317,7 +317,7 @@ The old finalized state does not carry over to the new worker.
 
 ### Committing Directly In The Canonical Workspace
 
-While workers are active, the orchestrator must respect the exclusion set formed by active workers' read and write sets. A file inside an active group's read set must remain stable while that group is active. Do not commit changes to those files directly. Either wait, discard conflicting workers, or evolve the rulebook and worker snapshots through the supported flow (edit rulebook, commit, install, forward).
+While workers are active, the orchestrator must respect the exclusion set formed by active workers' read and write sets. A file inside an active group's read set must remain stable while that group is active. Do not commit changes to those files directly. Either wait, discard conflicting workers, or evolve the rulebook and worker snapshots through the supported flow (edit rulebook, validate, forward).
 
 ### Revise Versus Resolve
 
