@@ -710,15 +710,13 @@ impl WorkerCommand {
                 println!("{result:#?}");
             }
             | Self::Outbox { worker_id, filter, body } => {
-                let result = services
-                    .orchestrator()?
-                    .read_outbox(worker_id, filter.into_runtime(), body)?;
+                let result =
+                    services.orchestrator()?.read_outbox(worker_id, filter.into_runtime(), body)?;
                 println!("{result:#?}");
             }
             | Self::Inbox { worker_id, filter, body } => {
-                let result = services
-                    .orchestrator()?
-                    .read_inbox(worker_id, filter.into_runtime(), body)?;
+                let result =
+                    services.orchestrator()?.read_inbox(worker_id, filter.into_runtime(), body)?;
                 println!("{result:#?}");
             }
             | Self::Ack { worker_id, sequence } => {

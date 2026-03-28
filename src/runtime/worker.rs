@@ -142,7 +142,7 @@ impl FsWorkerService {
             return Err(RuntimeError::InvalidState {
                 operation: "publish worker submission",
                 expected: "ACTIVE",
-                actual: entry.state.clone(),
+                actual: entry.state,
             });
         }
         entry.state = new_state;
@@ -274,7 +274,7 @@ impl WorkerService for FsWorkerService {
         Ok(WorkerStatus {
             worker_id: contract.worker_id,
             perspective: contract.perspective,
-            state: entry.state.clone(),
+            state: entry.state,
         })
     }
 }

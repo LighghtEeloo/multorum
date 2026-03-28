@@ -11,12 +11,12 @@ pub mod worker;
 
 use std::sync::{Arc, RwLock};
 
+use rmcp::ErrorData;
 use rmcp::model::{
     Annotated, CallToolResult, Implementation, ListResourceTemplatesResult, ListResourcesResult,
     ListToolsResult, RawContent, RawResource, RawResourceTemplate, ReadResourceResult, Resource,
     ResourceContents, ResourceTemplate, ServerCapabilities, ServerInfo, Tool,
 };
-use rmcp::ErrorData;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -296,10 +296,7 @@ fn extract_sequence_filter(
     let exact = optional_u64(args, "exact").map(crate::runtime::Sequence);
 
     if exact.is_some() && (from.is_some() || to.is_some()) {
-        return Err(ErrorData::invalid_params(
-            "exact is mutually exclusive with from/to",
-            None,
-        ));
+        return Err(ErrorData::invalid_params("exact is mutually exclusive with from/to", None));
     }
 
     Ok(match exact {

@@ -209,15 +209,15 @@ impl SequenceFilter {
     pub fn matches(self, seq: Sequence) -> bool {
         match self {
             | Self::Range { from, to } => {
-                if let Some(lo) = from {
-                    if seq < lo {
-                        return false;
-                    }
+                if let Some(lo) = from
+                    && seq < lo
+                {
+                    return false;
                 }
-                if let Some(hi) = to {
-                    if seq > hi {
-                        return false;
-                    }
+                if let Some(hi) = to
+                    && seq > hi
+                {
+                    return false;
                 }
                 true
             }

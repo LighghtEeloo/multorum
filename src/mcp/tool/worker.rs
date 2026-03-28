@@ -7,10 +7,8 @@ use super::{
     optional_string_list_input, required_integer_input, required_string_input,
 };
 
-const SET_WORKING_DIRECTORY_INPUTS: &[ToolInputDescriptor] = &[required_string_input(
-    "path",
-    "Absolute path to the managed worker worktree root.",
-)];
+const SET_WORKING_DIRECTORY_INPUTS: &[ToolInputDescriptor] =
+    &[required_string_input("path", "Absolute path to the managed worker worktree root.")];
 
 const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[
     optional_integer_input(

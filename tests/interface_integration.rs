@@ -52,8 +52,7 @@ fn cli_methodology_parses_top_level_role_selector() {
 
 #[test]
 fn cli_serve_orchestrator_takes_no_path_arguments() {
-    let cli =
-        Cli::try_parse_from(["multorum", "serve", "orchestrator"]).unwrap();
+    let cli = Cli::try_parse_from(["multorum", "serve", "orchestrator"]).unwrap();
 
     match cli.command {
         | Command::Serve { command: multorum::cli::ServeCommand::Orchestrator } => {}
