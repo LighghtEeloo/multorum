@@ -1,15 +1,31 @@
 # Define shared file ownership vocabulary first.
 # `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
 [fileset]
-Design.path = "DESIGN.md"
+McpToolDescriptors.path = "src/mcp/tool/*.rs"
+McpResourceDescriptors.path = "src/mcp/resource/*.rs"
+McpDescriptorTests.path = "tests/mcp/schema_snapshot.rs"
+McpTransportHandlers.path = "src/mcp/transport/*.rs"
+McpTransportTests.path = "tests/mcp/transport.rs"
+RuntimeOrchestrator.path = "src/runtime/orchestrator.rs"
+RuntimeWorker.path = "src/runtime/worker.rs"
+RuntimeMailboxTests.path = "tests/runtime_integration.rs"
+Nothing = "McpToolDescriptors - McpToolDescriptors"
 
 # Add one table per perspective under `[perspective.<Name>]`.
 # `write` names the files that perspective may modify.
 # `read` names stable context files that concurrent work must not write.
 [perspective]
-[perspective.Designer]
-read = "Design"
-write = "Design"
+[perspective.McpDescriptorsRefactor]
+read = "Nothing"
+write = "McpToolDescriptors | McpResourceDescriptors | McpDescriptorTests"
+
+[perspective.McpTransportRefactor]
+read = "McpToolDescriptors | McpResourceDescriptors"
+write = "McpTransportHandlers | McpTransportTests"
+
+[perspective.RuntimeMailboxRefactor]
+read = "Nothing"
+write = "RuntimeOrchestrator | RuntimeWorker | RuntimeMailboxTests"
 
 # Add pre-merge gates in execution order.
 # Add commands under `[check.command]` and optional skip policies under `[check.policy]`.
