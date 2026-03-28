@@ -20,7 +20,7 @@ use super::{
     },
     project::CurrentProject,
     state::{MailboxMessageView, WorkerContractView, WorkerStatus},
-    storage::RuntimeFs,
+    storage::{BiddingGroupRecord, RuntimeFs, StateFile, WorkerEntry},
 };
 
 /// Typed operations available to a worker frontend.
@@ -106,14 +106,59 @@ impl FsWorkerService {
         self.fs.load_worker_contract(&self.worktree_root)
     }
 
+    /// Locate one worker and its bidding group from persisted state.
+    ///
+    /// Note: Runtime state is authoritative; the helper fails fast if
+    /// the worker is missing rather than guessing a replacement.
+    fn worker_record<'a>(
+        state: &'a StateFile, worker_id: &crate::runtime::WorkerId,
+    ) -> Result<(&'a BiddingGroupRecord, &'a WorkerEntry)> {
+        state
+            .find_worker(worker_id)
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))
+    }
+
+    /// Locate one mutable worker entry inside persisted orchestrator state.
+    ///
+    /// Note: The worker identity must already exist in the current
+    /// state file. Multorum fails fast instead of trying to infer a
+    /// replacement entry.
+    fn worker_entry_mut<'a>(
+        state: &'a mut StateFile, worker_id: &crate::runtime::WorkerId,
+    ) -> Result<&'a mut WorkerEntry> {
+        let group = state
+            .find_worker_group_mut(worker_id)
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+        group
+            .find_worker_mut(worker_id)
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))
+    }
+
+    /// Read one worker mailbox with a shared direction-aware helper.
+    fn read_mailbox(
+        &self, direction: MailboxDirection, filter: SequenceFilter, include_body: bool,
+    ) -> Result<Vec<MailboxMessageView>> {
+        let contract = self.contract_view()?;
+        tracing::trace!(
+            worktree_root = %self.worktree_root.display(),
+            worker_id = %contract.worker_id,
+            direction = ?direction,
+            filter = ?filter,
+            "reading worker mailbox"
+        );
+        self.fs.list_mailbox_messages(
+            &self.worktree_root,
+            &contract.worker_id,
+            direction,
+            filter,
+            include_body,
+        )
+    }
+
     fn update_state_after_ack(&self, message: &AckRef) -> Result<()> {
         if let Some(next_state) = message.message.kind.worker_state_after_inbox_ack() {
             let mut state_file = self.fs.load_state()?;
-            let group =
-                state_file.find_worker_group_mut(&message.message.worker_id).ok_or_else(|| {
-                    RuntimeError::UnknownWorker(message.message.worker_id.to_string())
-                })?;
-            let entry = group.find_worker_mut(&message.message.worker_id).unwrap();
+            let entry = Self::worker_entry_mut(&mut state_file, &message.message.worker_id)?;
             if entry.worktree_path != self.worktree_root {
                 return Err(RuntimeError::MissingWorkerRuntime(
                     self.worktree_root.display().to_string(),
@@ -127,17 +172,14 @@ impl FsWorkerService {
     }
 
     fn update_submission_state(
-        &self, kind: MessageKind, head_commit: Option<CanonicalCommitHash>,
+        &self, contract: &WorkerContractView, kind: MessageKind,
+        head_commit: Option<CanonicalCommitHash>,
     ) -> Result<()> {
         let Some(new_state) = kind.worker_state_after_outbox_publication() else {
             unreachable!("worker submission state updates require a worker-authored outbox kind");
         };
-        let contract = self.contract_view()?;
         let mut state_file = self.fs.load_state()?;
-        let group = state_file
-            .find_worker_group_mut(&contract.worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(contract.worker_id.to_string()))?;
-        let entry = group.find_worker_mut(&contract.worker_id).unwrap();
+        let entry = Self::worker_entry_mut(&mut state_file, &contract.worker_id)?;
         if !entry.state.can_submit() {
             return Err(RuntimeError::InvalidState {
                 operation: "publish worker submission",
@@ -149,6 +191,32 @@ impl FsWorkerService {
         entry.submitted_head_commit = head_commit;
         self.fs.store_state(&state_file)
     }
+
+    /// Publish a worker-authored submission and persist its lifecycle transition.
+    fn publish_submission(
+        &self, contract: &WorkerContractView, kind: MessageKind, reply: ReplyReference,
+        payload: BundlePayload, bundle_head_commit: Option<CanonicalCommitHash>,
+        state_head_commit: Option<CanonicalCommitHash>,
+    ) -> Result<PublishedBundle> {
+        let message = self.fs.publish_bundle(
+            &self.worktree_root,
+            MailboxDirection::Outbox,
+            kind,
+            &contract.worker_id,
+            &contract.perspective,
+            reply,
+            bundle_head_commit,
+            payload,
+        )?;
+        self.update_submission_state(contract, kind, state_head_commit)?;
+        tracing::info!(
+            worktree_root = %self.worktree_root.display(),
+            worker_id = %contract.worker_id,
+            kind = ?kind,
+            "published worker submission"
+        );
+        Ok(message)
+    }
 }
 
 impl WorkerService for FsWorkerService {
@@ -159,39 +227,13 @@ impl WorkerService for FsWorkerService {
     fn read_inbox(
         &self, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
-        let contract = self.contract_view()?;
-        tracing::trace!(
-            worktree_root = %self.worktree_root.display(),
-            worker_id = %contract.worker_id,
-            filter = ?filter,
-            "reading worker inbox"
-        );
-        self.fs.list_mailbox_messages(
-            &self.worktree_root,
-            &contract.worker_id,
-            MailboxDirection::Inbox,
-            filter,
-            include_body,
-        )
+        self.read_mailbox(MailboxDirection::Inbox, filter, include_body)
     }
 
     fn read_outbox(
         &self, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
-        let contract = self.contract_view()?;
-        tracing::trace!(
-            worktree_root = %self.worktree_root.display(),
-            worker_id = %contract.worker_id,
-            filter = ?filter,
-            "reading worker outbox"
-        );
-        self.fs.list_mailbox_messages(
-            &self.worktree_root,
-            &contract.worker_id,
-            MailboxDirection::Outbox,
-            filter,
-            include_body,
-        )
+        self.read_mailbox(MailboxDirection::Outbox, filter, include_body)
     }
 
     fn ack_inbox(&self, sequence: Sequence) -> Result<AckRef> {
@@ -220,23 +262,7 @@ impl WorkerService for FsWorkerService {
                 )
             })
             .transpose()?;
-        let message = self.fs.publish_bundle(
-            &self.worktree_root,
-            MailboxDirection::Outbox,
-            MessageKind::Report,
-            &contract.worker_id,
-            &contract.perspective,
-            reply,
-            head_commit,
-            payload,
-        )?;
-        self.update_submission_state(MessageKind::Report, None)?;
-        tracing::info!(
-            worktree_root = %self.worktree_root.display(),
-            kind = ?MessageKind::Report,
-            "published worker report"
-        );
-        Ok(message)
+        self.publish_submission(&contract, MessageKind::Report, reply, payload, head_commit, None)
     }
 
     fn send_commit(&self, head_commit: String, payload: BundlePayload) -> Result<PublishedBundle> {
@@ -246,31 +272,20 @@ impl WorkerService for FsWorkerService {
             "verify submitted worker commit",
         )?;
         let contract = self.contract_view()?;
-        let message = self.fs.publish_bundle(
-            &self.worktree_root,
-            MailboxDirection::Outbox,
+        self.publish_submission(
+            &contract,
             MessageKind::Commit,
-            &contract.worker_id,
-            &contract.perspective,
             ReplyReference::default(),
-            Some(head_commit.clone()),
             payload,
-        )?;
-        self.update_submission_state(MessageKind::Commit, Some(head_commit.clone()))?;
-        tracing::info!(
-            worktree_root = %self.worktree_root.display(),
-            head_commit = %head_commit,
-            "published worker commit"
-        );
-        Ok(message)
+            Some(head_commit.clone()),
+            Some(head_commit),
+        )
     }
 
     fn status(&self) -> Result<WorkerStatus> {
         let contract = self.contract_view()?;
         let state_file = self.fs.load_state()?;
-        let (_group, entry) = state_file
-            .find_worker(&contract.worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(contract.worker_id.to_string()))?;
+        let (_group, entry) = Self::worker_record(&state_file, &contract.worker_id)?;
         Ok(WorkerStatus {
             worker_id: contract.worker_id,
             perspective: contract.perspective,

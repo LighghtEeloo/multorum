@@ -273,14 +273,40 @@ impl FsOrchestratorService {
         Ok(())
     }
 
+    /// Locate one worker and its bidding group from persisted state.
+    ///
+    /// Note: Runtime state is authoritative; the helper fails fast if
+    /// the worker is missing rather than trying to infer a fallback.
+    fn worker_record<'a>(
+        state: &'a StateFile, worker_id: &WorkerId,
+    ) -> Result<(&'a BiddingGroupRecord, &'a WorkerEntry)> {
+        state
+            .find_worker(worker_id)
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))
+    }
+
+    /// Read one worker mailbox with a shared direction-aware helper.
+    fn read_worker_mailbox(
+        &self, worker_id: &WorkerId, direction: MailboxDirection, filter: SequenceFilter,
+        include_body: bool,
+    ) -> Result<Vec<MailboxMessageView>> {
+        let state = self.fs.load_state()?;
+        let (_, worker) = Self::worker_record(&state, worker_id)?;
+        self.fs.list_mailbox_messages(
+            &worker.worktree_path,
+            &worker.worker_id,
+            direction,
+            filter,
+            include_body,
+        )
+    }
+
     fn publish_worker_inbox(
         &self, worker_id: &WorkerId, kind: MessageKind, reply: ReplyReference,
         payload: BundlePayload,
     ) -> Result<PublishedBundle> {
         let state = self.fs.load_state()?;
-        let (group, worker) = state
-            .find_worker(worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+        let (group, worker) = Self::worker_record(&state, worker_id)?;
         let Some(expected_state) = kind.required_worker_state_for_inbox_publication() else {
             unreachable!(
                 "worker inbox publication only accepts orchestrator-authored follow-up bundles"
@@ -482,9 +508,7 @@ impl OrchestratorService for FsOrchestratorService {
 
     fn get_worker(&self, worker_id: WorkerId) -> Result<WorkerDetail> {
         let state = self.fs.load_state()?;
-        let (group, worker) = state
-            .find_worker(&worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+        let (group, worker) = Self::worker_record(&state, &worker_id)?;
         Ok(WorkerDetail {
             worker_id: worker.worker_id.clone(),
             perspective: group.perspective.clone(),
@@ -498,41 +522,19 @@ impl OrchestratorService for FsOrchestratorService {
     fn read_outbox(
         &self, worker_id: WorkerId, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
-        let state = self.fs.load_state()?;
-        let (_, worker) = state
-            .find_worker(&worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
-        self.fs.list_mailbox_messages(
-            &worker.worktree_path,
-            &worker.worker_id,
-            MailboxDirection::Outbox,
-            filter,
-            include_body,
-        )
+        self.read_worker_mailbox(&worker_id, MailboxDirection::Outbox, filter, include_body)
     }
 
     fn read_inbox(
         &self, worker_id: WorkerId, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
-        let state = self.fs.load_state()?;
-        let (_, worker) = state
-            .find_worker(&worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
-        self.fs.list_mailbox_messages(
-            &worker.worktree_path,
-            &worker.worker_id,
-            MailboxDirection::Inbox,
-            filter,
-            include_body,
-        )
+        self.read_worker_mailbox(&worker_id, MailboxDirection::Inbox, filter, include_body)
     }
 
     fn ack_outbox(&self, worker_id: WorkerId, sequence: Sequence) -> Result<AckRef> {
         tracing::trace!(worker_id = %worker_id, sequence = sequence.0, "acknowledging worker outbox message");
         let state = self.fs.load_state()?;
-        let (_, worker) = state
-            .find_worker(&worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+        let (_, worker) = Self::worker_record(&state, &worker_id)?;
         let ack = self.fs.acknowledge_message(
             &worker.worktree_path,
             MailboxDirection::Outbox,
