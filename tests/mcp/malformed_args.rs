@@ -22,7 +22,7 @@ fn string_where_integer_expected() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.dispatch("ack_inbox_message", json_args(json!({"sequence": "42"})));
     assert!(result.is_err(), "string for integer should be a protocol error");
@@ -31,7 +31,7 @@ fn string_where_integer_expected() {
 #[test]
 fn null_where_string_expected() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler.dispatch("get_worker", json_args(json!({"worker": null})));
     assert!(result.is_err(), "null for required string should be a protocol error");
@@ -40,7 +40,7 @@ fn null_where_string_expected() {
 #[test]
 fn boolean_where_string_expected() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler.dispatch("get_worker", json_args(json!({"worker": true})));
     assert!(result.is_err(), "boolean for required string should be a protocol error");
@@ -49,7 +49,7 @@ fn boolean_where_string_expected() {
 #[test]
 fn array_where_string_expected() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler.dispatch("get_worker", json_args(json!({"worker": ["a"]})));
     assert!(result.is_err(), "array for required string should be a protocol error");
@@ -58,7 +58,7 @@ fn array_where_string_expected() {
 #[test]
 fn integer_where_string_expected() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler.dispatch("get_worker", json_args(json!({"worker": 42})));
     assert!(result.is_err(), "integer for required string should be a protocol error");
@@ -69,7 +69,7 @@ fn negative_where_u64_expected() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.dispatch("ack_inbox_message", json_args(json!({"sequence": -1})));
     assert!(result.is_err(), "negative integer for u64 should be a protocol error");
@@ -82,7 +82,7 @@ fn negative_where_u64_expected() {
 #[test]
 fn string_where_boolean_expected() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler.dispatch(
         "create_worker",
@@ -94,7 +94,7 @@ fn string_where_boolean_expected() {
 #[test]
 fn string_list_with_non_strings() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     // Create a worker first so merge_worker has something to reference,
     // but we only care that argument parsing doesn't panic.
@@ -118,7 +118,7 @@ fn string_list_with_non_strings() {
 #[test]
 fn extra_unknown_fields_rejected() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler.dispatch("get_status", json_args(json!({"bonus": 123, "extra": "field"})));
     assert!(result.is_err(), "unknown fields should be a protocol error");
@@ -127,7 +127,7 @@ fn extra_unknown_fields_rejected() {
 #[test]
 fn empty_string_worker() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     // Empty string passes the required_str check but should fail WorkerId
     // parsing, producing a protocol error (invalid_params).

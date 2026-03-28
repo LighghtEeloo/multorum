@@ -227,30 +227,18 @@ pub enum ServeCommand {
     /// Start the orchestrator MCP server.
     ///
     /// Exposes orchestrator tools and resources over stdio using the
-    /// Model Context Protocol.
-    ///
-    /// Note: MCP startup binds runtime identity from this explicit path
-    /// instead of process `cwd` so host sandboxes cannot silently point
-    /// the server at the wrong repository.
-    Orchestrator {
-        /// Canonical root of the managed Multorum workspace.
-        #[arg(long)]
-        workspace_root: PathBuf,
-    },
+    /// Model Context Protocol. The server defaults to the process
+    /// working directory; clients may call `set_working_directory`
+    /// to rebind the runtime to a different workspace root.
+    Orchestrator,
 
     /// Start a worker MCP server.
     ///
     /// Exposes worker tools and resources over stdio using the Model
-    /// Context Protocol.
-    ///
-    /// Note: MCP startup binds runtime identity from this explicit path
-    /// instead of process `cwd` so host sandboxes cannot silently point
-    /// the server at the wrong worker runtime.
-    Worker {
-        /// Absolute path to the managed worker worktree root.
-        #[arg(long)]
-        worktree_root: PathBuf,
-    },
+    /// Context Protocol. The server defaults to the process working
+    /// directory; clients may call `set_working_directory` to rebind
+    /// the runtime to a different worktree root.
+    Worker,
 }
 
 /// CLI selector for one shipped methodology document.
@@ -525,6 +513,9 @@ pub enum LocalCommand {
 
 impl ServeCommand {
     /// Start an MCP server on stdio in the selected mode.
+    ///
+    /// The server defaults to the process working directory. Clients
+    /// may call `set_working_directory` to rebind to a different path.
     pub fn execute(self) {
         use crate::mcp::transport::{orchestrator::OrchestratorHandler, worker::WorkerHandler};
 
@@ -535,38 +526,23 @@ impl ServeCommand {
             },
         );
 
+        async fn run_server<H: rmcp::ServerHandler>(handler: H) {
+            let transport = rmcp::transport::io::stdio();
+            match rmcp::serve_server(handler, transport).await {
+                | Ok(running) => {
+                    let _ = running.waiting().await;
+                }
+                | Err(e) => {
+                    eprintln!("error: MCP server failed to initialize: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+
         rt.block_on(async {
             match self {
-                | Self::Orchestrator { workspace_root } => {
-                    let handler = OrchestratorHandler::from_startup_result(
-                        runtime::FsOrchestratorService::new(workspace_root),
-                    );
-                    let transport = rmcp::transport::io::stdio();
-                    match rmcp::serve_server(handler, transport).await {
-                        | Ok(running) => {
-                            let _ = running.waiting().await;
-                        }
-                        | Err(e) => {
-                            eprintln!("error: MCP server failed to initialize: {e}");
-                            std::process::exit(1);
-                        }
-                    }
-                }
-                | Self::Worker { worktree_root } => {
-                    let handler = WorkerHandler::from_startup_result(
-                        runtime::FsWorkerService::new(worktree_root),
-                    );
-                    let transport = rmcp::transport::io::stdio();
-                    match rmcp::serve_server(handler, transport).await {
-                        | Ok(running) => {
-                            let _ = running.waiting().await;
-                        }
-                        | Err(e) => {
-                            eprintln!("error: MCP server failed to initialize: {e}");
-                            std::process::exit(1);
-                        }
-                    }
-                }
+                | Self::Orchestrator => run_server(OrchestratorHandler::new()).await,
+                | Self::Worker => run_server(WorkerHandler::new()).await,
             }
         });
     }

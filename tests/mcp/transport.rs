@@ -1,7 +1,7 @@
 //! Handler-level dispatch and resource read tests.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use rmcp::ServerHandler;
 use serde_json::json;
@@ -10,7 +10,7 @@ use multorum::mcp::transport::orchestrator::OrchestratorHandler;
 use multorum::mcp::transport::worker::WorkerHandler;
 use multorum::runtime::{
     BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, MessageKind,
-    OrchestratorService, ReplyReference, RuntimeError, WorkerService, WorkerState,
+    OrchestratorService, ReplyReference, WorkerService, WorkerState,
 };
 
 use crate::support::repo::{git, setup_repo};
@@ -27,14 +27,14 @@ use crate::support::worker::{create_worker_runtime, perspective};
 #[test]
 fn orchestrator_server_info() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let info = handler.get_info();
     assert_eq!(info.server_info.name, "multorum-orchestrator");
 }
 
 #[test]
 fn orchestrator_tool_descriptor_count() {
-    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 16);
+    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 17);
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn orchestrator_resource_template_descriptor_count() {
 #[test]
 fn orchestrator_get_status() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.dispatch("get_status", empty_args()).unwrap();
     assert_tool_success(&result);
     let status = tool_json(&result);
@@ -64,7 +64,7 @@ fn orchestrator_get_status() {
 #[test]
 fn orchestrator_list_perspectives() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.dispatch("list_perspectives", empty_args()).unwrap();
     assert_tool_success(&result);
     let perspectives = tool_json(&result);
@@ -77,7 +77,7 @@ fn orchestrator_list_perspectives() {
 fn orchestrator_forward_perspective_requires_blocked_worker() {
     let (_dir, svc) = setup_repo();
     svc.create_worker(CreateWorker::new(perspective())).unwrap();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler
         .dispatch("forward_perspective", json_args(json!({"perspective": "AuthImplementor"})))
         .unwrap();
@@ -88,7 +88,7 @@ fn orchestrator_forward_perspective_requires_blocked_worker() {
 #[test]
 fn orchestrator_list_workers_empty() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.dispatch("list_workers", empty_args()).unwrap();
     assert_tool_success(&result);
     assert!(tool_json(&result).as_array().unwrap().is_empty());
@@ -97,7 +97,7 @@ fn orchestrator_list_workers_empty() {
 #[test]
 fn orchestrator_validate_perspectives() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler
         .dispatch("validate_perspectives", json_args(json!({"perspectives": ["AuthImplementor"]})))
@@ -113,7 +113,7 @@ fn orchestrator_validate_perspectives() {
 fn orchestrator_rulebook_init_on_bare_directory() {
     let dir = tempfile::tempdir().unwrap();
     let svc = FsOrchestratorService::new(dir.path()).unwrap();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler.dispatch("rulebook_init", empty_args()).unwrap();
     assert_tool_success(&result);
@@ -128,7 +128,7 @@ fn orchestrator_rulebook_init_on_bare_directory() {
 #[test]
 fn orchestrator_create_worker() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler
         .dispatch("create_worker", json_args(json!({"perspective": "AuthImplementor"})))
@@ -144,7 +144,7 @@ fn orchestrator_create_worker() {
 #[test]
 fn orchestrator_create_worker_with_explicit_id() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler
         .dispatch(
@@ -159,7 +159,7 @@ fn orchestrator_create_worker_with_explicit_id() {
 #[test]
 fn orchestrator_get_worker() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
         .dispatch(
@@ -179,7 +179,7 @@ fn orchestrator_get_worker() {
 #[test]
 fn orchestrator_read_worker_outbox() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
         .dispatch(
@@ -212,7 +212,7 @@ fn orchestrator_read_worker_outbox() {
 #[test]
 fn orchestrator_ack_worker_outbox_message() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
         .dispatch(
@@ -249,7 +249,7 @@ fn orchestrator_ack_worker_outbox_message() {
 #[test]
 fn orchestrator_list_workers_after_create() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     handler
         .dispatch("create_worker", json_args(json!({"perspective": "AuthImplementor"})))
@@ -263,7 +263,7 @@ fn orchestrator_list_workers_after_create() {
 #[test]
 fn orchestrator_discard_worker() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     handler
         .dispatch(
@@ -279,7 +279,7 @@ fn orchestrator_discard_worker() {
 #[test]
 fn orchestrator_delete_worker_after_discard() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     handler
         .dispatch(
@@ -298,7 +298,7 @@ fn orchestrator_delete_worker_after_discard() {
 #[test]
 fn orchestrator_resolve_worker() {
     let (dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
         .dispatch(
@@ -337,7 +337,7 @@ fn orchestrator_resolve_worker() {
 #[test]
 fn orchestrator_hint_worker() {
     let (dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
         .dispatch(
@@ -372,7 +372,7 @@ fn orchestrator_hint_worker() {
 #[test]
 fn orchestrator_revise_worker() {
     let (dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
         .dispatch(
@@ -407,7 +407,7 @@ fn orchestrator_revise_worker() {
 #[test]
 fn orchestrator_merge_worker() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
         .dispatch(
@@ -437,7 +437,7 @@ fn orchestrator_merge_worker() {
 #[test]
 fn orchestrator_unknown_tool_returns_protocol_error() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.dispatch("nonexistent_tool", empty_args());
     assert!(result.is_err(), "unknown tool should return protocol-level error");
 }
@@ -445,7 +445,7 @@ fn orchestrator_unknown_tool_returns_protocol_error() {
 #[test]
 fn orchestrator_missing_required_arg_returns_protocol_error() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.dispatch("get_worker", empty_args());
     assert!(result.is_err(), "missing worker_id should return protocol-level error");
 }
@@ -453,7 +453,7 @@ fn orchestrator_missing_required_arg_returns_protocol_error() {
 #[test]
 fn orchestrator_nonexistent_worker_returns_tool_error() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result =
         handler.dispatch("get_worker", json_args(json!({"worker": "does-not-exist"}))).unwrap();
     assert_tool_error(&result);
@@ -464,7 +464,7 @@ fn orchestrator_nonexistent_worker_returns_tool_error() {
 #[test]
 fn orchestrator_hint_worker_rejected_for_blocked_worker() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
         .dispatch(
@@ -492,7 +492,7 @@ fn orchestrator_hint_worker_rejected_for_blocked_worker() {
 #[test]
 fn orchestrator_invalid_perspective_returns_protocol_error() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result =
         handler.dispatch("create_worker", json_args(json!({"perspective": "lowercase_bad"})));
     assert!(result.is_err(), "invalid perspective name should return protocol-level error");
@@ -501,7 +501,7 @@ fn orchestrator_invalid_perspective_returns_protocol_error() {
 #[test]
 fn orchestrator_delete_active_worker_returns_tool_error() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     handler
         .dispatch(
@@ -523,7 +523,7 @@ fn orchestrator_delete_active_worker_returns_tool_error() {
 #[test]
 fn orchestrator_resource_status() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.read("multorum://orchestrator/status").unwrap();
     let status = resource_json(&result);
     assert!(status["active_perspectives"].as_array().unwrap().is_empty());
@@ -533,7 +533,7 @@ fn orchestrator_resource_status() {
 #[test]
 fn orchestrator_resource_methodology() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.read("multorum://orchestrator/methodology").unwrap();
     let text = crate::support::result::resource_text(&result);
     assert!(text.contains("# Multorum Orchestrator Methodology"));
@@ -542,7 +542,7 @@ fn orchestrator_resource_methodology() {
 #[test]
 fn orchestrator_resource_perspectives() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.read("multorum://orchestrator/perspectives").unwrap();
     let perspectives = resource_json(&result);
     assert_eq!(perspectives.as_array().unwrap().len(), 1);
@@ -551,7 +551,7 @@ fn orchestrator_resource_perspectives() {
 #[test]
 fn orchestrator_resource_workers() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.read("multorum://orchestrator/workers").unwrap();
     assert!(resource_json(&result).as_array().unwrap().is_empty());
 }
@@ -559,7 +559,7 @@ fn orchestrator_resource_workers() {
 #[test]
 fn orchestrator_resource_worker_detail() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     handler
         .dispatch(
@@ -577,7 +577,7 @@ fn orchestrator_resource_worker_detail() {
 #[test]
 fn orchestrator_resource_unimplemented_returns_error() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     handler
         .dispatch(
@@ -596,7 +596,7 @@ fn orchestrator_resource_unimplemented_returns_error() {
 #[test]
 fn orchestrator_resource_worker_outbox() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
         .dispatch(
@@ -627,7 +627,7 @@ fn orchestrator_resource_worker_outbox() {
 #[test]
 fn orchestrator_resource_unknown_returns_error() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.read("multorum://orchestrator/nonexistent");
     assert!(result.is_err());
 }
@@ -635,7 +635,7 @@ fn orchestrator_resource_unknown_returns_error() {
 #[test]
 fn orchestrator_resource_invalid_worker_id_returns_error() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.read("multorum://orchestrator/workers/!!!invalid");
     assert!(result.is_err());
 }
@@ -643,7 +643,7 @@ fn orchestrator_resource_invalid_worker_id_returns_error() {
 #[test]
 fn orchestrator_resource_unknown_worker_sub_resource_returns_error() {
     let (_dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let result = handler.read("multorum://orchestrator/workers/w1/nonexistent");
     assert!(result.is_err());
 }
@@ -657,14 +657,14 @@ fn worker_server_info() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
     let info = handler.get_info();
     assert_eq!(info.server_info.name, "multorum-worker");
 }
 
 #[test]
 fn worker_tool_descriptor_count() {
-    assert_eq!(multorum::mcp::tool::worker::descriptors().len(), 6);
+    assert_eq!(multorum::mcp::tool::worker::descriptors().len(), 7);
 }
 
 #[test]
@@ -686,7 +686,7 @@ fn worker_get_contract() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.dispatch("get_contract", empty_args()).unwrap();
     assert_tool_success(&result);
@@ -696,15 +696,11 @@ fn worker_get_contract() {
 }
 
 #[test]
-fn worker_startup_role_mismatch_becomes_tool_error() {
-    let handler = WorkerHandler::from_startup_result(Err(RuntimeError::RuntimeRoleMismatch {
-        expected: "worker",
-        actual: "orchestrator",
-        repo_root: PathBuf::from("/repo"),
-    }));
+fn worker_cwd_mismatch_returns_deferred_tool_error() {
+    let handler = WorkerHandler::new();
 
     let result = handler.dispatch("get_status", empty_args()).unwrap();
-    assert_tool_error_code(&result, "invalid_state");
+    assert_tool_error(&result);
 }
 
 #[test]
@@ -722,7 +718,7 @@ fn worker_read_inbox() {
         .unwrap();
 
     let worker_svc = FsWorkerService::new(&provision.worktree_path).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.dispatch("read_inbox", empty_args()).unwrap();
     assert_tool_success(&result);
@@ -737,7 +733,7 @@ fn worker_read_inbox_with_after() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let inbox = handler.dispatch("read_inbox", empty_args()).unwrap();
     assert_tool_success(&inbox);
@@ -764,7 +760,7 @@ fn worker_ack_inbox_message() {
         .unwrap();
 
     let worker_svc = FsWorkerService::new(&provision.worktree_path).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let inbox_result = handler.dispatch("read_inbox", empty_args()).unwrap();
     let sequence = tool_json(&inbox_result).as_array().unwrap()[0]["sequence"].as_u64().unwrap();
@@ -785,7 +781,7 @@ fn worker_send_report() {
         worker_svc.ack_inbox(msg.sequence).unwrap();
     }
 
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
     let report_body = worktree.join("report.md");
     fs::write(&report_body, "Blocked on design question.\n").unwrap();
     let result = handler
@@ -806,7 +802,7 @@ fn worker_send_report_accepts_inline_body_text() {
         worker_svc.ack_inbox(msg.sequence).unwrap();
     }
 
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
     let result = handler
         .dispatch(
             "send_report",
@@ -826,7 +822,7 @@ fn worker_send_commit() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     fs::write(worktree.join("src/owned.rs"), "pub fn owned() -> i32 { 3 }\n").unwrap();
     git(&worktree, &["add", "src/owned.rs"]);
@@ -842,7 +838,7 @@ fn worker_send_commit_accepts_inline_body_text() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     fs::write(worktree.join("src/owned.rs"), "pub fn owned() -> i32 { 7 }\n").unwrap();
     git(&worktree, &["add", "src/owned.rs"]);
@@ -869,7 +865,7 @@ fn worker_get_status() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.dispatch("get_status", empty_args()).unwrap();
     assert_tool_success(&result);
@@ -886,7 +882,7 @@ fn worker_unknown_tool_returns_protocol_error() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
     let result = handler.dispatch("nonexistent_tool", empty_args());
     assert!(result.is_err());
 }
@@ -896,7 +892,7 @@ fn worker_missing_required_sequence_returns_protocol_error() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
     let result = handler.dispatch("ack_inbox_message", empty_args());
     assert!(result.is_err());
 }
@@ -906,7 +902,7 @@ fn worker_missing_required_head_commit_returns_protocol_error() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
     let result = handler.dispatch("send_commit", empty_args());
     assert!(result.is_err());
 }
@@ -916,7 +912,7 @@ fn worker_invalid_commit_returns_tool_error() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
     let result =
         handler.dispatch("send_commit", json_args(json!({"head_commit": "deadbeef"}))).unwrap();
     assert_tool_error(&result);
@@ -927,7 +923,7 @@ fn worker_ack_nonexistent_sequence_returns_tool_error() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
     let result =
         handler.dispatch("ack_inbox_message", json_args(json!({"sequence": 9999}))).unwrap();
     assert_tool_error(&result);
@@ -942,7 +938,7 @@ fn worker_resource_contract() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.read("multorum://worker/contract").unwrap();
     let contract = resource_json(&result);
@@ -954,7 +950,7 @@ fn worker_resource_methodology() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.read("multorum://worker/methodology").unwrap();
     let text = crate::support::result::resource_text(&result);
@@ -966,7 +962,7 @@ fn worker_resource_inbox() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.read("multorum://worker/inbox").unwrap();
     let inbox = resource_json(&result);
@@ -978,7 +974,7 @@ fn worker_resource_status() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.read("multorum://worker/status").unwrap();
     let status = resource_json(&result);
@@ -986,12 +982,8 @@ fn worker_resource_status() {
 }
 
 #[test]
-fn worker_startup_role_mismatch_becomes_resource_error() {
-    let handler = WorkerHandler::from_startup_result(Err(RuntimeError::RuntimeRoleMismatch {
-        expected: "worker",
-        actual: "orchestrator",
-        repo_root: PathBuf::from("/repo"),
-    }));
+fn worker_cwd_mismatch_resource_returns_deferred_error() {
+    let handler = WorkerHandler::new();
 
     let result = handler.read("multorum://worker/status");
     assert!(result.is_err());
@@ -1002,7 +994,7 @@ fn worker_resource_unimplemented_returns_error() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     for uri in &[
         "multorum://worker/read-set",
@@ -1020,7 +1012,7 @@ fn worker_resource_unknown_returns_error() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
 
     let result = handler.read("multorum://worker/nonexistent");
     assert!(result.is_err());
@@ -1033,7 +1025,7 @@ fn worker_resource_unknown_returns_error() {
 #[test]
 fn full_workflow_create_commit_merge_via_mcp() {
     let (repo, svc) = setup_repo();
-    let orch = OrchestratorHandler::new(svc);
+    let orch = OrchestratorHandler::with_service(svc);
 
     let create = orch
         .dispatch(
@@ -1045,7 +1037,7 @@ fn full_workflow_create_commit_merge_via_mcp() {
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let worker = WorkerHandler::new(worker_svc);
+    let worker = WorkerHandler::with_service(worker_svc);
 
     let contract = worker.dispatch("get_contract", empty_args()).unwrap();
     assert_tool_success(&contract);

@@ -36,6 +36,7 @@ fn orchestrator_tool_names_stable() {
             "resolve_worker",
             "revise_worker",
             "rulebook_init",
+            "set_working_directory",
             "validate_perspectives",
         ]
     );
@@ -51,6 +52,10 @@ fn orchestrator_tool_input_schemas_stable() {
             (d.name, inputs)
         })
         .collect();
+
+    // set_working_directory
+    let (_, inputs) = schemas.iter().find(|(n, _)| *n == "set_working_directory").unwrap();
+    assert_eq!(inputs, &[("path", ToolInputType::String, true)]);
 
     // No-input tools.
     for name in ["rulebook_init", "list_perspectives", "list_workers", "get_status"] {
@@ -187,6 +192,7 @@ fn worker_tool_names_stable() {
             "read_inbox",
             "send_commit",
             "send_report",
+            "set_working_directory",
         ]
     );
 }
@@ -201,6 +207,10 @@ fn worker_tool_input_schemas_stable() {
             (d.name, inputs)
         })
         .collect();
+
+    // set_working_directory
+    let (_, inputs) = schemas.iter().find(|(n, _)| *n == "set_working_directory").unwrap();
+    assert_eq!(inputs, &[("path", ToolInputType::String, true)]);
 
     // No-input tools.
     for name in ["get_contract", "get_status"] {

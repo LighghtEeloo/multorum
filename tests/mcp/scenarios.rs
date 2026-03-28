@@ -105,7 +105,7 @@ async fn different_perspectives_independent_on_merge() {
     use multorum::mcp::transport::orchestrator::OrchestratorHandler;
     use multorum::mcp::transport::worker::WorkerHandler;
     use multorum::runtime::FsWorkerService;
-    let orch = OrchestratorHandler::new(svc);
+    let orch = OrchestratorHandler::with_service(svc);
 
     // Create one worker per perspective.
     let create_auth = orch
@@ -132,7 +132,7 @@ async fn different_perspectives_independent_on_merge() {
     git(Path::new(&wt_auth), &["commit", "-m", "incr: auth work"]);
     let head_auth = git(Path::new(&wt_auth), &["rev-parse", "HEAD"]);
 
-    let auth_worker = WorkerHandler::new(FsWorkerService::new(&wt_auth).unwrap());
+    let auth_worker = WorkerHandler::with_service(FsWorkerService::new(&wt_auth).unwrap());
     let commit_auth =
         auth_worker.dispatch("send_commit", json_args(json!({"head_commit": head_auth}))).unwrap();
     assert_tool_success(&commit_auth);
@@ -153,7 +153,7 @@ async fn different_perspectives_independent_on_merge() {
     git(Path::new(&wt_data), &["commit", "-m", "incr: data work"]);
     let head_data = git(Path::new(&wt_data), &["rev-parse", "HEAD"]);
 
-    let data_worker = WorkerHandler::new(FsWorkerService::new(&wt_data).unwrap());
+    let data_worker = WorkerHandler::with_service(FsWorkerService::new(&wt_data).unwrap());
     let commit_data =
         data_worker.dispatch("send_commit", json_args(json!({"head_commit": head_data}))).unwrap();
     assert_tool_success(&commit_data);
@@ -777,7 +777,7 @@ async fn check_pipeline_failure_blocks_merge() {
 
     let svc = FsOrchestratorService::new(dir.path()).unwrap();
 
-    let orch = OrchestratorHandler::new(svc);
+    let orch = OrchestratorHandler::with_service(svc);
 
     let create = orch
         .dispatch(
@@ -794,7 +794,7 @@ async fn check_pipeline_failure_blocks_merge() {
     git(wt, &["commit", "-m", "incr: check test"]);
     let head = git(wt, &["rev-parse", "HEAD"]);
 
-    let worker = WorkerHandler::new(FsWorkerService::new(wt).unwrap());
+    let worker = WorkerHandler::with_service(FsWorkerService::new(wt).unwrap());
     let commit = worker.dispatch("send_commit", json_args(json!({"head_commit": head}))).unwrap();
     assert_tool_success(&commit);
 
@@ -847,7 +847,7 @@ async fn check_pipeline_skip_succeeds() {
 
     let svc = FsOrchestratorService::new(dir.path()).unwrap();
 
-    let orch = OrchestratorHandler::new(svc);
+    let orch = OrchestratorHandler::with_service(svc);
 
     let create = orch
         .dispatch(
@@ -864,7 +864,7 @@ async fn check_pipeline_skip_succeeds() {
     git(wt, &["commit", "-m", "incr: skip check test"]);
     let head = git(wt, &["rev-parse", "HEAD"]);
 
-    let worker = WorkerHandler::new(FsWorkerService::new(wt).unwrap());
+    let worker = WorkerHandler::with_service(FsWorkerService::new(wt).unwrap());
     let commit = worker.dispatch("send_commit", json_args(json!({"head_commit": head}))).unwrap();
     assert_tool_success(&commit);
 
@@ -889,7 +889,7 @@ async fn skip_non_skippable_check_rejected() {
     use multorum::runtime::FsWorkerService;
 
     let (_dir, svc) = setup_multi_perspective_repo();
-    let orch = OrchestratorHandler::new(svc);
+    let orch = OrchestratorHandler::with_service(svc);
 
     let create = orch
         .dispatch(
@@ -906,7 +906,7 @@ async fn skip_non_skippable_check_rejected() {
     git(wt, &["commit", "-m", "incr: non-skippable test"]);
     let head = git(wt, &["rev-parse", "HEAD"]);
 
-    let worker = WorkerHandler::new(FsWorkerService::new(wt).unwrap());
+    let worker = WorkerHandler::with_service(FsWorkerService::new(wt).unwrap());
     let commit = worker.dispatch("send_commit", json_args(json!({"head_commit": head}))).unwrap();
     assert_tool_success(&commit);
 
@@ -927,7 +927,7 @@ async fn check_pipeline_passing_reports_ran_checks() {
     use multorum::runtime::FsWorkerService;
 
     let (_dir, svc) = setup_multi_perspective_repo();
-    let orch = OrchestratorHandler::new(svc);
+    let orch = OrchestratorHandler::with_service(svc);
 
     let create = orch
         .dispatch(
@@ -944,7 +944,7 @@ async fn check_pipeline_passing_reports_ran_checks() {
     git(wt, &["commit", "-m", "incr: passing checks test"]);
     let head = git(wt, &["rev-parse", "HEAD"]);
 
-    let worker = WorkerHandler::new(FsWorkerService::new(wt).unwrap());
+    let worker = WorkerHandler::with_service(FsWorkerService::new(wt).unwrap());
     let commit = worker.dispatch("send_commit", json_args(json!({"head_commit": head}))).unwrap();
     assert_tool_success(&commit);
 

@@ -9,7 +9,7 @@
 pub mod orchestrator;
 pub mod worker;
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use rmcp::model::{
     Annotated, CallToolResult, Implementation, ListResourceTemplatesResult, ListResourcesResult,
@@ -27,38 +27,50 @@ use super::dto::{
 };
 use super::error::{McpErrorCode, McpToolError};
 
-/// Deferred runtime binding for one MCP handler.
+/// Runtime binding state for one MCP handler.
 ///
-/// MCP startup must complete the protocol handshake even when the
-/// current directory does not match the requested runtime role. The
-/// handler therefore advertises its static schema immediately and
-/// delays startup validation failures until the first tool or resource
-/// request that needs the runtime service.
+/// The server defaults to the process working directory at startup.
+/// The `set_working_directory` tool allows the client to rebind the
+/// runtime to a different directory at any time.
 #[derive(Debug, Clone)]
-enum DeferredService<S> {
-    /// Ready runtime service bound to the current directory.
+pub(crate) enum ServiceState<S> {
+    /// Ready runtime service bound to a working directory.
     Ready(S),
-    /// Startup failure captured as an MCP-visible tool error.
+    /// Service construction failed for the configured directory.
     Failed(McpToolError),
 }
 
+/// Thread-safe wrapper around [`ServiceState`] that allows runtime
+/// rebinding via `set_working_directory`.
+pub(crate) struct DeferredService<S> {
+    pub(crate) state: RwLock<ServiceState<S>>,
+}
+
 impl<S> DeferredService<S> {
-    /// Bind either a ready runtime service or one deferred startup
-    /// failure.
+    /// Bind from the initial startup attempt (typically `from_current_dir`).
     fn from_startup_result(result: Result<S, RuntimeError>) -> Self {
-        match result {
-            | Ok(service) => Self::Ready(service),
-            | Err(error) => Self::Failed(McpToolError::from(error)),
-        }
+        let state = match result {
+            | Ok(service) => ServiceState::Ready(service),
+            | Err(error) => ServiceState::Failed(McpToolError::from(error)),
+        };
+        Self { state: RwLock::new(state) }
     }
 
-    /// Borrow the runtime service or return the deferred startup
-    /// failure that should be surfaced to the MCP client.
-    fn get(&self) -> Result<&S, &McpToolError> {
-        match self {
-            | Self::Ready(service) => Ok(service),
-            | Self::Failed(error) => Err(error),
-        }
+    /// Rebind the working directory by storing a new service
+    /// construction result. Replaces any previous binding and returns
+    /// the outcome so the caller can report it to the client.
+    fn bind(&self, result: Result<S, RuntimeError>) -> Result<(), McpToolError> {
+        let new_state = match result {
+            | Ok(service) => ServiceState::Ready(service),
+            | Err(error) => {
+                let mcp_err = McpToolError::from(error);
+                let ret = mcp_err.clone();
+                *self.state.write().unwrap() = ServiceState::Failed(mcp_err);
+                return Err(ret);
+            }
+        };
+        *self.state.write().unwrap() = new_state;
+        Ok(())
     }
 }
 

@@ -18,7 +18,7 @@ use super::repo::setup_repo;
 pub async fn orchestrator_duplex() -> (TempDir, rmcp::service::RunningService<rmcp::RoleClient, ()>)
 {
     let (dir, svc) = setup_repo();
-    let handler = OrchestratorHandler::new(svc);
+    let handler = OrchestratorHandler::with_service(svc);
     let (server_io, client_io) = tokio::io::duplex(65536);
     tokio::spawn(async move {
         let server = handler.serve(server_io).await.expect("server failed to start");
@@ -33,7 +33,7 @@ pub async fn orchestrator_duplex() -> (TempDir, rmcp::service::RunningService<rm
 /// The caller must keep the orchestrator tempdir alive.
 pub async fn worker_duplex(worktree: &Path) -> rmcp::service::RunningService<rmcp::RoleClient, ()> {
     let worker_svc = FsWorkerService::new(worktree).unwrap();
-    let handler = WorkerHandler::new(worker_svc);
+    let handler = WorkerHandler::with_service(worker_svc);
     let (server_io, client_io) = tokio::io::duplex(65536);
     tokio::spawn(async move {
         let server = handler.serve(server_io).await.expect("worker server failed to start");

@@ -17,20 +17,21 @@ use crate::methodology::{MethodologyDocument, MethodologyRole};
 use crate::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService, WorkerId};
 
 use super::{
-    DeferredService, args_or_empty, dispatch_tool, extract_payload, extract_reply,
+    DeferredService, ServiceState, args_or_empty, dispatch_tool, extract_payload, extract_reply,
     list_resource_templates_result, list_resources_result, list_tools_result,
     mcp_to_resource_error, optional_bool, optional_str, optional_string_list, optional_u64,
-    required_str, required_u64, resource_success, resource_text_success, runtime_to_resource_error,
-    server_info, tool_error_result, validate_tool_arguments,
+    required_str, required_u64, resource_success, resource_text_success,
+    runtime_to_resource_error, server_info, tool_error_result, validate_tool_arguments,
 };
 
 /// MCP server handler for the orchestrator surface.
+///
+/// The handler defaults to the process working directory at startup.
+/// The `set_working_directory` tool allows the client to rebind the
+/// runtime to a different workspace root at any time.
 pub struct OrchestratorHandler {
-    /// Deferred runtime binding.
-    ///
-    /// Note: The handler stays protocol-live even when startup role
-    /// detection fails so MCP hosts can complete initialization and then
-    /// observe a structured error on the first runtime operation.
+    /// Runtime service, defaulting to cwd and rebindable via
+    /// `set_working_directory`.
     service: DeferredService<FsOrchestratorService>,
     tools: ListToolsResult,
     resources: ListResourcesResult,
@@ -38,20 +39,29 @@ pub struct OrchestratorHandler {
 }
 
 impl OrchestratorHandler {
-    /// Construct the handler from a runtime orchestrator service.
-    pub fn new(service: FsOrchestratorService) -> Self {
+    /// Construct the handler with a pre-bound service.
+    ///
+    /// Note: This bypasses the default cwd binding and is intended
+    /// for tests and programmatic embeddings that already hold a
+    /// constructed service instance.
+    pub fn with_service(service: FsOrchestratorService) -> Self {
         Self::from_startup_result(Ok(service))
     }
 
-    /// Construct the handler from the startup attempt used by the CLI
-    /// entrypoint.
-    pub fn from_startup_result(service: crate::runtime::Result<FsOrchestratorService>) -> Self {
+    /// Construct the handler, defaulting to the process working
+    /// directory.
+    pub fn new() -> Self {
+        Self::from_startup_result(FsOrchestratorService::from_current_dir())
+    }
+
+    /// Construct the handler from an explicit startup result.
+    fn from_startup_result(result: crate::runtime::Result<FsOrchestratorService>) -> Self {
         let tools = list_tools_result(&crate::mcp::tool::orchestrator::descriptors());
         let resources = list_resources_result(&crate::mcp::resource::orchestrator::descriptors());
         let resource_templates =
             list_resource_templates_result(&crate::mcp::resource::orchestrator::templates());
         Self {
-            service: DeferredService::from_startup_result(service),
+            service: DeferredService::from_startup_result(result),
             tools,
             resources,
             resource_templates,
@@ -63,9 +73,19 @@ impl OrchestratorHandler {
         &self, name: &str, args: serde_json::Map<String, serde_json::Value>,
     ) -> Result<CallToolResult, ErrorData> {
         validate_tool_arguments(name, &args, &crate::mcp::tool::orchestrator::descriptors())?;
-        let service = match self.service.get() {
-            | Ok(service) => service,
-            | Err(error) => return Ok(tool_error_result(error)),
+
+        if name == "set_working_directory" {
+            let path = required_str(&args, "path")?;
+            return match self.service.bind(FsOrchestratorService::new(path)) {
+                | Ok(()) => dispatch_tool(Ok(serde_json::json!({ "path": path }))),
+                | Err(error) => Ok(tool_error_result(&error)),
+            };
+        }
+
+        let guard = self.service.state.read().unwrap();
+        let service = match &*guard {
+            | ServiceState::Ready(service) => service,
+            | ServiceState::Failed(error) => return Ok(tool_error_result(error)),
         };
         match name {
             | "rulebook_init" => dispatch_tool(service.rulebook_init()),
@@ -164,9 +184,10 @@ impl OrchestratorHandler {
                 "text/markdown",
             );
         }
-        let service = match self.service.get() {
-            | Ok(service) => service,
-            | Err(error) => return Err(mcp_to_resource_error(error)),
+        let guard = self.service.state.read().unwrap();
+        let service = match &*guard {
+            | ServiceState::Ready(service) => service,
+            | ServiceState::Failed(error) => return Err(mcp_to_resource_error(error)),
         };
         match uri {
             | "multorum://orchestrator/status" => {

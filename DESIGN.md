@@ -570,10 +570,12 @@ High-level role guidance is shipped with the binary itself. The CLI prints that 
 
 The MCP surface is split into two stdio servers:
 
-- orchestrator mode, started from the workspace root
-- worker mode, started from inside one managed worker worktree
+- orchestrator mode
+- worker mode
 
 Each mode exposes only the tools and resources that make sense for that runtime role.
+
+Both servers default to the process working directory at startup. If `cwd` is a valid workspace or worktree, the runtime is immediately available. Otherwise, the startup failure is deferred until the first tool or resource call. The `set_working_directory` tool allows the client to rebind the runtime to a different directory at any time.
 
 ### Tools
 
@@ -623,7 +625,7 @@ Concrete:
 | `multorum://worker/inbox` | Inbox mailbox listing for the active worker. |
 | `multorum://worker/status` | Projected worker lifecycle status. |
 
-Worker-mode resources carry no worker identity parameter because the server is started from inside a single worker worktree — the identity is implicit.
+Worker-mode resources carry no worker identity parameter because the server is bound to a single worker worktree via `set_working_directory` — the identity is implicit.
 
 ### Error Contract
 
@@ -695,5 +697,5 @@ multorum util completion fish | source
 
 ### MCP Server
 
-- `multorum serve orchestrator --workspace-root <workspace-root>` — Start the orchestrator MCP server on stdio, explicitly bound to the canonical workspace root.
-- `multorum serve worker --worktree-root <worktree-root>` — Start the worker MCP server on stdio, explicitly bound to one managed worker worktree root.
+- `multorum serve orchestrator` — Start the orchestrator MCP server on stdio. Defaults to the process working directory; the client may call `set_working_directory` to rebind.
+- `multorum serve worker` — Start the worker MCP server on stdio. Defaults to the process working directory; the client may call `set_working_directory` to rebind.

@@ -17,7 +17,7 @@ use crate::methodology::{MethodologyDocument, MethodologyRole};
 use crate::runtime::{FsWorkerService, Sequence, WorkerService};
 
 use super::{
-    DeferredService, args_or_empty, dispatch_tool, extract_payload, extract_reply,
+    DeferredService, ServiceState, args_or_empty, dispatch_tool, extract_payload, extract_reply,
     list_resource_templates_result, list_resources_result, list_tools_result,
     mcp_to_resource_error, optional_str, optional_u64, required_str, required_u64,
     resource_success, resource_text_success, runtime_to_resource_error, server_info,
@@ -25,12 +25,13 @@ use super::{
 };
 
 /// MCP server handler for the worker surface.
+///
+/// The handler defaults to the process working directory at startup.
+/// The `set_working_directory` tool allows the client to rebind the
+/// runtime to a different worktree root at any time.
 pub struct WorkerHandler {
-    /// Deferred runtime binding.
-    ///
-    /// Note: The worker server still advertises its schema when it is
-    /// launched from the wrong directory, so clients only observe the
-    /// runtime-role failure when they invoke a worker operation.
+    /// Runtime service, defaulting to cwd and rebindable via
+    /// `set_working_directory`.
     service: DeferredService<FsWorkerService>,
     tools: ListToolsResult,
     resources: ListResourcesResult,
@@ -38,20 +39,29 @@ pub struct WorkerHandler {
 }
 
 impl WorkerHandler {
-    /// Construct the handler from a runtime worker service.
-    pub fn new(service: FsWorkerService) -> Self {
+    /// Construct the handler with a pre-bound service.
+    ///
+    /// Note: This bypasses the default cwd binding and is intended
+    /// for tests and programmatic embeddings that already hold a
+    /// constructed service instance.
+    pub fn with_service(service: FsWorkerService) -> Self {
         Self::from_startup_result(Ok(service))
     }
 
-    /// Construct the handler from the startup attempt used by the CLI
-    /// entrypoint.
-    pub fn from_startup_result(service: crate::runtime::Result<FsWorkerService>) -> Self {
+    /// Construct the handler, defaulting to the process working
+    /// directory.
+    pub fn new() -> Self {
+        Self::from_startup_result(FsWorkerService::from_current_dir())
+    }
+
+    /// Construct the handler from an explicit startup result.
+    fn from_startup_result(result: crate::runtime::Result<FsWorkerService>) -> Self {
         let tools = list_tools_result(&crate::mcp::tool::worker::descriptors());
         let resources = list_resources_result(&crate::mcp::resource::worker::descriptors());
         let resource_templates =
             list_resource_templates_result(&crate::mcp::resource::worker::templates());
         Self {
-            service: DeferredService::from_startup_result(service),
+            service: DeferredService::from_startup_result(result),
             tools,
             resources,
             resource_templates,
@@ -63,9 +73,19 @@ impl WorkerHandler {
         &self, name: &str, args: serde_json::Map<String, serde_json::Value>,
     ) -> Result<CallToolResult, ErrorData> {
         validate_tool_arguments(name, &args, &crate::mcp::tool::worker::descriptors())?;
-        let service = match self.service.get() {
-            | Ok(service) => service,
-            | Err(error) => return Ok(tool_error_result(error)),
+
+        if name == "set_working_directory" {
+            let path = required_str(&args, "path")?;
+            return match self.service.bind(FsWorkerService::new(path)) {
+                | Ok(()) => dispatch_tool(Ok(serde_json::json!({ "path": path }))),
+                | Err(error) => Ok(tool_error_result(&error)),
+            };
+        }
+
+        let guard = self.service.state.read().unwrap();
+        let service = match &*guard {
+            | ServiceState::Ready(service) => service,
+            | ServiceState::Failed(error) => return Ok(tool_error_result(error)),
         };
         match name {
             | "get_contract" => dispatch_tool(service.contract()),
@@ -103,9 +123,10 @@ impl WorkerHandler {
                 "text/markdown",
             );
         }
-        let service = match self.service.get() {
-            | Ok(service) => service,
-            | Err(error) => return Err(mcp_to_resource_error(error)),
+        let guard = self.service.state.read().unwrap();
+        let service = match &*guard {
+            | ServiceState::Ready(service) => service,
+            | ServiceState::Failed(error) => return Err(mcp_to_resource_error(error)),
         };
         match uri {
             | "multorum://worker/contract" => {

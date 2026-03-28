@@ -7,6 +7,11 @@ use super::{
     required_integer_input, required_string_input,
 };
 
+const SET_WORKING_DIRECTORY_INPUTS: &[ToolInputDescriptor] = &[required_string_input(
+    "path",
+    "Absolute path to the managed worker worktree root.",
+)];
+
 const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[optional_integer_input(
     "after",
     "Optional sequence number; only inbox bundles after it are returned.",
@@ -51,6 +56,11 @@ const COMMIT_INPUTS: &[ToolInputDescriptor] = &[
 /// Return the worker MCP tool descriptors.
 pub fn descriptors() -> Vec<ToolDescriptor> {
     vec![
+        ToolDescriptor {
+            name: "set_working_directory",
+            description: "Rebind the worker server to a different worktree root directory. The server defaults to the process working directory at startup.",
+            inputs: SET_WORKING_DIRECTORY_INPUTS,
+        },
         ToolDescriptor {
             name: "get_contract",
             description: "Load the worker contract view.",

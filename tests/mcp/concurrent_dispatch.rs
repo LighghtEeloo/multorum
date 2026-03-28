@@ -20,7 +20,7 @@ use crate::support::worker::create_worker_runtime;
 async fn concurrent_list_operations() {
     let (_dir, client) = orchestrator_duplex().await;
     let (tools, resources) = tokio::join!(client.list_all_tools(), client.list_all_resources());
-    assert_eq!(tools.unwrap().len(), 16);
+    assert_eq!(tools.unwrap().len(), 17);
     assert_eq!(resources.unwrap().len(), 4);
     client.cancel().await.unwrap();
 }

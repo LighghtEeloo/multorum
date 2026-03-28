@@ -51,20 +51,12 @@ fn cli_methodology_parses_top_level_role_selector() {
 }
 
 #[test]
-fn cli_serve_orchestrator_requires_explicit_workspace_root() {
-    let cli = Cli::try_parse_from([
-        "multorum",
-        "serve",
-        "orchestrator",
-        "--workspace-root",
-        "/repo",
-    ])
-    .unwrap();
+fn cli_serve_orchestrator_takes_no_path_arguments() {
+    let cli =
+        Cli::try_parse_from(["multorum", "serve", "orchestrator"]).unwrap();
 
     match cli.command {
-        | Command::Serve { command: multorum::cli::ServeCommand::Orchestrator { workspace_root } } => {
-            assert_eq!(workspace_root, std::path::PathBuf::from("/repo"));
-        }
+        | Command::Serve { command: multorum::cli::ServeCommand::Orchestrator } => {}
         | command => panic!("unexpected command: {command:?}"),
     }
 }

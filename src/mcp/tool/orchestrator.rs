@@ -8,6 +8,11 @@ use super::{
     required_string_list_input,
 };
 
+const SET_WORKING_DIRECTORY_INPUTS: &[ToolInputDescriptor] = &[required_string_input(
+    "path",
+    "Absolute path to the Multorum workspace root.",
+)];
+
 const GET_WORKER_INPUTS: &[ToolInputDescriptor] =
     &[required_string_input("worker", "Runtime worker identity to inspect.")];
 
@@ -101,6 +106,11 @@ const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
 /// Return the orchestrator MCP tool descriptors.
 pub fn descriptors() -> Vec<ToolDescriptor> {
     vec![
+        ToolDescriptor {
+            name: "set_working_directory",
+            description: "Rebind the orchestrator server to a different workspace root directory. The server defaults to the process working directory at startup.",
+            inputs: SET_WORKING_DIRECTORY_INPUTS,
+        },
         ToolDescriptor {
             name: "rulebook_init",
             description: "Initialize .multorum with the default committed rulebook artifacts.",
