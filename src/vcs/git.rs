@@ -16,6 +16,68 @@ const WORKER_EXCLUDE_ENTRIES: [&str; 5] = [
     ".multorum/outbox/",
 ];
 
+/// Begin marker for the injected multorum pre-commit hook section.
+const HOOK_GUARD_BEGIN: &str =
+    "# >>> BEGIN MULTORUM HOOK — auto-generated, do not edit manually <<<";
+
+/// End marker for the injected multorum pre-commit hook section.
+const HOOK_GUARD_END: &str = "# >>> END MULTORUM HOOK <<<";
+
+/// Shell fragment injected between the guard markers.
+///
+/// Wrapped in a subshell so that `set -eu` does not leak into the
+/// surrounding hook script when multorum is appended to an existing hook.
+/// The exit status is captured into a variable and re-raised explicitly
+/// instead of using `|| exit $?`, because POSIX `set -e` is suppressed
+/// inside the left-hand side of `||`.
+const HOOK_BODY: &str = r#"(
+set -eu
+
+# --- Worker write-set guard ---
+# In a worker worktree, every staged path must be inside the write set.
+write_set=".multorum/write-set.txt"
+if [ -f "$write_set" ]; then
+    allowed=''
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        allowed="$allowed
+$path"
+    done < "$write_set"
+
+    git diff --cached --name-only --diff-filter=ACDMRTUXB | while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        if ! printf '%s\n' "$allowed" | grep -Fxq "$path"; then
+            printf 'multorum: staged path outside write set: %s\n' "$path" >&2
+            exit 1
+        fi
+    done
+fi
+
+# --- Orchestrator exclusion-set guard ---
+# In the canonical workspace, no staged path may appear in the exclusion set.
+exclusion_set=".multorum/orchestrator/exclusion-set.txt"
+if [ -f "$exclusion_set" ]; then
+    blocked=''
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        blocked="$blocked
+$path"
+    done < "$exclusion_set"
+
+    if [ -n "$blocked" ]; then
+        git diff --cached --name-only --diff-filter=ACDMRTUXB | while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            if printf '%s\n' "$blocked" | grep -Fxq "$path"; then
+                printf 'multorum: staged path in orchestrator exclusion set: %s\n' "$path" >&2
+                exit 1
+            fi
+        done
+    fi
+fi
+)
+_multorum_rc=$?
+if [ "$_multorum_rc" -ne 0 ]; then exit "$_multorum_rc"; fi"#;
+
 /// Git backend for Multorum repository operations.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct GitVcs;
@@ -104,12 +166,13 @@ impl GitVcs {
         Ok(())
     }
 
-    /// Install the shared pre-commit hook.
+    /// Install or update the multorum pre-commit hook section.
     ///
-    /// Since Git worktrees share the main repository's hooks directory,
-    /// a single script handles both the worker write-set check and the
-    /// orchestrator exclusion-set check. The hook detects which context
-    /// it runs in by probing the files present in the working directory.
+    /// Instead of overwriting the entire hook file, the hook logic is
+    /// injected between unique guard markers ([`HOOK_GUARD_BEGIN`] /
+    /// [`HOOK_GUARD_END`]). An existing guarded section is replaced
+    /// in-place; otherwise the block is appended. A missing file is
+    /// created with a POSIX shebang.
     fn install_pre_commit_hook(&self, repo_root: &Path) -> Result<()> {
         let mut command = self.git_command(repo_root);
         command.arg("rev-parse").arg("--git-path").arg("hooks/pre-commit");
@@ -119,57 +182,43 @@ impl GitVcs {
             fs::create_dir_all(parent)?;
         }
 
-        let script = r#"#!/bin/sh
-set -eu
+        let guarded_block = format!("{HOOK_GUARD_BEGIN}\n{HOOK_BODY}\n{HOOK_GUARD_END}\n");
 
-# --- Worker write-set guard ---
-# In a worker worktree, every staged path must be inside the write set.
-write_set=".multorum/write-set.txt"
-if [ -f "$write_set" ]; then
-    allowed=''
-    while IFS= read -r path; do
-        [ -n "$path" ] || continue
-        allowed="$allowed
-$path"
-    done < "$write_set"
+        let content = if hook_path.exists() {
+            let existing = fs::read_to_string(&hook_path)?;
+            if let Some(begin) = existing.find(HOOK_GUARD_BEGIN) {
+                // Replace the existing guarded section in-place.
+                let end = if let Some(offset) = existing[begin..].find(HOOK_GUARD_END) {
+                    let raw = begin + offset + HOOK_GUARD_END.len();
+                    // Consume the trailing newline if present.
+                    if existing.as_bytes().get(raw) == Some(&b'\n') {
+                        raw + 1
+                    } else {
+                        raw
+                    }
+                } else {
+                    // Begin marker without matching end — replace to EOF.
+                    existing.len()
+                };
+                format!("{}{}{}", &existing[..begin], guarded_block, &existing[end..])
+            } else {
+                // No existing section — append after a blank separator line.
+                let mut result = existing;
+                if !result.ends_with('\n') {
+                    result.push('\n');
+                }
+                result.push('\n');
+                result.push_str(&guarded_block);
+                result
+            }
+        } else {
+            format!("#!/bin/sh\n\n{guarded_block}")
+        };
 
-    git diff --cached --name-only --diff-filter=ACDMRTUXB | while IFS= read -r path; do
-        [ -n "$path" ] || continue
-        if ! printf '%s\n' "$allowed" | grep -Fxq "$path"; then
-            printf 'multorum: staged path outside write set: %s\n' "$path" >&2
-            exit 1
-        fi
-    done
-fi
-
-# --- Orchestrator exclusion-set guard ---
-# In the canonical workspace, no staged path may appear in the exclusion set.
-exclusion_set=".multorum/orchestrator/exclusion-set.txt"
-if [ -f "$exclusion_set" ]; then
-    blocked=''
-    while IFS= read -r path; do
-        [ -n "$path" ] || continue
-        blocked="$blocked
-$path"
-    done < "$exclusion_set"
-
-    if [ -n "$blocked" ]; then
-        git diff --cached --name-only --diff-filter=ACDMRTUXB | while IFS= read -r path; do
-            [ -n "$path" ] || continue
-            if printf '%s\n' "$blocked" | grep -Fxq "$path"; then
-                printf 'multorum: staged path in orchestrator exclusion set: %s\n' "$path" >&2
-                exit 1
-            fi
-        done
-    fi
-fi
-"#;
-
-        fs::write(&hook_path, script)?;
+        fs::write(&hook_path, &content)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-
             let mut permissions = fs::metadata(&hook_path)?.permissions();
             permissions.set_mode(0o755);
             fs::set_permissions(&hook_path, permissions)?;
