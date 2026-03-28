@@ -208,8 +208,12 @@ pub struct CreateResult {
     pub worktree_path: PathBuf,
     /// Initial projected state.
     pub state: WorkerState,
-    /// Optional seeded task bundle path.
-    pub seeded_task_path: Option<PathBuf>,
+    /// Absolute path to the created initial `task` bundle.
+    ///
+    /// Note: Every worker starts with sequence `1` in its inbox so the
+    /// worker transcript has one stable bootstrap shape even when the
+    /// orchestrator supplied no body text or artifacts.
+    pub created_task_path: PathBuf,
 }
 
 /// Result of forwarding one live bidding group to HEAD.

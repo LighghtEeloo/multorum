@@ -138,6 +138,7 @@ fn orchestrator_create_worker() {
     assert_eq!(json["perspective"], "AuthImplementor");
     assert_eq!(json["state"], "active");
     assert!(json["worktree_path"].is_string());
+    assert!(json["created_task_path"].is_string());
 }
 
 #[test]
@@ -737,6 +738,11 @@ fn worker_read_inbox_with_after() {
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
     let handler = WorkerHandler::new(worker_svc);
+
+    let inbox = handler.dispatch("read_inbox", empty_args()).unwrap();
+    assert_tool_success(&inbox);
+    assert_eq!(tool_json(&inbox).as_array().unwrap().len(), 1);
+    assert_eq!(tool_json(&inbox).as_array().unwrap()[0]["kind"], "task");
 
     let result = handler.dispatch("read_inbox", json_args(json!({"after": 999}))).unwrap();
     assert_tool_success(&result);

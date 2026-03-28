@@ -187,12 +187,7 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
         .unwrap();
     assert_eq!(provision.state, WorkerState::Active);
     assert!(provision.worktree_path.is_absolute());
-    assert!(
-        provision
-            .seeded_task_path
-            .as_ref()
-            .is_some_and(|path: &std::path::PathBuf| path.is_absolute())
-    );
+    assert!(provision.created_task_path.is_absolute());
     assert!(!task_body.exists(), "task body should be moved into the runtime bundle");
 
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
@@ -262,6 +257,21 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     assert!(follow_up[0].bundle_path.is_absolute());
     worker.ack_inbox(follow_up[0].sequence).unwrap();
     assert_eq!(worker.status().unwrap().state, WorkerState::Active);
+}
+
+#[test]
+fn worker_creation_without_payload_still_seeds_initial_task_bundle() {
+    let (_repo, orchestrator, _) = setup_repo();
+
+    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
+
+    assert!(provision.created_task_path.is_absolute());
+
+    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
+    let inbox = worker.read_inbox(None).unwrap();
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox[0].kind, MessageKind::Task);
+    assert_eq!(inbox[0].sequence.0, 1);
 }
 
 #[test]

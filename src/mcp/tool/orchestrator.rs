@@ -36,15 +36,15 @@ const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ),
     optional_string_input(
         "body_text",
-        "Optional inline Markdown content written into the seeded task bundle body.",
+        "Optional inline Markdown content written into the created task bundle body.",
     ),
     optional_string_input(
         "body_path",
-        "Optional Markdown file to move into the seeded task bundle body.",
+        "Optional Markdown file to move into the created task bundle body.",
     ),
     optional_string_list_input(
         "artifacts",
-        "Optional files to move into the seeded task bundle artifacts directory.",
+        "Optional files to move into the created task bundle artifacts directory.",
     ),
 ];
 
@@ -143,7 +143,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "create_worker",
-            description: "Create a worker workspace and optional initial task bundle; path-backed payload files are moved into .multorum storage.",
+            description: "Create a worker workspace and create its initial task bundle; path-backed payload files are moved into .multorum storage.",
             inputs: CREATE_WORKER_INPUTS,
         },
         ToolDescriptor {

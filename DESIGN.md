@@ -647,7 +647,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 
 ### Orchestrator Worker Commands
 
-- `multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Compile the perspective boundary from the current rulebook against the working tree. If a bidding group for this perspective already exists, join it. Otherwise, form a new group with base commit set to HEAD and check conflict-freedom against all active bidding groups. Create the worker worktree and materialize the runtime surface, seeding the initial `task` inbox bundle with the optional payload. `--worker` sets an explicit worker identity; when omitted, Multorum derives one from the perspective name. Reusing an explicit worker id is allowed only after that worker is finalized; if its finalized worktree still exists, pass `--overwriting-worktree` to replace it. Transition: new worker enters `ACTIVE`.
+- `multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Compile the perspective boundary from the current rulebook against the working tree. If a bidding group for this perspective already exists, join it. Otherwise, form a new group with base commit set to HEAD and check conflict-freedom against all active bidding groups. Create the worker worktree and materialize the runtime surface, always creating the initial `task` inbox bundle; the optional payload only populates that bundle's body and artifacts. `--worker` sets an explicit worker identity; when omitted, Multorum derives one from the perspective name. Reusing an explicit worker id is allowed only after that worker is finalized; if its finalized worktree still exists, pass `--overwriting-worktree` to replace it. Transition: new worker enters `ACTIVE`.
 - `multorum worker list` — List active workers.
 - `multorum worker show <worker>` — Return one worker in detail.
 - `multorum worker outbox <worker> [--after <sequence>]` — List worker-authored bundles from that worker's outbox. No lifecycle transition.
@@ -695,5 +695,5 @@ multorum util completion fish | source
 
 ### MCP Server
 
-- `multorum serve orchestrator` — Start the orchestrator MCP server on stdio from the workspace root.
-- `multorum serve worker` — Start the worker MCP server on stdio from inside a worker worktree.
+- `multorum serve orchestrator --workspace-root <workspace-root>` — Start the orchestrator MCP server on stdio, explicitly bound to the canonical workspace root.
+- `multorum serve worker --worktree-root <worktree-root>` — Start the worker MCP server on stdio, explicitly bound to one managed worker worktree root.

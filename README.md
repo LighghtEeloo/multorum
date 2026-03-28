@@ -133,14 +133,14 @@ Multorum ships the high-level orchestrator and worker guidance inside the binary
 
 ### 1) Add the orchestrator MCP server
 
-Add this to your MCP host config. `cwd` must be the canonical workspace root.
+Add this to your MCP host config. Pass the canonical workspace root explicitly so the server cannot bind itself from an accidental host `cwd`.
 
 ```json
 {
   "mcpServers": {
     "multorum-orchestrator": {
       "command": "/absolute/path/to/multorum",
-      "args": ["serve", "orchestrator"],
+      "args": ["serve", "orchestrator", "--workspace-root", "/absolute/path/to/your/repo"],
       "cwd": "/absolute/path/to/your/repo"
     }
   }
@@ -149,14 +149,14 @@ Add this to your MCP host config. `cwd` must be the canonical workspace root.
 
 ### 2) Add a worker MCP server
 
-Repeat for each worker worktree. `cwd` must point at that specific worktree, not the canonical root.
+Repeat for each worker worktree. Pass that specific worktree explicitly so the worker server cannot accidentally bind to the canonical root or another repo.
 
 ```json
 {
   "mcpServers": {
     "multorum-worker": {
       "command": "/absolute/path/to/multorum",
-      "args": ["serve", "worker"],
+      "args": ["serve", "worker", "--worktree-root", "/absolute/path/to/worker-worktree"],
       "cwd": "/absolute/path/to/worker-worktree"
     }
   }
@@ -165,7 +165,7 @@ Repeat for each worker worktree. `cwd` must point at that specific worktree, not
 
 ### 3) Reload and verify
 
-Reload your MCP host. If it reports an unmanaged repository or root mismatch, `cwd` is pointed at the wrong directory for that server role.
+Reload your MCP host. If it reports an unmanaged repository or root mismatch, the explicit root passed in `args` is wrong for that server role.
 </details>
 
 <details>

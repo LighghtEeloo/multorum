@@ -49,7 +49,12 @@ pub struct CreateWorker {
     pub perspective: PerspectiveName,
     /// Optional orchestrator-selected worker identity.
     pub worker_id: Option<WorkerId>,
-    /// Optional initial `task` bundle to seed in the worker inbox.
+    /// Optional payload for the worker's initial `task` bundle.
+    ///
+    /// Note: Multorum always creates one bootstrap `task` bundle so
+    /// workers start with a consistent inbox transcript. This payload
+    /// only controls whether that bundle carries user-supplied body
+    /// content or artifacts.
     pub task: Option<BundlePayload>,
     /// Whether to replace an existing finalized workspace for the same
     /// explicit worker id.
@@ -68,7 +73,7 @@ impl CreateWorker {
         self
     }
 
-    /// Seed the new worker inbox with one initial `task` bundle.
+    /// Create the new worker's initial `task` bundle payload.
     pub fn with_task(mut self, task: BundlePayload) -> Self {
         self.task = Some(task);
         self
@@ -113,7 +118,7 @@ pub trait OrchestratorService {
     /// Acknowledge one consumed worker outbox bundle.
     fn ack_outbox(&self, worker_id: WorkerId, sequence: Sequence) -> Result<AckRef>;
 
-    /// Create a worker workspace and optional initial task bundle.
+    /// Create a worker workspace and create its initial task bundle.
     fn create_worker(&self, request: CreateWorker) -> Result<CreateResult>;
 
     /// Move one blocked bidding group to HEAD.
@@ -583,24 +588,19 @@ impl OrchestratorService for FsOrchestratorService {
         self.fs.prepare_worker_runtime(&new_worker, &state.groups[group_idx])?;
         self.fs.store_state(&state)?;
 
-        let seeded_task_path = if let Some(payload) = task {
-            Some(
-                self.fs
-                    .publish_bundle(
-                        &worktree_path,
-                        MailboxDirection::Inbox,
-                        MessageKind::Task,
-                        &worker_id,
-                        &perspective,
-                        ReplyReference::default(),
-                        None,
-                        payload,
-                    )?
-                    .bundle_path,
-            )
-        } else {
-            None
-        };
+        let created_task_path = self
+            .fs
+            .publish_bundle(
+                &worktree_path,
+                MailboxDirection::Inbox,
+                MessageKind::Task,
+                &worker_id,
+                &perspective,
+                ReplyReference::default(),
+                None,
+                task.unwrap_or_default(),
+            )?
+            .bundle_path;
 
         self.fs.rewrite_exclusion_set(&state)?;
 
@@ -616,7 +616,7 @@ impl OrchestratorService for FsOrchestratorService {
             perspective,
             worktree_path,
             state: WorkerState::Active,
-            seeded_task_path,
+            created_task_path,
         })
     }
 
