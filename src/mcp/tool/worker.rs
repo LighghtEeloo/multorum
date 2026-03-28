@@ -2,90 +2,10 @@
 
 use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor};
 
-use super::{
-    optional_boolean_input, optional_integer_input, optional_string_input,
-    optional_string_list_input, required_integer_input, required_string_input,
-};
+use super::{ToolInputSets, required_string_input};
 
 const SET_WORKING_DIRECTORY_INPUTS: &[ToolInputDescriptor] =
     &[required_string_input("path", "Absolute path to the managed worker worktree root.")];
-
-const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[
-    optional_integer_input(
-        "from",
-        "Inclusive lower-bound sequence number. Mutually exclusive with exact.",
-    ),
-    optional_integer_input(
-        "to",
-        "Inclusive upper-bound sequence number. Mutually exclusive with exact.",
-    ),
-    optional_integer_input(
-        "exact",
-        "Return exactly one message by sequence number. Mutually exclusive with from/to.",
-    ),
-    optional_boolean_input(
-        "include_body",
-        "Include full body.md content for each returned message.",
-    ),
-];
-
-const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
-    optional_integer_input(
-        "from",
-        "Inclusive lower-bound sequence number. Mutually exclusive with exact.",
-    ),
-    optional_integer_input(
-        "to",
-        "Inclusive upper-bound sequence number. Mutually exclusive with exact.",
-    ),
-    optional_integer_input(
-        "exact",
-        "Return exactly one message by sequence number. Mutually exclusive with from/to.",
-    ),
-    optional_boolean_input(
-        "include_body",
-        "Include full body.md content for each returned message.",
-    ),
-];
-
-const ACK_INPUTS: &[ToolInputDescriptor] =
-    &[required_integer_input("sequence", "Inbox sequence number to acknowledge.")];
-
-const REPORT_INPUTS: &[ToolInputDescriptor] = &[
-    optional_string_input(
-        "head_commit",
-        "Optional git commit hash relevant to the blocker report.",
-    ),
-    optional_integer_input("reply_to", "Optional mailbox sequence number answered by this report."),
-    optional_string_input(
-        "body_text",
-        "Required when body_path is absent: inline Markdown content written into the report body.",
-    ),
-    optional_string_input(
-        "body_path",
-        "Required when body_text is absent: Markdown file to move into the report body.",
-    ),
-    optional_string_list_input(
-        "artifacts",
-        "Optional files to move into the report artifacts directory.",
-    ),
-];
-
-const COMMIT_INPUTS: &[ToolInputDescriptor] = &[
-    required_string_input("head_commit", "Git commit hash submitted by the worker."),
-    optional_string_input(
-        "body_text",
-        "Required when body_path is absent: inline Markdown content written into the commit bundle body.",
-    ),
-    optional_string_input(
-        "body_path",
-        "Required when body_text is absent: Markdown file to move into the commit bundle body.",
-    ),
-    optional_string_list_input(
-        "artifacts",
-        "Optional files to move into the commit bundle artifacts directory.",
-    ),
-];
 
 /// Return the worker MCP tool descriptors.
 pub fn descriptors() -> Vec<ToolDescriptor> {
@@ -103,27 +23,27 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         ToolDescriptor {
             name: "read_inbox",
             description: "Read messages sent by the orchestrator to this worker, optionally filtering to bundles after a given sequence number.",
-            inputs: READ_INBOX_INPUTS,
+            inputs: ToolInputSets::WORKER_MAILBOX_READ,
         },
         ToolDescriptor {
             name: "read_outbox",
             description: "Read messages sent by this worker to the orchestrator, optionally filtering to bundles after a given sequence number.",
-            inputs: READ_OUTBOX_INPUTS,
+            inputs: ToolInputSets::WORKER_MAILBOX_READ,
         },
         ToolDescriptor {
             name: "ack_inbox_message",
             description: "Acknowledge a message received from the orchestrator, marking the inbox bundle as consumed.",
-            inputs: ACK_INPUTS,
+            inputs: ToolInputSets::WORKER_ACK_INBOX,
         },
         ToolDescriptor {
             name: "send_report",
             description: "Send a blocker report to the orchestrator, signaling that the worker needs input before continuing; path-backed payload files are moved into .multorum storage.",
-            inputs: REPORT_INPUTS,
+            inputs: ToolInputSets::WORKER_REPORT,
         },
         ToolDescriptor {
             name: "send_commit",
             description: "Send a completed submission to the orchestrator for review; path-backed payload files are moved into .multorum storage.",
-            inputs: COMMIT_INPUTS,
+            inputs: ToolInputSets::WORKER_COMMIT,
         },
         ToolDescriptor {
             name: "get_status",

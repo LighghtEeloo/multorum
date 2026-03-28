@@ -1,31 +1,26 @@
 //! Worker MCP resource surface.
 
 use crate::mcp::dto::{ResourceDescriptor, ResourceTemplateDescriptor};
-use crate::methodology::{MethodologyDocument, MethodologyRole};
+use crate::methodology::MethodologyRole;
+
+use super::ResourceDescriptors;
 
 /// Return concrete worker MCP resource descriptors.
 pub fn descriptors() -> Vec<ResourceDescriptor> {
     vec![
-        ResourceDescriptor {
-            uri: MethodologyDocument::new(MethodologyRole::Worker).resource_uri(),
-            description: "High-level worker operating methodology shipped with Multorum.",
-            mime_type: "text/markdown",
-        },
-        ResourceDescriptor {
-            uri: "multorum://worker/contract",
-            description: "Immutable worker contract for the active perspective.",
-            mime_type: "application/json",
-        },
-        ResourceDescriptor {
-            uri: "multorum://worker/inbox",
-            description: "Inbox mailbox listing for the active worker.",
-            mime_type: "application/json",
-        },
-        ResourceDescriptor {
-            uri: "multorum://worker/status",
-            description: "Projected worker lifecycle status.",
-            mime_type: "application/json",
-        },
+        ResourceDescriptors::methodology(
+            MethodologyRole::Worker,
+            "High-level worker operating methodology shipped with Multorum.",
+        ),
+        ResourceDescriptors::json(
+            "multorum://worker/contract",
+            "Immutable worker contract for the active perspective.",
+        ),
+        ResourceDescriptors::json(
+            "multorum://worker/inbox",
+            "Inbox mailbox listing for the active worker.",
+        ),
+        ResourceDescriptors::json("multorum://worker/status", "Projected worker lifecycle status."),
     ]
 }
 

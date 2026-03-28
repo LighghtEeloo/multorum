@@ -3,9 +3,7 @@
 use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor};
 
 use super::{
-    optional_boolean_input, optional_integer_input, optional_string_input,
-    optional_string_list_input, required_integer_input, required_string_input,
-    required_string_list_input,
+    ToolInputSets, optional_boolean_input, required_string_input, required_string_list_input,
 };
 
 const SET_WORKING_DIRECTORY_INPUTS: &[ToolInputDescriptor] =
@@ -13,75 +11,6 @@ const SET_WORKING_DIRECTORY_INPUTS: &[ToolInputDescriptor] =
 
 const GET_WORKER_INPUTS: &[ToolInputDescriptor] =
     &[required_string_input("worker", "Runtime worker identity to inspect.")];
-
-const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
-    required_string_input("worker", "Runtime worker identity whose outbox should be read."),
-    optional_integer_input(
-        "from",
-        "Inclusive lower-bound sequence number. Mutually exclusive with exact.",
-    ),
-    optional_integer_input(
-        "to",
-        "Inclusive upper-bound sequence number. Mutually exclusive with exact.",
-    ),
-    optional_integer_input(
-        "exact",
-        "Return exactly one message by sequence number. Mutually exclusive with from/to.",
-    ),
-    optional_boolean_input(
-        "include_body",
-        "Include full body.md content for each returned message.",
-    ),
-];
-
-const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[
-    required_string_input("worker", "Runtime worker identity whose inbox should be read."),
-    optional_integer_input(
-        "from",
-        "Inclusive lower-bound sequence number. Mutually exclusive with exact.",
-    ),
-    optional_integer_input(
-        "to",
-        "Inclusive upper-bound sequence number. Mutually exclusive with exact.",
-    ),
-    optional_integer_input(
-        "exact",
-        "Return exactly one message by sequence number. Mutually exclusive with from/to.",
-    ),
-    optional_boolean_input(
-        "include_body",
-        "Include full body.md content for each returned message.",
-    ),
-];
-
-const ACK_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
-    required_string_input("worker", "Runtime worker identity whose outbox owns the message."),
-    required_integer_input("sequence", "Outbox sequence number to acknowledge."),
-];
-
-const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
-    required_string_input("perspective", "Compiled perspective to instantiate."),
-    optional_string_input(
-        "worker",
-        "Optional orchestrator-selected runtime worker identity. When omitted, Multorum allocates a default perspective-based identity.",
-    ),
-    optional_boolean_input(
-        "overwriting_worktree",
-        "Optional flag to replace an existing finalized workspace for the same explicit worker.",
-    ),
-    optional_string_input(
-        "body_text",
-        "Required when body_path is absent: inline Markdown content written into the created task bundle body.",
-    ),
-    optional_string_input(
-        "body_path",
-        "Required when body_text is absent: Markdown file to move into the created task bundle body.",
-    ),
-    optional_string_list_input(
-        "artifacts",
-        "Optional files to move into the created task bundle artifacts directory.",
-    ),
-];
 
 const VALIDATE_PERSPECTIVES_INPUTS: &[ToolInputDescriptor] = &[
     required_string_list_input(
@@ -96,45 +25,8 @@ const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[required_string_inp
     "Perspective whose blocked bidding group should move to HEAD.",
 )];
 
-const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
-    required_string_input("worker", "Runtime worker identity that owns the inbox."),
-    optional_integer_input("reply_to", "Optional mailbox sequence number answered by this bundle."),
-    optional_string_input(
-        "body_text",
-        "Required when body_path is absent: inline Markdown content written into the bundle body.",
-    ),
-    optional_string_input(
-        "body_path",
-        "Required when body_text is absent: Markdown file to move into the bundle body.",
-    ),
-    optional_string_list_input(
-        "artifacts",
-        "Optional files to move into the bundle artifacts directory.",
-    ),
-];
-
 const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] =
     &[required_string_input("worker", "Runtime worker identity to act on.")];
-
-const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
-    required_string_input("worker", "Runtime worker identity to merge."),
-    optional_string_list_input(
-        "skip_checks",
-        "Optional project-defined checks to skip based on trusted worker evidence.",
-    ),
-    optional_string_input(
-        "body_text",
-        "Required when body_path is absent: inline Markdown content written into the audit rationale body. Prefer self-contained findings instead of references to worker outbox paths.",
-    ),
-    optional_string_input(
-        "body_path",
-        "Required when body_text is absent: Markdown file to move into the audit rationale body. Prefer self-contained findings instead of references to worker outbox paths.",
-    ),
-    optional_string_list_input(
-        "artifacts",
-        "Optional files to move into the audit rationale artifacts directory.",
-    ),
-];
 
 /// Return the orchestrator MCP tool descriptors.
 pub fn descriptors() -> Vec<ToolDescriptor> {
@@ -177,37 +69,37 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         ToolDescriptor {
             name: "read_worker_outbox",
             description: "Read messages sent by a worker to the orchestrator, optionally filtering to bundles after a given sequence number.",
-            inputs: READ_OUTBOX_INPUTS,
+            inputs: ToolInputSets::ORCHESTRATOR_MAILBOX_READ,
         },
         ToolDescriptor {
             name: "read_worker_inbox",
             description: "Read messages sent by the orchestrator to a worker, optionally filtering to bundles after a given sequence number.",
-            inputs: READ_INBOX_INPUTS,
+            inputs: ToolInputSets::ORCHESTRATOR_MAILBOX_READ,
         },
         ToolDescriptor {
             name: "ack_worker_outbox_message",
             description: "Acknowledge a message received from a worker, marking the outbox bundle as consumed.",
-            inputs: ACK_OUTBOX_INPUTS,
+            inputs: ToolInputSets::ORCHESTRATOR_ACK_OUTBOX,
         },
         ToolDescriptor {
             name: "create_worker",
             description: "Create a worker workspace and send it an initial task bundle; path-backed payload files are moved into .multorum storage.",
-            inputs: CREATE_WORKER_INPUTS,
+            inputs: ToolInputSets::ORCHESTRATOR_TASK_BUNDLE,
         },
         ToolDescriptor {
             name: "resolve_worker",
             description: "Send a resolve bundle to a blocked worker, unblocking it to continue work; path-backed payload files are moved into .multorum storage.",
-            inputs: REPLY_BUNDLE_INPUTS,
+            inputs: ToolInputSets::ORCHESTRATOR_REPLY_BUNDLE,
         },
         ToolDescriptor {
             name: "hint_worker",
             description: "Send an advisory hint bundle to an active worker without changing its lifecycle state; path-backed payload files are moved into .multorum storage.",
-            inputs: REPLY_BUNDLE_INPUTS,
+            inputs: ToolInputSets::ORCHESTRATOR_REPLY_BUNDLE,
         },
         ToolDescriptor {
             name: "revise_worker",
             description: "Send a revision request bundle to a committed worker, returning it to active state; path-backed payload files are moved into .multorum storage.",
-            inputs: REPLY_BUNDLE_INPUTS,
+            inputs: ToolInputSets::ORCHESTRATOR_REPLY_BUNDLE,
         },
         ToolDescriptor {
             name: "discard_worker",
@@ -222,7 +114,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         ToolDescriptor {
             name: "merge_worker",
             description: "Run the pre-merge pipeline and merge a worker submission. Audit rationale should be self-contained because worker runtime state may be deleted after merge confirmation.",
-            inputs: MERGE_WORKER_INPUTS,
+            inputs: ToolInputSets::ORCHESTRATOR_MERGE,
         },
         ToolDescriptor {
             name: "get_status",
