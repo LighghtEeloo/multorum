@@ -191,11 +191,7 @@ impl GitVcs {
                 let end = if let Some(offset) = existing[begin..].find(HOOK_GUARD_END) {
                     let raw = begin + offset + HOOK_GUARD_END.len();
                     // Consume the trailing newline if present.
-                    if existing.as_bytes().get(raw) == Some(&b'\n') {
-                        raw + 1
-                    } else {
-                        raw
-                    }
+                    if existing.as_bytes().get(raw) == Some(&b'\n') { raw + 1 } else { raw }
                 } else {
                     // Begin marker without matching end — replace to EOF.
                     existing.len()
