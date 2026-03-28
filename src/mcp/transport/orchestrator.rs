@@ -112,6 +112,11 @@ impl OrchestratorHandler {
                 let after = optional_u64(&args, "after").map(crate::runtime::Sequence);
                 dispatch_tool(service.read_outbox(worker_id, after))
             }
+            | "read_worker_inbox" => {
+                let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
+                let after = optional_u64(&args, "after").map(crate::runtime::Sequence);
+                dispatch_tool(service.read_inbox(worker_id, after))
+            }
             | "ack_worker_outbox_message" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let sequence = required_u64(&args, "sequence")?;

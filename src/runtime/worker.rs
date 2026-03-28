@@ -25,8 +25,11 @@ pub trait WorkerService {
     /// Load the worker contract view.
     fn contract(&self) -> Result<WorkerContractView>;
 
-    /// Read inbox messages after the provided sequence number.
+    /// Read messages sent by the orchestrator to this worker.
     fn read_inbox(&self, after: Option<Sequence>) -> Result<Vec<MailboxMessageView>>;
+
+    /// Read messages sent by this worker to the orchestrator.
+    fn read_outbox(&self, after: Option<Sequence>) -> Result<Vec<MailboxMessageView>>;
 
     /// Acknowledge an inbox message.
     fn ack_inbox(&self, sequence: Sequence) -> Result<AckRef>;
@@ -158,6 +161,22 @@ impl WorkerService for FsWorkerService {
             &self.worktree_root,
             &contract.worker_id,
             MailboxDirection::Inbox,
+            after,
+        )
+    }
+
+    fn read_outbox(&self, after: Option<Sequence>) -> Result<Vec<MailboxMessageView>> {
+        let contract = self.contract_view()?;
+        tracing::trace!(
+            worktree_root = %self.worktree_root.display(),
+            worker_id = %contract.worker_id,
+            after_sequence = ?after.map(|s| s.0),
+            "reading worker outbox"
+        );
+        self.fs.list_mailbox_messages(
+            &self.worktree_root,
+            &contract.worker_id,
+            MailboxDirection::Outbox,
             after,
         )
     }

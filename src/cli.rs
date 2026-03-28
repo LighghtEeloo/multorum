@@ -367,9 +367,19 @@ pub enum WorkerCommand {
         worker_id: WorkerId,
     },
 
-    /// List outbox messages for one worker after an optional sequence.
+    /// List messages sent by a worker to the orchestrator.
     Outbox {
         /// Worker identity whose outbox should be read.
+        worker_id: WorkerId,
+
+        /// Only return messages after this sequence number.
+        #[arg(long = "after", value_name = "SEQUENCE")]
+        after: Option<u64>,
+    },
+
+    /// List messages sent by the orchestrator to a worker.
+    Inbox {
+        /// Worker identity whose inbox should be read.
         worker_id: WorkerId,
 
         /// Only return messages after this sequence number.
@@ -471,8 +481,15 @@ pub enum LocalCommand {
     /// Return the projected worker status for the current worktree.
     Status,
 
-    /// List inbox messages after an optional sequence.
+    /// List messages sent by the orchestrator to this worker.
     Inbox {
+        /// Only return messages after this sequence number.
+        #[arg(long = "after", value_name = "SEQUENCE")]
+        after: Option<u64>,
+    },
+
+    /// List messages sent by this worker to the orchestrator.
+    Outbox {
         /// Only return messages after this sequence number.
         #[arg(long = "after", value_name = "SEQUENCE")]
         after: Option<u64>,
@@ -654,6 +671,12 @@ impl WorkerCommand {
                     .read_outbox(worker_id, after.map(runtime::Sequence))?;
                 println!("{result:#?}");
             }
+            | Self::Inbox { worker_id, after } => {
+                let result = services
+                    .orchestrator()?
+                    .read_inbox(worker_id, after.map(runtime::Sequence))?;
+                println!("{result:#?}");
+            }
             | Self::Ack { worker_id, sequence } => {
                 let result =
                     services.orchestrator()?.ack_outbox(worker_id, runtime::Sequence(sequence))?;
@@ -719,6 +742,10 @@ impl LocalCommand {
             }
             | Self::Inbox { after } => {
                 let result = worker.read_inbox(after.map(runtime::Sequence))?;
+                println!("{result:#?}");
+            }
+            | Self::Outbox { after } => {
+                let result = worker.read_outbox(after.map(runtime::Sequence))?;
                 println!("{result:#?}");
             }
             | Self::Ack { sequence } => {

@@ -110,8 +110,13 @@ pub trait OrchestratorService {
     /// Load one worker detail view.
     fn get_worker(&self, worker_id: WorkerId) -> Result<WorkerDetail>;
 
-    /// Read one worker outbox after the provided sequence number.
+    /// Read messages sent by a worker to the orchestrator.
     fn read_outbox(
+        &self, worker_id: WorkerId, after: Option<Sequence>,
+    ) -> Result<Vec<MailboxMessageView>>;
+
+    /// Read messages sent by the orchestrator to a worker.
+    fn read_inbox(
         &self, worker_id: WorkerId, after: Option<Sequence>,
     ) -> Result<Vec<MailboxMessageView>>;
 
@@ -497,6 +502,21 @@ impl OrchestratorService for FsOrchestratorService {
             &worker.worktree_path,
             &worker.worker_id,
             MailboxDirection::Outbox,
+            after,
+        )
+    }
+
+    fn read_inbox(
+        &self, worker_id: WorkerId, after: Option<Sequence>,
+    ) -> Result<Vec<MailboxMessageView>> {
+        let state = self.fs.load_state()?;
+        let (_, worker) = state
+            .find_worker(&worker_id)
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+        self.fs.list_mailbox_messages(
+            &worker.worktree_path,
+            &worker.worker_id,
+            MailboxDirection::Inbox,
             after,
         )
     }

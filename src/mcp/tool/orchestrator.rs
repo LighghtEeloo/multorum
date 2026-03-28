@@ -24,6 +24,14 @@ const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
     ),
 ];
 
+const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[
+    required_string_input("worker", "Runtime worker identity whose inbox should be read."),
+    optional_integer_input(
+        "after",
+        "Optional sequence number; only inbox bundles after it are returned.",
+    ),
+];
+
 const ACK_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
     required_string_input("worker", "Runtime worker identity whose outbox owns the message."),
     required_integer_input("sequence", "Outbox sequence number to acknowledge."),
@@ -143,32 +151,37 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "read_worker_outbox",
-            description: "List one worker outbox after an optional sequence number.",
+            description: "Read messages sent by a worker to the orchestrator, optionally filtering to bundles after a given sequence number.",
             inputs: READ_OUTBOX_INPUTS,
         },
         ToolDescriptor {
+            name: "read_worker_inbox",
+            description: "Read messages sent by the orchestrator to a worker, optionally filtering to bundles after a given sequence number.",
+            inputs: READ_INBOX_INPUTS,
+        },
+        ToolDescriptor {
             name: "ack_worker_outbox_message",
-            description: "Acknowledge a consumed worker outbox bundle.",
+            description: "Acknowledge a message received from a worker, marking the outbox bundle as consumed.",
             inputs: ACK_OUTBOX_INPUTS,
         },
         ToolDescriptor {
             name: "create_worker",
-            description: "Create a worker workspace and create its initial task bundle; path-backed payload files are moved into .multorum storage.",
+            description: "Create a worker workspace and send it an initial task bundle; path-backed payload files are moved into .multorum storage.",
             inputs: CREATE_WORKER_INPUTS,
         },
         ToolDescriptor {
             name: "resolve_worker",
-            description: "Publish a resolve bundle to a blocked worker inbox; path-backed payload files are moved into .multorum storage.",
+            description: "Send a resolve bundle to a blocked worker, unblocking it to continue work; path-backed payload files are moved into .multorum storage.",
             inputs: REPLY_BUNDLE_INPUTS,
         },
         ToolDescriptor {
             name: "hint_worker",
-            description: "Publish an advisory hint bundle to an active worker inbox; path-backed payload files are moved into .multorum storage.",
+            description: "Send an advisory hint bundle to an active worker without changing its lifecycle state; path-backed payload files are moved into .multorum storage.",
             inputs: REPLY_BUNDLE_INPUTS,
         },
         ToolDescriptor {
             name: "revise_worker",
-            description: "Publish a revise bundle to a committed worker inbox; path-backed payload files are moved into .multorum storage.",
+            description: "Send a revision request bundle to a committed worker, returning it to active state; path-backed payload files are moved into .multorum storage.",
             inputs: REPLY_BUNDLE_INPUTS,
         },
         ToolDescriptor {

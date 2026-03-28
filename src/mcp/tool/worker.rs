@@ -17,6 +17,11 @@ const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[optional_integer_input(
     "Optional sequence number; only inbox bundles after it are returned.",
 )];
 
+const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[optional_integer_input(
+    "after",
+    "Optional sequence number; only outbox bundles after it are returned.",
+)];
+
 const ACK_INPUTS: &[ToolInputDescriptor] =
     &[required_integer_input("sequence", "Inbox sequence number to acknowledge.")];
 
@@ -68,22 +73,27 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "read_inbox",
-            description: "List inbox bundles after an optional sequence number.",
+            description: "Read messages sent by the orchestrator to this worker, optionally filtering to bundles after a given sequence number.",
             inputs: READ_INBOX_INPUTS,
         },
         ToolDescriptor {
+            name: "read_outbox",
+            description: "Read messages sent by this worker to the orchestrator, optionally filtering to bundles after a given sequence number.",
+            inputs: READ_OUTBOX_INPUTS,
+        },
+        ToolDescriptor {
             name: "ack_inbox_message",
-            description: "Acknowledge a consumed inbox bundle.",
+            description: "Acknowledge a message received from the orchestrator, marking the inbox bundle as consumed.",
             inputs: ACK_INPUTS,
         },
         ToolDescriptor {
             name: "send_report",
-            description: "Publish a worker blocker report bundle to the outbox; path-backed payload files are moved into .multorum storage.",
+            description: "Send a blocker report to the orchestrator, signaling that the worker needs input before continuing; path-backed payload files are moved into .multorum storage.",
             inputs: REPORT_INPUTS,
         },
         ToolDescriptor {
             name: "send_commit",
-            description: "Publish a completed worker submission bundle to the outbox; path-backed payload files are moved into .multorum storage.",
+            description: "Send a completed submission to the orchestrator for review; path-backed payload files are moved into .multorum storage.",
             inputs: COMMIT_INPUTS,
         },
         ToolDescriptor {

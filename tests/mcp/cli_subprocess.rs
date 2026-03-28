@@ -122,7 +122,7 @@ async fn cli_orchestrator_list_tools() {
     let response = read_jsonrpc(&mut stdout).await;
     assert_eq!(response["id"], 2);
     let tools = response["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 17);
+    assert_eq!(tools.len(), 18);
 
     let list_resources = json!({
         "jsonrpc": "2.0",
@@ -175,7 +175,7 @@ async fn cli_worker_invalid_cwd_defers_error_until_tool_call() {
     let response = read_jsonrpc(&mut stdout).await;
     assert_eq!(response["id"], 2);
     let tools = response["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 7);
+    assert_eq!(tools.len(), 8);
 
     let read_methodology = json!({
         "jsonrpc": "2.0",

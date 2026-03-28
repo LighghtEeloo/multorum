@@ -93,6 +93,10 @@ impl WorkerHandler {
                 let after = optional_u64(&args, "after").map(Sequence);
                 dispatch_tool(service.read_inbox(after))
             }
+            | "read_outbox" => {
+                let after = optional_u64(&args, "after").map(Sequence);
+                dispatch_tool(service.read_outbox(after))
+            }
             | "ack_inbox_message" => {
                 let sequence = required_u64(&args, "sequence")?;
                 dispatch_tool(service.ack_inbox(Sequence(sequence)))

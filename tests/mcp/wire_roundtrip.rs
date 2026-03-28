@@ -33,7 +33,7 @@ async fn orchestrator_wire_server_info() {
 async fn orchestrator_wire_list_tools() {
     let (_dir, client) = orchestrator_duplex().await;
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 17);
+    assert_eq!(tools.len(), 18);
     client.cancel().await.unwrap();
 }
 
@@ -105,7 +105,7 @@ async fn worker_wire_list_tools() {
     let (_, worktree) = create_worker_runtime(&svc);
     let client = worker_duplex(&worktree).await;
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 7);
+    assert_eq!(tools.len(), 8);
     client.cancel().await.unwrap();
 }
 

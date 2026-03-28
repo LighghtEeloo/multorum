@@ -34,7 +34,7 @@ fn orchestrator_server_info() {
 
 #[test]
 fn orchestrator_tool_descriptor_count() {
-    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 17);
+    assert_eq!(multorum::mcp::tool::orchestrator::descriptors().len(), 18);
 }
 
 #[test]
@@ -664,7 +664,7 @@ fn worker_server_info() {
 
 #[test]
 fn worker_tool_descriptor_count() {
-    assert_eq!(multorum::mcp::tool::worker::descriptors().len(), 7);
+    assert_eq!(multorum::mcp::tool::worker::descriptors().len(), 8);
 }
 
 #[test]
