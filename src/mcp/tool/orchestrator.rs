@@ -71,11 +71,11 @@ const CREATE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ),
     optional_string_input(
         "body_text",
-        "Optional inline Markdown content written into the created task bundle body.",
+        "Required when body_path is absent: inline Markdown content written into the created task bundle body.",
     ),
     optional_string_input(
         "body_path",
-        "Optional Markdown file to move into the created task bundle body.",
+        "Required when body_text is absent: Markdown file to move into the created task bundle body.",
     ),
     optional_string_list_input(
         "artifacts",
@@ -101,9 +101,12 @@ const REPLY_BUNDLE_INPUTS: &[ToolInputDescriptor] = &[
     optional_integer_input("reply_to", "Optional mailbox sequence number answered by this bundle."),
     optional_string_input(
         "body_text",
-        "Optional inline Markdown content written into the bundle body.",
+        "Required when body_path is absent: inline Markdown content written into the bundle body.",
     ),
-    optional_string_input("body_path", "Optional Markdown file to move into the bundle body."),
+    optional_string_input(
+        "body_path",
+        "Required when body_text is absent: Markdown file to move into the bundle body.",
+    ),
     optional_string_list_input(
         "artifacts",
         "Optional files to move into the bundle artifacts directory.",
@@ -121,11 +124,11 @@ const MERGE_WORKER_INPUTS: &[ToolInputDescriptor] = &[
     ),
     optional_string_input(
         "body_text",
-        "Optional inline Markdown content written into the audit rationale body. Prefer self-contained findings instead of references to worker outbox paths.",
+        "Required when body_path is absent: inline Markdown content written into the audit rationale body. Prefer self-contained findings instead of references to worker outbox paths.",
     ),
     optional_string_input(
         "body_path",
-        "Optional Markdown file to move into the audit rationale body. Prefer self-contained findings instead of references to worker outbox paths.",
+        "Required when body_text is absent: Markdown file to move into the audit rationale body. Prefer self-contained findings instead of references to worker outbox paths.",
     ),
     optional_string_list_input(
         "artifacts",

@@ -17,11 +17,11 @@ use crate::methodology::{MethodologyDocument, MethodologyRole};
 use crate::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService, WorkerId};
 
 use super::{
-    DeferredService, ServiceState, args_or_empty, dispatch_tool, extract_payload, extract_reply,
-    extract_sequence_filter, list_resource_templates_result, list_resources_result,
-    list_tools_result, mcp_to_resource_error, optional_bool, optional_str, optional_string_list,
-    required_str, required_u64, resource_success, resource_text_success, runtime_to_resource_error,
-    server_info, tool_error_result, validate_tool_arguments,
+    DeferredService, ServiceState, args_or_empty, dispatch_tool, extract_reply,
+    extract_required_payload, extract_sequence_filter, list_resource_templates_result,
+    list_resources_result, list_tools_result, mcp_to_resource_error, optional_bool, optional_str,
+    optional_string_list, required_str, required_u64, resource_success, resource_text_success,
+    runtime_to_resource_error, server_info, tool_error_result, validate_tool_arguments,
 };
 
 /// MCP server handler for the orchestrator surface.
@@ -133,10 +133,7 @@ impl OrchestratorHandler {
                 if optional_bool(&args, "overwriting_worktree").unwrap_or(false) {
                     request = request.with_overwriting_worktree();
                 }
-                let payload = extract_payload(&args);
-                if !payload.is_empty() {
-                    request = request.with_task(payload);
-                }
+                request = request.with_task(extract_required_payload(&args)?);
                 dispatch_tool(service.create_worker(request))
             }
             | "resolve_worker" => {
@@ -144,7 +141,7 @@ impl OrchestratorHandler {
                 dispatch_tool(service.resolve_worker(
                     worker_id,
                     extract_reply(&args),
-                    extract_payload(&args),
+                    extract_required_payload(&args)?,
                 ))
             }
             | "hint_worker" => {
@@ -152,7 +149,7 @@ impl OrchestratorHandler {
                 dispatch_tool(service.hint_worker(
                     worker_id,
                     extract_reply(&args),
-                    extract_payload(&args),
+                    extract_required_payload(&args)?,
                 ))
             }
             | "revise_worker" => {
@@ -160,7 +157,7 @@ impl OrchestratorHandler {
                 dispatch_tool(service.revise_worker(
                     worker_id,
                     extract_reply(&args),
-                    extract_payload(&args),
+                    extract_required_payload(&args)?,
                 ))
             }
             | "discard_worker" => {
@@ -174,7 +171,7 @@ impl OrchestratorHandler {
             | "merge_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let skip_checks = optional_string_list(&args, "skip_checks");
-                let audit_payload = extract_payload(&args);
+                let audit_payload = extract_required_payload(&args)?;
                 dispatch_tool(service.merge_worker(worker_id, skip_checks, audit_payload))
             }
             | "get_status" => dispatch_tool(service.status()),

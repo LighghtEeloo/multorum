@@ -86,7 +86,11 @@ fn string_where_boolean_expected() {
 
     let result = handler.dispatch(
         "create_worker",
-        json_args(json!({"perspective": "AuthImplementor", "overwriting_worktree": "yes"})),
+        json_args(json!({
+            "perspective": "AuthImplementor",
+            "overwriting_worktree": "yes",
+            "body_text": "Bootstrap the worker.",
+        })),
     );
     assert!(result.is_err(), "optional boolean with wrong type should be a protocol error");
 }
@@ -101,7 +105,11 @@ fn string_list_with_non_strings() {
     handler
         .dispatch(
             "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
+            json_args(json!({
+                "perspective": "AuthImplementor",
+                "worker": "w1",
+                "body_text": "Bootstrap the worker.",
+            })),
         )
         .unwrap();
 
@@ -133,4 +141,25 @@ fn empty_string_worker() {
     // parsing, producing a protocol error (invalid_params).
     let result = handler.dispatch("get_worker", json_args(json!({"worker": ""})));
     assert!(result.is_err(), "empty worker should be a protocol error");
+}
+
+#[test]
+fn create_worker_requires_body_source() {
+    let (_dir, svc) = setup_repo();
+    let handler = OrchestratorHandler::with_service(svc);
+
+    let result =
+        handler.dispatch("create_worker", json_args(json!({"perspective": "AuthImplementor"})));
+    assert!(result.is_err(), "missing body source should be a protocol error");
+}
+
+#[test]
+fn send_commit_requires_body_source() {
+    let (_dir, svc) = setup_repo();
+    let (_, worktree) = create_worker_runtime(&svc);
+    let worker_svc = FsWorkerService::new(&worktree).unwrap();
+    let handler = WorkerHandler::with_service(worker_svc);
+
+    let result = handler.dispatch("send_commit", json_args(json!({"head_commit": "deadbeef"})));
+    assert!(result.is_err(), "missing body source should be a protocol error");
 }

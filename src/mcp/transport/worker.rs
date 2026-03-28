@@ -17,11 +17,11 @@ use crate::methodology::{MethodologyDocument, MethodologyRole};
 use crate::runtime::{FsWorkerService, Sequence, WorkerService};
 
 use super::{
-    DeferredService, ServiceState, args_or_empty, dispatch_tool, extract_payload, extract_reply,
-    extract_sequence_filter, list_resource_templates_result, list_resources_result,
-    list_tools_result, mcp_to_resource_error, optional_bool, optional_str, required_str,
-    required_u64, resource_success, resource_text_success, runtime_to_resource_error, server_info,
-    tool_error_result, validate_tool_arguments,
+    DeferredService, ServiceState, args_or_empty, dispatch_tool, extract_reply,
+    extract_required_payload, extract_sequence_filter, list_resource_templates_result,
+    list_resources_result, list_tools_result, mcp_to_resource_error, optional_bool, optional_str,
+    required_str, required_u64, resource_success, resource_text_success, runtime_to_resource_error,
+    server_info, tool_error_result, validate_tool_arguments,
 };
 
 /// MCP server handler for the worker surface.
@@ -108,12 +108,12 @@ impl WorkerHandler {
                 dispatch_tool(service.send_report(
                     head_commit,
                     extract_reply(&args),
-                    extract_payload(&args),
+                    extract_required_payload(&args)?,
                 ))
             }
             | "send_commit" => {
                 let head_commit = required_str(&args, "head_commit")?.to_string();
-                dispatch_tool(service.send_commit(head_commit, extract_payload(&args)))
+                dispatch_tool(service.send_commit(head_commit, extract_required_payload(&args)?))
             }
             | "get_status" => dispatch_tool(service.status()),
             | _ => Err(ErrorData::invalid_params(format!("unknown tool: {name}"), None)),

@@ -20,6 +20,34 @@ use crate::support::result::{
 };
 use crate::support::worker::{create_worker_runtime, perspective};
 
+/// Build MCP arguments for `create_worker` with the required body content.
+fn create_worker_args(
+    perspective: &str, worker: Option<&str>,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut args =
+        json_args(json!({"perspective": perspective, "body_text": "Bootstrap the worker."}));
+    if let Some(worker) = worker {
+        args.insert("worker".to_string(), json!(worker));
+    }
+    args
+}
+
+/// Build MCP arguments for `send_commit` with the required body content.
+fn send_commit_args(head_commit: &str) -> serde_json::Map<String, serde_json::Value> {
+    json_args(json!({
+        "head_commit": head_commit,
+        "body_text": "Implemented the requested change.",
+    }))
+}
+
+/// Build MCP arguments for `merge_worker` with the required body content.
+fn merge_worker_args(worker: &str) -> serde_json::Map<String, serde_json::Value> {
+    json_args(json!({
+        "worker": worker,
+        "body_text": "Merged after reviewing the worker submission.",
+    }))
+}
+
 // ===========================================================================
 // Orchestrator handler -- server info and descriptor counts
 // ===========================================================================
@@ -130,9 +158,8 @@ fn orchestrator_create_worker() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::with_service(svc);
 
-    let result = handler
-        .dispatch("create_worker", json_args(json!({"perspective": "AuthImplementor"})))
-        .unwrap();
+    let result =
+        handler.dispatch("create_worker", create_worker_args("AuthImplementor", None)).unwrap();
     assert_tool_success(&result);
     let json = tool_json(&result);
     assert_eq!(json["perspective"], "AuthImplementor");
@@ -147,10 +174,7 @@ fn orchestrator_create_worker_with_explicit_id() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let result = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "custom-1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("custom-1")))
         .unwrap();
     assert_tool_success(&result);
     assert_eq!(tool_json(&result)["worker"], "custom-1");
@@ -162,10 +186,7 @@ fn orchestrator_get_worker() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1")))
         .unwrap();
     assert_tool_success(&create);
 
@@ -182,10 +203,7 @@ fn orchestrator_read_worker_outbox() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1")))
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
@@ -215,10 +233,7 @@ fn orchestrator_ack_worker_outbox_message() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1")))
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
@@ -251,9 +266,7 @@ fn orchestrator_list_workers_after_create() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::with_service(svc);
 
-    handler
-        .dispatch("create_worker", json_args(json!({"perspective": "AuthImplementor"})))
-        .unwrap();
+    handler.dispatch("create_worker", create_worker_args("AuthImplementor", None)).unwrap();
 
     let result = handler.dispatch("list_workers", empty_args()).unwrap();
     assert_tool_success(&result);
@@ -265,12 +278,7 @@ fn orchestrator_discard_worker() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::with_service(svc);
 
-    handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
-        .unwrap();
+    handler.dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1"))).unwrap();
 
     let result = handler.dispatch("discard_worker", json_args(json!({"worker": "w1"}))).unwrap();
     assert_tool_success(&result);
@@ -281,12 +289,7 @@ fn orchestrator_delete_worker_after_discard() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::with_service(svc);
 
-    handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
-        .unwrap();
+    handler.dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1"))).unwrap();
     handler.dispatch("discard_worker", json_args(json!({"worker": "w1"}))).unwrap();
 
     let result = handler.dispatch("delete_worker", json_args(json!({"worker": "w1"}))).unwrap();
@@ -301,10 +304,7 @@ fn orchestrator_resolve_worker() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1")))
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
@@ -340,10 +340,7 @@ fn orchestrator_hint_worker() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1")))
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
@@ -375,10 +372,7 @@ fn orchestrator_revise_worker() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1")))
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
@@ -410,10 +404,7 @@ fn orchestrator_merge_worker() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1")))
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
@@ -424,7 +415,7 @@ fn orchestrator_merge_worker() {
     let head = git(Path::new(&worktree), &["rev-parse", "HEAD"]);
     worker_svc.send_commit(head, BundlePayload::default()).unwrap();
 
-    let result = handler.dispatch("merge_worker", json_args(json!({"worker": "w1"}))).unwrap();
+    let result = handler.dispatch("merge_worker", merge_worker_args("w1")).unwrap();
     assert_tool_success(&result);
     let merge = tool_json(&result);
     assert_eq!(merge["state"], "merged");
@@ -467,10 +458,7 @@ fn orchestrator_hint_worker_rejected_for_blocked_worker() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1")))
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
@@ -493,8 +481,7 @@ fn orchestrator_hint_worker_rejected_for_blocked_worker() {
 fn orchestrator_invalid_perspective_returns_protocol_error() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::with_service(svc);
-    let result =
-        handler.dispatch("create_worker", json_args(json!({"perspective": "lowercase_bad"})));
+    let result = handler.dispatch("create_worker", create_worker_args("lowercase_bad", None));
     assert!(result.is_err(), "invalid perspective name should return protocol-level error");
 }
 
@@ -503,12 +490,7 @@ fn orchestrator_delete_active_worker_returns_tool_error() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::with_service(svc);
 
-    handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
-        .unwrap();
+    handler.dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1"))).unwrap();
 
     let result = handler.dispatch("delete_worker", json_args(json!({"worker": "w1"}))).unwrap();
     assert_tool_error(&result);
@@ -561,12 +543,7 @@ fn orchestrator_resource_worker_detail() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::with_service(svc);
 
-    handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
-        .unwrap();
+    handler.dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1"))).unwrap();
 
     let result = handler.read("multorum://orchestrator/workers/w1").unwrap();
     let detail = resource_json(&result);
@@ -579,12 +556,7 @@ fn orchestrator_resource_unimplemented_returns_error() {
     let (_dir, svc) = setup_repo();
     let handler = OrchestratorHandler::with_service(svc);
 
-    handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
-        .unwrap();
+    handler.dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1"))).unwrap();
 
     for sub in &["contract", "transcript", "checks"] {
         let uri = format!("multorum://orchestrator/workers/w1/{sub}");
@@ -599,10 +571,7 @@ fn orchestrator_resource_worker_outbox() {
     let handler = OrchestratorHandler::with_service(svc);
 
     let create = handler
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("w1")))
         .unwrap();
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
@@ -829,7 +798,7 @@ fn worker_send_commit() {
     git(&worktree, &["commit", "-m", "incr: update owned"]);
     let head = git(&worktree, &["rev-parse", "HEAD"]);
 
-    let result = handler.dispatch("send_commit", json_args(json!({"head_commit": head}))).unwrap();
+    let result = handler.dispatch("send_commit", send_commit_args(&head)).unwrap();
     assert_tool_success(&result);
 }
 
@@ -913,8 +882,15 @@ fn worker_invalid_commit_returns_tool_error() {
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
     let handler = WorkerHandler::with_service(worker_svc);
-    let result =
-        handler.dispatch("send_commit", json_args(json!({"head_commit": "deadbeef"}))).unwrap();
+    let result = handler
+        .dispatch(
+            "send_commit",
+            json_args(json!({
+                "head_commit": "deadbeef",
+                "body_text": "Attempted to publish a commit.",
+            })),
+        )
+        .unwrap();
     assert_tool_error(&result);
 }
 
@@ -1028,10 +1004,7 @@ fn full_workflow_create_commit_merge_via_mcp() {
     let orch = OrchestratorHandler::with_service(svc);
 
     let create = orch
-        .dispatch(
-            "create_worker",
-            json_args(json!({"perspective": "AuthImplementor", "worker": "mcp-w1"})),
-        )
+        .dispatch("create_worker", create_worker_args("AuthImplementor", Some("mcp-w1")))
         .unwrap();
     assert_tool_success(&create);
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
@@ -1051,13 +1024,13 @@ fn full_workflow_create_commit_merge_via_mcp() {
     git(Path::new(&worktree), &["commit", "-m", "incr: answer to everything"]);
     let head = git(Path::new(&worktree), &["rev-parse", "HEAD"]);
 
-    let commit = worker.dispatch("send_commit", json_args(json!({"head_commit": head}))).unwrap();
+    let commit = worker.dispatch("send_commit", send_commit_args(&head)).unwrap();
     assert_tool_success(&commit);
 
     let status = worker.dispatch("get_status", empty_args()).unwrap();
     assert_eq!(tool_json(&status)["state"], "committed");
 
-    let merge = orch.dispatch("merge_worker", json_args(json!({"worker": "mcp-w1"}))).unwrap();
+    let merge = orch.dispatch("merge_worker", merge_worker_args("mcp-w1")).unwrap();
     assert_tool_success(&merge);
     assert_eq!(tool_json(&merge)["state"], "merged");
 

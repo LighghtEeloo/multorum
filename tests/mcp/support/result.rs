@@ -11,6 +11,35 @@ pub fn json_args(value: Value) -> serde_json::Map<String, Value> {
     value.as_object().unwrap().clone()
 }
 
+/// Build `create_worker` arguments with the required body text.
+pub fn create_worker_args(
+    perspective: &str, worker: Option<&str>,
+) -> serde_json::Map<String, Value> {
+    let mut args = json_args(
+        serde_json::json!({"perspective": perspective, "body_text": "Bootstrap the worker."}),
+    );
+    if let Some(worker) = worker {
+        args.insert("worker".to_string(), Value::String(worker.to_owned()));
+    }
+    args
+}
+
+/// Build `send_commit` arguments with the required body text.
+pub fn send_commit_args(head_commit: &str) -> serde_json::Map<String, Value> {
+    json_args(serde_json::json!({
+        "head_commit": head_commit,
+        "body_text": "Implemented the requested change.",
+    }))
+}
+
+/// Build `merge_worker` arguments with the required body text.
+pub fn merge_worker_args(worker: &str) -> serde_json::Map<String, Value> {
+    json_args(serde_json::json!({
+        "worker": worker,
+        "body_text": "Merged after reviewing the worker submission.",
+    }))
+}
+
 /// Extract the text payload from a successful tool call result.
 pub fn tool_text(result: &CallToolResult) -> &str {
     assert!(!result.content.is_empty(), "tool result has no content");

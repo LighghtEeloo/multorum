@@ -136,13 +136,15 @@ impl CliServices {
 
 /// Shared payload options for commands that publish mailbox bundles.
 ///
-/// `--body-text` and `--body-path` are mutually exclusive.
+/// CLI bundle-publishing commands require exactly one body source so
+/// every user-authored bundle carries explicit primary content.
 #[derive(Debug, Clone, Args)]
+#[group(id = "bundle_body", required = true, multiple = false)]
 pub struct BundlePayloadArgs {
     /// Inline Markdown body text for the bundle's `body.md`.
     ///
     /// Mutually exclusive with `--body-path`.
-    #[arg(long = "body-text", value_name = "TEXT", conflicts_with = "body_path")]
+    #[arg(long = "body-text", value_name = "TEXT", group = "bundle_body")]
     pub body_text: Option<String>,
 
     /// Existing Markdown file to move into the bundle's `body.md`.
@@ -150,7 +152,7 @@ pub struct BundlePayloadArgs {
     /// On successful publication, Multorum consumes the path and stores
     /// the moved file under its managed `.multorum/` runtime state.
     /// Mutually exclusive with `--body-text`.
-    #[arg(long = "body-path", value_name = "FILE", conflicts_with = "body_text")]
+    #[arg(long = "body-path", value_name = "FILE", group = "bundle_body")]
     pub body_path: Option<PathBuf>,
 
     /// Files to move under the bundle's `artifacts/` directory.
@@ -385,7 +387,7 @@ pub enum WorkerCommand {
         #[arg(long = "overwriting-worktree")]
         overwriting_worktree: bool,
 
-        /// Optional payload for the initial `task` bundle.
+        /// Payload for the initial `task` bundle.
         #[command(flatten)]
         payload: BundlePayloadArgs,
     },
@@ -439,7 +441,7 @@ pub enum WorkerCommand {
         /// Worker identity to resolve.
         worker_id: WorkerId,
 
-        /// Optional payload for the `resolve` bundle.
+        /// Payload for the `resolve` bundle.
         #[command(flatten)]
         payload: BundlePayloadArgs,
 
@@ -456,7 +458,7 @@ pub enum WorkerCommand {
         /// Worker identity to notify.
         worker_id: WorkerId,
 
-        /// Optional payload for the `hint` bundle.
+        /// Payload for the `hint` bundle.
         #[command(flatten)]
         payload: BundlePayloadArgs,
 
@@ -470,7 +472,7 @@ pub enum WorkerCommand {
         /// Worker identity to revise.
         worker_id: WorkerId,
 
-        /// Optional payload for the `revise` bundle.
+        /// Payload for the `revise` bundle.
         #[command(flatten)]
         payload: BundlePayloadArgs,
 
@@ -500,7 +502,7 @@ pub enum WorkerCommand {
         #[arg(long = "skip-check", value_name = "CHECK")]
         skip_checks: Vec<String>,
 
-        /// Optional audit rationale payload.
+        /// Audit rationale payload.
         ///
         /// Prefer self-contained findings in this payload instead of
         /// references to worker outbox paths, because worker runtime
@@ -555,7 +557,7 @@ pub enum LocalCommand {
         #[command(flatten)]
         reply: ReplyReferenceArgs,
 
-        /// Optional payload for the `report` bundle.
+        /// Payload for the `report` bundle.
         #[command(flatten)]
         payload: BundlePayloadArgs,
     },
@@ -566,7 +568,7 @@ pub enum LocalCommand {
         #[arg(long = "head-commit", value_name = "COMMIT")]
         head_commit: String,
 
-        /// Optional payload for the `commit` bundle.
+        /// Payload for the `commit` bundle.
         #[command(flatten)]
         payload: BundlePayloadArgs,
     },
@@ -686,8 +688,6 @@ impl WorkerCommand {
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
             | Self::Create { perspective, worker_id, overwriting_worktree, payload } => {
-                let task =
-                    (!payload.clone().into_runtime().is_empty()).then(|| payload.into_runtime());
                 let mut request = CreateWorker::new(perspective);
                 if let Some(worker_id) = worker_id {
                     request = request.with_worker_id(worker_id);
@@ -695,9 +695,7 @@ impl WorkerCommand {
                 if overwriting_worktree {
                     request = request.with_overwriting_worktree();
                 }
-                if let Some(task) = task {
-                    request = request.with_task(task);
-                }
+                request = request.with_task(payload.into_runtime());
                 let result = services.orchestrator()?.create_worker(request)?;
                 println!("{result:#?}");
             }

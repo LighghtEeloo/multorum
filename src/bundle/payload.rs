@@ -17,7 +17,8 @@ use crate::bundle::BundleError;
 
 /// User-supplied content to place into a bundle directory.
 ///
-/// `body_text` and `body_path` are mutually exclusive.
+/// Frontends that publish mailbox bundles should require exactly one of
+/// `body_text` or `body_path`.
 ///
 /// Path-backed fields are consumed on successful publication. Multorum
 /// moves those files into its managed `.multorum/` bundle storage so the
@@ -76,5 +77,19 @@ impl BundlePayload {
         }
 
         Ok(())
+    }
+
+    /// Validate that the payload names exactly one bundle body source.
+    ///
+    /// This is the frontend contract for CLI and MCP bundle-publishing
+    /// operations. Lower layers may still construct empty bodies for
+    /// internal bootstrap flows that do not originate from those
+    /// user-facing surfaces.
+    pub fn validate_required_body(&self) -> Result<(), BundleError> {
+        match (&self.body_text, &self.body_path) {
+            | (None, None) => Err(BundleError::MissingBody),
+            | (Some(_), Some(_)) => Err(BundleError::ConflictingBody),
+            | _ => Ok(()),
+        }
     }
 }

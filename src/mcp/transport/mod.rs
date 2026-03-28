@@ -330,6 +330,21 @@ fn extract_payload(args: &serde_json::Map<String, Value>) -> crate::bundle::Bund
     crate::bundle::BundlePayload { body_text, body_path, artifacts }
 }
 
+/// Build a [`BundlePayload`] and enforce the MCP frontend body contract.
+///
+/// Bundle-publishing MCP tools require exactly one of `body_text` or
+/// `body_path` so workers and orchestrators must author a primary body
+/// explicitly instead of relying on an implicit empty `body.md`.
+fn extract_required_payload(
+    args: &serde_json::Map<String, Value>,
+) -> Result<crate::bundle::BundlePayload, ErrorData> {
+    let payload = extract_payload(args);
+    payload
+        .validate_required_body()
+        .map_err(|error| ErrorData::invalid_params(error.to_string(), None))?;
+    Ok(payload)
+}
+
 /// Build a [`ReplyReference`] from common MCP tool arguments.
 fn extract_reply(args: &serde_json::Map<String, Value>) -> crate::runtime::ReplyReference {
     crate::runtime::ReplyReference {

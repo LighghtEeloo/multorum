@@ -4,13 +4,11 @@
 //! wire transport, exercising rmcp's server event loop and the handler's
 //! thread safety under real parallelism.
 
-use rmcp::model::CallToolRequestParams;
-use serde_json::json;
-
 use crate::support::repo::setup_repo;
-use crate::support::result::{assert_tool_success, json_args, tool_json};
+use crate::support::result::{assert_tool_success, create_worker_args, tool_json};
 use crate::support::wire::{orchestrator_duplex, worker_duplex};
 use crate::support::worker::create_worker_runtime;
+use rmcp::model::CallToolRequestParams;
 
 // ---------------------------------------------------------------------------
 // Concurrent read operations
@@ -44,15 +42,16 @@ async fn concurrent_tool_calls() {
 #[tokio::test]
 async fn concurrent_create_different_workers() {
     let (_dir, client) = orchestrator_duplex().await;
-    let (w1, w2) =
-        tokio::join!(
-            client.call_tool(CallToolRequestParams::new("create_worker").with_arguments(
-                json_args(json!({"perspective": "AuthImplementor", "worker": "cw1"}))
-            ),),
-            client.call_tool(CallToolRequestParams::new("create_worker").with_arguments(
-                json_args(json!({"perspective": "AuthImplementor", "worker": "cw2"}))
-            ),),
-        );
+    let (w1, w2) = tokio::join!(
+        client.call_tool(
+            CallToolRequestParams::new("create_worker")
+                .with_arguments(create_worker_args("AuthImplementor", Some("cw1"))),
+        ),
+        client.call_tool(
+            CallToolRequestParams::new("create_worker")
+                .with_arguments(create_worker_args("AuthImplementor", Some("cw2"))),
+        ),
+    );
     assert_tool_success(&w1.unwrap());
     assert_tool_success(&w2.unwrap());
 

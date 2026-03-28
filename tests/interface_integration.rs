@@ -23,6 +23,8 @@ fn cli_create_accepts_optional_worker_id() {
         "--worker",
         "custom-worker-7",
         "--overwriting-worktree",
+        "--body-text",
+        "Start with the auth rulebook.",
     ])
     .unwrap();
 
@@ -113,6 +115,8 @@ fn cli_merge_accepts_worker_id_and_skip_checks() {
         "custom-worker-7",
         "--skip-check",
         "unit",
+        "--body-text",
+        "Merged after reviewing worker evidence.",
     ])
     .unwrap();
 
@@ -147,4 +151,20 @@ fn worker_mcp_exposes_methodology_resource() {
     assert!(server.resources.iter().any(|resource| {
         resource.uri == "multorum://worker/methodology" && resource.mime_type == "text/markdown"
     }));
+}
+
+#[test]
+fn cli_create_requires_a_body_source() {
+    let err = Cli::try_parse_from(["multorum", "worker", "create", "AuthImplementor"]).unwrap_err();
+    let rendered = err.to_string();
+    assert!(rendered.contains("--body-text"));
+    assert!(rendered.contains("--body-path"));
+}
+
+#[test]
+fn cli_merge_requires_a_body_source() {
+    let err = Cli::try_parse_from(["multorum", "worker", "merge", "custom-worker-7"]).unwrap_err();
+    let rendered = err.to_string();
+    assert!(rendered.contains("--body-text"));
+    assert!(rendered.contains("--body-path"));
 }

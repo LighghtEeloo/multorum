@@ -9,6 +9,10 @@ use thiserror::Error;
 /// Errors produced by the bundle content layer.
 #[derive(Debug, Error)]
 pub enum BundleError {
+    /// The caller omitted both supported body sources.
+    #[error("one of body_text or body_path is required")]
+    MissingBody,
+
     /// The caller supplied both inline text and a file path for the body.
     #[error("body_text and body_path are mutually exclusive")]
     ConflictingBody,

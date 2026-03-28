@@ -59,9 +59,12 @@ const REPORT_INPUTS: &[ToolInputDescriptor] = &[
     optional_integer_input("reply_to", "Optional mailbox sequence number answered by this report."),
     optional_string_input(
         "body_text",
-        "Optional inline Markdown content written into the report body.",
+        "Required when body_path is absent: inline Markdown content written into the report body.",
     ),
-    optional_string_input("body_path", "Optional Markdown file to move into the report body."),
+    optional_string_input(
+        "body_path",
+        "Required when body_text is absent: Markdown file to move into the report body.",
+    ),
     optional_string_list_input(
         "artifacts",
         "Optional files to move into the report artifacts directory.",
@@ -72,11 +75,11 @@ const COMMIT_INPUTS: &[ToolInputDescriptor] = &[
     required_string_input("head_commit", "Git commit hash submitted by the worker."),
     optional_string_input(
         "body_text",
-        "Optional inline Markdown content written into the commit bundle body.",
+        "Required when body_path is absent: inline Markdown content written into the commit bundle body.",
     ),
     optional_string_input(
         "body_path",
-        "Optional Markdown file to move into the commit bundle body.",
+        "Required when body_text is absent: Markdown file to move into the commit bundle body.",
     ),
     optional_string_list_input(
         "artifacts",

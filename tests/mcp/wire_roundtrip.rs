@@ -12,7 +12,8 @@ use serde_json::json;
 
 use crate::support::repo::{git, setup_repo};
 use crate::support::result::{
-    assert_tool_error, assert_tool_success, json_args, resource_text, tool_json,
+    assert_tool_error, assert_tool_success, create_worker_args, json_args, merge_worker_args,
+    resource_text, send_commit_args, tool_json,
 };
 use crate::support::wire::{orchestrator_duplex, worker_duplex};
 use crate::support::worker::create_worker_runtime;
@@ -62,7 +63,7 @@ async fn orchestrator_wire_call_tool_get_status() {
 async fn orchestrator_wire_call_tool_with_args() {
     let (_dir, client) = orchestrator_duplex().await;
     let params = CallToolRequestParams::new("create_worker")
-        .with_arguments(json_args(json!({"perspective": "AuthImplementor", "worker": "w1"})));
+        .with_arguments(create_worker_args("AuthImplementor", Some("w1")));
     let result = client.call_tool(params).await.unwrap();
     assert_tool_success(&result);
     let created = tool_json(&result);
@@ -136,7 +137,7 @@ async fn wire_full_workflow() {
 
     // Step 1: Create worker.
     let create_params = CallToolRequestParams::new("create_worker")
-        .with_arguments(json_args(json!({"perspective": "AuthImplementor", "worker": "wf1"})));
+        .with_arguments(create_worker_args("AuthImplementor", Some("wf1")));
     let create = orch_client.call_tool(create_params).await.unwrap();
     assert_tool_success(&create);
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
@@ -150,15 +151,15 @@ async fn wire_full_workflow() {
 
     // Step 3: Worker submits via wire.
     let worker_client = worker_duplex(worktree_path).await;
-    let commit_params = CallToolRequestParams::new("send_commit")
-        .with_arguments(json_args(json!({"head_commit": head})));
+    let commit_params =
+        CallToolRequestParams::new("send_commit").with_arguments(send_commit_args(&head));
     let commit = worker_client.call_tool(commit_params).await.unwrap();
     assert_tool_success(&commit);
     worker_client.cancel().await.unwrap();
 
     // Step 4: Orchestrator merges via wire.
-    let merge_params = CallToolRequestParams::new("merge_worker")
-        .with_arguments(json_args(json!({"worker": "wf1"})));
+    let merge_params =
+        CallToolRequestParams::new("merge_worker").with_arguments(merge_worker_args("wf1"));
     let merge = orch_client.call_tool(merge_params).await.unwrap();
     assert_tool_success(&merge);
     assert_eq!(tool_json(&merge)["state"], "merged");
