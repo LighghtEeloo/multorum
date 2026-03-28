@@ -164,7 +164,8 @@ pub struct PerspectiveConflict {
 
 /// Summary of one active perspective in the current runtime.
 ///
-/// Note: Derived from live bidding groups in `state.toml`.
+/// Note: Derived from persisted group and worker state under
+/// `.multorum/orchestrator/`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ActivePerspectiveSummary {
     /// Perspective identifier.

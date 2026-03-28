@@ -85,8 +85,17 @@ fn audit_entry_id(worker: &str, head_commit: &str) -> String {
     format!("{worker}-{head_prefix}")
 }
 
-fn read_state_toml(dir: &Path) -> Value {
-    let path = dir.canonicalize().unwrap().join(".multorum/orchestrator/state.toml");
+fn read_group_state_toml(dir: &Path, perspective: &str) -> Value {
+    let path = dir
+        .canonicalize()
+        .unwrap()
+        .join(format!(".multorum/orchestrator/group/{perspective}.toml"));
+    toml::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+}
+
+fn read_worker_state_toml(dir: &Path, worker_id: &str) -> Value {
+    let path =
+        dir.canonicalize().unwrap().join(format!(".multorum/orchestrator/worker/{worker_id}.toml"));
     toml::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
@@ -105,9 +114,11 @@ fn rulebook_init_creates_default_committed_files() {
     assert_eq!(fs::read_to_string(&init.gitignore_path).unwrap(), "orchestrator/\ntr/\n");
     assert!(init.multorum_root.join("orchestrator").is_dir());
     assert!(init.multorum_root.join("audit").is_dir());
-    assert!(init.multorum_root.join("orchestrator/state.toml").is_file());
+    assert!(init.multorum_root.join("orchestrator/group").is_dir());
+    assert!(init.multorum_root.join("orchestrator/worker").is_dir());
     assert!(init.multorum_root.join("orchestrator/exclusion-set.txt").is_file());
-    assert_eq!(fs::read_to_string(init.multorum_root.join("orchestrator/state.toml")).unwrap(), "");
+    assert!(fs::read_dir(init.multorum_root.join("orchestrator/group")).unwrap().next().is_none());
+    assert!(fs::read_dir(init.multorum_root.join("orchestrator/worker")).unwrap().next().is_none());
     assert_eq!(
         fs::read_to_string(init.multorum_root.join("orchestrator/exclusion-set.txt")).unwrap(),
         ""
@@ -143,22 +154,22 @@ fn rulebook_init_repairs_runtime_surface_without_overwriting_existing_rulebook()
     );
     assert!(dir.path().join(".multorum/audit").is_dir());
     assert_eq!(
-        fs::read_to_string(dir.path().join(".multorum/orchestrator/state.toml")).unwrap(),
-        ""
-    );
-    assert_eq!(
         fs::read_to_string(dir.path().join(".multorum/orchestrator/exclusion-set.txt")).unwrap(),
         ""
     );
+    assert!(dir.path().join(".multorum/orchestrator/group").is_dir());
+    assert!(dir.path().join(".multorum/orchestrator/worker").is_dir());
     assert!(dir.path().join(".multorum/tr").is_dir());
     assert_eq!(init.warnings.len(), 1);
     assert!(init.warnings[0].contains(".multorum/.gitignore"));
 
     orchestrator.rulebook_init().unwrap();
     assert_eq!(fs::read_to_string(&rulebook_path).unwrap(), "[check]\npipeline = []\n");
-    assert_eq!(
-        fs::read_to_string(dir.path().join(".multorum/orchestrator/state.toml")).unwrap(),
-        ""
+    assert!(
+        fs::read_dir(dir.path().join(".multorum/orchestrator/group")).unwrap().next().is_none()
+    );
+    assert!(
+        fs::read_dir(dir.path().join(".multorum/orchestrator/worker")).unwrap().next().is_none()
     );
 }
 
@@ -341,10 +352,10 @@ fn same_perspective_can_spawn_multiple_workers_and_close_the_group_on_integratio
     assert!(first.worktree_path.exists(), "merged worktree should be preserved");
     assert!(second.worktree_path.exists(), "discarded sibling worktree should be preserved");
     assert!(orchestrator.status().unwrap().workers.is_empty());
-    let state =
-        read_state_toml(first.worktree_path.parent().unwrap().parent().unwrap().parent().unwrap());
-    assert!(state["groups"][0]["read_set"].as_array().unwrap().is_empty());
-    assert!(state["groups"][0]["write_set"].as_array().unwrap().is_empty());
+    let root = first.worktree_path.parent().unwrap().parent().unwrap().parent().unwrap();
+    let group_state = read_group_state_toml(root, first.perspective.as_str());
+    assert!(group_state["read_set"].as_array().unwrap().is_empty());
+    assert!(group_state["write_set"].as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -525,7 +536,7 @@ fn delete_worker_removes_workspace_after_discard() {
     assert_eq!(deleted.state, WorkerState::Discarded);
     assert_eq!(deleted.worktree_path, created.worktree_path);
     assert!(deleted.deleted_workspace);
-    // Worker entry removed from state.toml during delete.
+    // Worker entry removed from persisted worker state during delete.
     assert!(!created.worktree_path.exists());
     assert!(
         !git_worktree_list(repo.path()).contains(created.worktree_path.to_string_lossy().as_ref())
@@ -569,7 +580,7 @@ fn delete_worker_clears_git_worktree_registration_after_manual_directory_removal
     let deleted = orchestrator.delete_worker(created.worker_id.clone()).unwrap();
 
     assert!(deleted.deleted_workspace);
-    // Worker entry removed from state.toml during delete.
+    // Worker entry removed from persisted worker state during delete.
     assert!(
         !git_worktree_list(repo.path()).contains(created.worktree_path.to_string_lossy().as_ref())
     );
@@ -606,20 +617,10 @@ fn send_commit_canonicalizes_symbolic_revision_before_storage_and_integration() 
 
     worker.send_commit("HEAD".to_owned(), BundlePayload::default()).unwrap();
 
-    // Verify the canonical commit hash is stored in state.toml.
-    let state_toml = fs::read_to_string(
-        provision.worktree_path.parent().unwrap().parent().unwrap().join("orchestrator/state.toml"),
-    )
-    .unwrap();
-    let state: Value = toml::from_str(&state_toml).unwrap();
-    let groups = state["groups"].as_array().unwrap();
-    let worker_entry = groups[0]["workers"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|w| w["worker"].as_str() == Some(provision.worker_id.as_str()))
-        .unwrap();
-    assert_eq!(worker_entry["submitted_head_commit"].as_str(), Some(head_commit.as_str()));
+    // Verify the canonical commit hash is stored in persisted worker state.
+    let root = provision.worktree_path.parent().unwrap().parent().unwrap().parent().unwrap();
+    let worker_state = read_worker_state_toml(root, provision.worker_id.as_str());
+    assert_eq!(worker_state["submitted_head_commit"].as_str(), Some(head_commit.as_str()));
 
     let integration = orchestrator
         .merge_worker(provision.worker_id.clone(), Vec::new(), BundlePayload::default())
@@ -902,10 +903,11 @@ fn discard_worker_accepts_blocked_state_and_clears_exclusion_set() {
     assert_eq!(discarded.state, WorkerState::Discarded);
     assert_eq!(worker.status().unwrap().state, WorkerState::Discarded);
     assert!(read_exclusion_set(dir.path()).is_empty());
-    let state = read_state_toml(dir.path());
-    assert_eq!(state["groups"][0]["workers"][0]["state"].as_str().unwrap(), "discarded");
-    assert!(state["groups"][0]["read_set"].as_array().unwrap().is_empty());
-    assert!(state["groups"][0]["write_set"].as_array().unwrap().is_empty());
+    let worker_state = read_worker_state_toml(dir.path(), result.worker_id.as_str());
+    assert_eq!(worker_state["state"].as_str().unwrap(), "discarded");
+    let group_state = read_group_state_toml(dir.path(), result.perspective.as_str());
+    assert!(group_state["read_set"].as_array().unwrap().is_empty());
+    assert!(group_state["write_set"].as_array().unwrap().is_empty());
 }
 
 #[test]

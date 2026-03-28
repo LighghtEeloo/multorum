@@ -202,7 +202,7 @@ The write-set scope check is always mandatory and cannot be configured away.
 
 ### Default Template
 
-`multorum init` creates a sparse template:
+`multorum init` creates the sparse committed rulebook template shown below and prepares the empty orchestrator runtime scaffold under `.multorum/orchestrator/` (`group/`, `worker/`, and `exclusion-set.txt`):
 
 ```toml
 # Define shared file ownership vocabulary first.
@@ -332,7 +332,7 @@ tr/
 
 Multorum verifies these entries during `multorum init` and warns if they are missing.
 
-The runtime directory names are intentionally short. `tr/` keeps managed worktree paths compact, and `state.toml` consolidates all bidding group and worker state into a single file so the control plane stays shallow.
+The runtime directory names are intentionally short. `tr/` keeps managed worktree paths compact, while `group/` and `worker/` keep the orchestrator control plane shallow without forcing unrelated state updates into one monolithic file.
 
 ### Orchestrator Runtime Surface
 
@@ -340,30 +340,35 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
 
 ```text
 .multorum/orchestrator/
-  state.toml             # bidding groups, workers, and compiled boundaries
+  group/
+    <Perspective>.toml   # one bidding-group record per perspective
+  worker/
+    <worker>.toml        # one worker record per worker id
   exclusion-set.txt      # materialized orchestrator exclusion set
 ```
 
-`state.toml` is the orchestrator's single runtime state file. It records every bidding group and every worker within it. Each group entry carries the perspective name, base commit, and compiled boundary (read and write sets as concrete file lists). Each worker entry within a group carries the worker, lifecycle state, worktree path, and submitted head commit where applicable.
+`group/<Perspective>.toml` stores the group-scoped runtime state for one perspective: the perspective name, the pinned base commit, and the compiled boundary (read and write sets as concrete file lists).
 
-`multorum init` creates `state.toml` as an empty file. Subsequent operations update it:
+`worker/<worker>.toml` stores the worker-scoped runtime state for one worker: the worker id, owning perspective, lifecycle state, managed worktree path, and submitted head commit where applicable.
 
-- `worker create` forming a new group adds a group entry with perspective, base commit (HEAD), compiled boundary, and the first worker entry.
-- `worker create` joining an existing group adds a worker entry to that group.
-- `worker merge` marks the worker `MERGED`, marks siblings `DISCARDED`, and clears the group's boundary — the group no longer contributes to the exclusion set.
-- `worker discard` marks the worker `DISCARDED`. If the group has no remaining non-finalized members, the group's boundary is cleared.
-- `worker delete` removes the worker entry. If the group has no remaining members, the group entry is removed.
-- `perspective forward` updates the group's base commit and recompiled boundary, and rewrites each forwarded worker's `read-set.txt` and `write-set.txt` to match.
+`multorum init` creates empty `group/` and `worker/` directories. Subsequent operations update them as follows:
+
+- `worker create` forming a new group writes `group/<Perspective>.toml` with perspective, base commit (HEAD), and compiled boundary, then writes the first `worker/<worker>.toml`.
+- `worker create` joining an existing group writes only the new `worker/<worker>.toml`.
+- `worker merge` marks the chosen worker `MERGED`, marks siblings `DISCARDED`, and clears the boundary in `group/<Perspective>.toml` so the group no longer contributes to the exclusion set.
+- `worker discard` marks `worker/<worker>.toml` as `DISCARDED`. If the group has no remaining non-finalized members, the boundary in `group/<Perspective>.toml` is cleared.
+- `worker delete` removes `worker/<worker>.toml`. If that was the last worker for the perspective, it also removes `group/<Perspective>.toml`.
+- `perspective forward` rewrites `group/<Perspective>.toml` with the new base commit and recompiled boundary, then rewrites each forwarded worker's `read-set.txt` and `write-set.txt` to match.
 
 Workers also update their own entries directly:
 
-- Acknowledging a `task`, `resolve`, or `revise` inbox message transitions the worker's entry to `ACTIVE`.
-- `local report` transitions the worker's entry to `BLOCKED`.
-- `local commit` transitions the worker's entry to `COMMITTED` and records the submitted head commit.
+- Acknowledging a `task`, `resolve`, or `revise` inbox message updates `worker/<worker>.toml` to `ACTIVE`.
+- `local report` updates `worker/<worker>.toml` to `BLOCKED`.
+- `local commit` updates `worker/<worker>.toml` to `COMMITTED` and records the submitted head commit.
 
 The orchestrator writes only the terminal states `MERGED` and `DISCARDED`. Once an entry reaches either terminal state, the worker must treat it as read-only.
 
-`exclusion-set.txt` is a flat projection of `state.toml`: the union of all read and write sets from groups that still have live workers. A pre-commit hook in the canonical workspace reads it and rejects commits that touch any listed file. Multorum regenerates it whenever `state.toml` changes. When no groups carry a boundary the file is empty.
+`exclusion-set.txt` is a flat projection of the persisted group and worker state: the union of all read and write sets from groups that still have live workers. A pre-commit hook in the canonical workspace reads it and rejects commits that touch any listed file. Multorum regenerates it whenever group or worker state changes. When no groups carry a boundary the file is empty.
 
 ### Audit Trail
 
@@ -449,7 +454,7 @@ For analysis-only tasks that intentionally produce no code diff, workers should 
 
 Once one worker in a bidding group reaches `MERGED`, every sibling in that group becomes `DISCARDED`.
 
-`delete` is not a lifecycle transition. It removes the worktree and the worker's entry from `state.toml`.
+`delete` is not a lifecycle transition. It removes the worktree and the worker's state file. If that worker was the last member of its perspective, it also removes the group's state file.
 
 `perspective forward` is also not a lifecycle transition. It repins a blocked bidding group to HEAD while leaving worker states unchanged.
 
@@ -652,7 +657,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 - `multorum worker revise <worker> [--reply-to <sequence>] [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Publish a `revise` bundle to a committed worker inbox. `--reply-to` correlates the revision with an earlier outbox sequence number. The optional payload carries revision context for the worker. The worker returns to `ACTIVE` when it acknowledges that inbox message.
 - `multorum worker merge <worker> [--skip-check <check>]... [--body-text <text> | --body-path <file>] [--artifact <file>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. The optional payload arguments attach an audit rationale; this rationale should contain self-contained findings instead of references to worker outbox paths. Transition: `COMMITTED` to `MERGED`.
 - `multorum worker discard <worker>` — Finalize a worker without integration. Allowed from `ACTIVE`, `BLOCKED`, or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
-- `multorum worker delete <worker>` — Delete the worktree and remove the worker's entry from `state.toml`. If the worker is the last member of its bidding group, the group entry is also removed. Allowed only from `MERGED` or `DISCARDED`.
+- `multorum worker delete <worker>` — Delete the worktree and remove `worker/<worker>.toml`. If the worker is the last member of its bidding group, also remove `group/<Perspective>.toml`. Allowed only from `MERGED` or `DISCARDED`.
 
 ### Worker-Local Commands
 

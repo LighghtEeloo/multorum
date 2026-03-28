@@ -6,9 +6,13 @@
 //! layout and the small amount of version-control orchestration needed
 //! to create worktrees, delete finalized workspaces, and integrate
 //! submitted commits.
+//!
+//! The orchestrator persists runtime state as one file per bidding
+//! group under `.multorum/orchestrator/group/` and one file per worker
+//! under `.multorum/orchestrator/worker/`.
 
 use super::timestamp::Timestamp;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -36,20 +40,8 @@ use crate::vcs::{CanonicalCommitHash, GitVcs, VersionControl};
 // Records
 // ---------------------------------------------------------------------------
 
-/// Orchestrator runtime state stored at `.multorum/orchestrator/state.toml`.
-///
-/// This is the single source of truth for all bidding groups and workers.
-/// Each group entry carries the perspective name, base commit, and compiled
-/// boundary. Each worker entry within a group carries the worker,
-/// lifecycle state, and submitted head commit where applicable.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct StateFile {
-    /// Bidding groups, each containing its member workers.
-    #[serde(default)]
-    pub groups: Vec<BiddingGroupRecord>,
-}
-
-/// One bidding group with its compiled boundary and member workers.
+/// One persisted bidding-group record stored under
+/// `.multorum/orchestrator/group/<Perspective>.toml`.
 ///
 /// A group forms when the first worker for a perspective is created.
 /// Its base commit and boundary are locked at formation. Subsequent
@@ -58,9 +50,52 @@ pub(crate) struct StateFile {
 ///
 /// Note: When the group has no live workers left (all members are
 /// `MERGED` or `DISCARDED`), Multorum clears the materialized boundary.
-/// The historical group membership stays in `state.toml` until
-/// `worker delete` removes the final member record.
+/// The group record itself stays on disk until `worker delete`
+/// removes the final worker record for that perspective.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct GroupStateRecord {
+    /// Perspective governing this group.
+    pub perspective: crate::schema::perspective::PerspectiveName,
+    /// Base commit pinning the group's code snapshot.
+    pub base_commit: CanonicalCommitHash,
+    /// Compiled read set at group formation.
+    pub read_set: BTreeSet<PathBuf>,
+    /// Compiled write set at group formation.
+    pub write_set: BTreeSet<PathBuf>,
+}
+
+/// One persisted worker record stored under
+/// `.multorum/orchestrator/worker/<worker>.toml`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct WorkerStateRecord {
+    /// Unique worker identity.
+    #[serde(rename = "worker")]
+    pub worker_id: WorkerId,
+    /// Perspective governing this worker.
+    pub perspective: crate::schema::perspective::PerspectiveName,
+    /// Current lifecycle state.
+    pub state: crate::runtime::WorkerState,
+    /// Absolute path to the managed worktree.
+    pub worktree_path: PathBuf,
+    /// Canonical submitted worker commit when the worker is in `COMMITTED`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submitted_head_commit: Option<CanonicalCommitHash>,
+}
+
+/// Orchestrator runtime state reconstructed from persisted group and
+/// worker records.
+///
+/// Note: The runtime still operates on a joined in-memory aggregate so
+/// service code can reason in terms of bidding groups. Persistence is
+/// split only at the filesystem boundary.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct StateFile {
+    /// Bidding groups, each containing its member workers.
+    pub groups: Vec<BiddingGroupRecord>,
+}
+
+/// One bidding group with its compiled boundary and member workers.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BiddingGroupRecord {
     /// Perspective governing this group.
     pub perspective: crate::schema::perspective::PerspectiveName,
@@ -100,21 +135,104 @@ impl BiddingGroupRecord {
 }
 
 /// One worker within a bidding group.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WorkerEntry {
     /// Unique worker identity.
-    #[serde(rename = "worker")]
     pub worker_id: WorkerId,
     /// Current lifecycle state.
     pub state: crate::runtime::WorkerState,
     /// Absolute path to the managed worktree.
     pub worktree_path: PathBuf,
     /// Canonical submitted worker commit when the worker is in `COMMITTED`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submitted_head_commit: Option<CanonicalCommitHash>,
 }
 
 impl StateFile {
+    /// Reconstruct joined runtime state from persisted group and worker
+    /// records.
+    ///
+    /// Note: Every worker must reference an existing group record.
+    /// Multorum fails fast instead of guessing a partial topology from
+    /// orphaned files.
+    fn from_records(
+        groups: Vec<GroupStateRecord>, workers: Vec<WorkerStateRecord>,
+    ) -> Result<Self, RuntimeError> {
+        let mut grouped =
+            BTreeMap::<crate::schema::perspective::PerspectiveName, BiddingGroupRecord>::new();
+        let mut seen_workers = BTreeSet::<WorkerId>::new();
+        for group in groups {
+            let previous = grouped.insert(
+                group.perspective.clone(),
+                BiddingGroupRecord {
+                    perspective: group.perspective,
+                    base_commit: group.base_commit,
+                    read_set: group.read_set,
+                    write_set: group.write_set,
+                    workers: Vec::new(),
+                },
+            );
+            if previous.is_some() {
+                return Err(RuntimeError::CheckFailed(
+                    "duplicate persisted group state for one perspective".to_owned(),
+                ));
+            }
+        }
+
+        for worker in workers {
+            if !seen_workers.insert(worker.worker_id.clone()) {
+                return Err(RuntimeError::CheckFailed(format!(
+                    "duplicate persisted worker state for `{}`",
+                    worker.worker_id
+                )));
+            }
+            let group = grouped.get_mut(&worker.perspective).ok_or_else(|| {
+                RuntimeError::CheckFailed(format!(
+                    "worker `{}` references missing group `{}`",
+                    worker.worker_id, worker.perspective
+                ))
+            })?;
+            group.workers.push(WorkerEntry {
+                worker_id: worker.worker_id,
+                state: worker.state,
+                worktree_path: worker.worktree_path,
+                submitted_head_commit: worker.submitted_head_commit,
+            });
+        }
+
+        let mut groups = grouped.into_values().collect::<Vec<_>>();
+        for group in &mut groups {
+            group.workers.sort_by(|left, right| left.worker_id.cmp(&right.worker_id));
+        }
+        Ok(Self { groups })
+    }
+
+    /// Convert the joined runtime view into persisted group and worker
+    /// records.
+    fn into_records(self) -> (Vec<GroupStateRecord>, Vec<WorkerStateRecord>) {
+        let mut group_records = Vec::with_capacity(self.groups.len());
+        let mut worker_records = Vec::new();
+
+        for group in self.groups {
+            group_records.push(GroupStateRecord {
+                perspective: group.perspective.clone(),
+                base_commit: group.base_commit.clone(),
+                read_set: group.read_set.clone(),
+                write_set: group.write_set.clone(),
+            });
+            worker_records.extend(group.workers.into_iter().map(|worker| WorkerStateRecord {
+                worker_id: worker.worker_id,
+                perspective: group.perspective.clone(),
+                state: worker.state,
+                worktree_path: worker.worktree_path,
+                submitted_head_commit: worker.submitted_head_commit,
+            }));
+        }
+
+        group_records.sort_by(|left, right| left.perspective.cmp(&right.perspective));
+        worker_records.sort_by(|left, right| left.worker_id.cmp(&right.worker_id));
+        (group_records, worker_records)
+    }
+
     /// Find the live bidding group for a perspective.
     ///
     /// A "live" group is one with at least one non-finalized worker.
@@ -414,6 +532,97 @@ impl RuntimeFs {
         Ok(())
     }
 
+    fn load_state_records<T>(root: &Path) -> Result<Vec<T>, RuntimeError>
+    where
+        T: DeserializeOwned,
+    {
+        let mut entries = Vec::new();
+        for entry in fs::read_dir(root)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("toml") {
+                continue;
+            }
+            entries.push(Self::read_toml(&path)?);
+        }
+        Ok(entries)
+    }
+
+    fn remove_stale_state_files(
+        root: &Path, expected: &BTreeSet<PathBuf>,
+    ) -> Result<(), RuntimeError> {
+        for entry in fs::read_dir(root)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("toml") {
+                continue;
+            }
+            if !expected.contains(&path) {
+                fs::remove_file(path)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn write_state_snapshot(
+        &self, group_root: &Path, worker_root: &Path, state: StateFile,
+    ) -> Result<(), RuntimeError> {
+        fs::create_dir_all(group_root)?;
+        fs::create_dir_all(worker_root)?;
+
+        let (groups, workers) = state.into_records();
+        let orchestrator_paths = self.paths.orchestrator();
+        let expected_group_paths = groups
+            .iter()
+            .map(|group| {
+                if group_root == orchestrator_paths.group_root().as_path() {
+                    orchestrator_paths.group_state(&group.perspective)
+                } else {
+                    group_root.join(format!("{}.toml", group.perspective))
+                }
+            })
+            .collect::<BTreeSet<_>>();
+        let expected_worker_paths = workers
+            .iter()
+            .map(|worker| {
+                if worker_root == orchestrator_paths.worker_root().as_path() {
+                    orchestrator_paths.worker_state(&worker.worker_id)
+                } else {
+                    worker_root.join(format!("{}.toml", worker.worker_id))
+                }
+            })
+            .collect::<BTreeSet<_>>();
+
+        Self::remove_stale_state_files(group_root, &expected_group_paths)?;
+        Self::remove_stale_state_files(worker_root, &expected_worker_paths)?;
+
+        for group in groups {
+            let path = if group_root == orchestrator_paths.group_root().as_path() {
+                orchestrator_paths.group_state(&group.perspective)
+            } else {
+                group_root.join(format!("{}.toml", group.perspective))
+            };
+            Self::write_toml(&path, &group)?;
+        }
+
+        for worker in workers {
+            let path = if worker_root == orchestrator_paths.worker_root().as_path() {
+                orchestrator_paths.worker_state(&worker.worker_id)
+            } else {
+                worker_root.join(format!("{}.toml", worker.worker_id))
+            };
+            Self::write_toml(&path, &worker)?;
+        }
+
+        Ok(())
+    }
+
     // -----------------------------------------------------------------------
     // Rulebook initialization
     // -----------------------------------------------------------------------
@@ -428,6 +637,8 @@ impl RuntimeFs {
 
         fs::create_dir_all(&multorum_root)?;
         fs::create_dir_all(orchestrator_paths.root())?;
+        fs::create_dir_all(orchestrator_paths.group_root())?;
+        fs::create_dir_all(orchestrator_paths.worker_root())?;
         fs::create_dir_all(self.paths.audit())?;
         fs::create_dir_all(multorum_root.join("tr"))?;
 
@@ -440,11 +651,6 @@ impl RuntimeFs {
         }
         if !rulebook_path.exists() {
             fs::write(&rulebook_path, Rulebook::default_template())?;
-        }
-
-        let state_path = orchestrator_paths.state();
-        if !state_path.exists() {
-            fs::write(&state_path, "")?;
         }
 
         let exclusion_path = orchestrator_paths.exclusion_set();
@@ -463,29 +669,30 @@ impl RuntimeFs {
     }
 
     // -----------------------------------------------------------------------
-    // State file
+    // State directories
     // -----------------------------------------------------------------------
 
-    /// Load the orchestrator state file.
+    /// Load the orchestrator group and worker state directories.
     pub(crate) fn load_state(&self) -> Result<StateFile, RuntimeError> {
-        let path = self.paths.orchestrator().state();
-        if !path.exists() {
+        let orchestrator_paths = self.paths.orchestrator();
+        let group_root = orchestrator_paths.group_root();
+        let worker_root = orchestrator_paths.worker_root();
+        if !group_root.is_dir() || !worker_root.is_dir() {
             return Err(RuntimeError::MissingOrchestratorState);
         }
-        let contents = fs::read_to_string(&path)?;
-        if contents.trim().is_empty() {
-            return Ok(StateFile::default());
-        }
-        Ok(toml::from_str(&contents)?)
+        let groups = Self::load_state_records::<GroupStateRecord>(&group_root)?;
+        let workers = Self::load_state_records::<WorkerStateRecord>(&worker_root)?;
+        StateFile::from_records(groups, workers)
     }
 
-    /// Persist the orchestrator state file.
+    /// Persist the orchestrator group and worker state directories.
     pub(crate) fn store_state(&self, state: &StateFile) -> Result<(), RuntimeError> {
-        let path = self.paths.orchestrator().state();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        Self::write_toml(&path, state)
+        let orchestrator_paths = self.paths.orchestrator();
+        self.write_state_snapshot(
+            &orchestrator_paths.group_root(),
+            &orchestrator_paths.worker_root(),
+            state.clone(),
+        )
     }
 
     // -----------------------------------------------------------------------
@@ -610,11 +817,12 @@ impl RuntimeFs {
         exclusion
     }
 
-    /// Recompute and persist the orchestrator exclusion set from `state.toml`.
+    /// Recompute and persist the orchestrator exclusion set from group
+    /// and worker state.
     ///
     /// The exclusion set is the union of every live bidding group's
     /// read and write sets. It must be rewritten after every persisted
-    /// `state.toml` update so the projection always matches runtime state.
+    /// state update so the projection always matches runtime state.
     pub(crate) fn rewrite_exclusion_set(&self, state: &StateFile) -> Result<(), RuntimeError> {
         let exclusion = Self::collect_exclusion_set(state);
         let path = self.paths.orchestrator().exclusion_set();
@@ -630,9 +838,10 @@ impl RuntimeFs {
     /// Stage the runtime artifacts that must become visible when a merge
     /// transaction commits.
     ///
-    /// Note: This prepares audit state, `state.toml`, and the exclusion
-    /// set before canonical integration starts. Promotion still happens
-    /// later, after the worker patch has been applied in no-commit mode.
+    /// Note: This prepares audit state, persisted group/worker state,
+    /// and the exclusion set before canonical integration starts.
+    /// Promotion still happens later, after the worker patch has been
+    /// applied in no-commit mode.
     ///
     /// Note: Merge staging is allocated with `tempfile` in the system
     /// temp directory so transient artifacts do not pollute
@@ -651,8 +860,9 @@ impl RuntimeFs {
             .tempdir()?;
         let staging_root = staging_dir.path();
 
-        let staged_state_path = staging_root.join("state.toml");
-        Self::write_toml(&staged_state_path, updated_state)?;
+        let staged_group_root = staging_root.join("group");
+        let staged_worker_root = staging_root.join("worker");
+        self.write_state_snapshot(&staged_group_root, &staged_worker_root, updated_state.clone())?;
 
         let staged_exclusion_path = staging_root.join("exclusion-set.txt");
         let exclusion = Self::collect_exclusion_set(updated_state);
@@ -713,10 +923,16 @@ impl RuntimeFs {
             "backup-audit-entry.toml",
         ));
         promotions.push(PreparedPromotion::new(
-            staged_state_path,
-            orchestrator_paths.state(),
+            staged_group_root,
+            orchestrator_paths.group_root(),
             staging_root,
-            "backup-state.toml",
+            "backup-group",
+        ));
+        promotions.push(PreparedPromotion::new(
+            staged_worker_root,
+            orchestrator_paths.worker_root(),
+            staging_root,
+            "backup-worker",
         ));
         promotions.push(PreparedPromotion::new(
             staged_exclusion_path,

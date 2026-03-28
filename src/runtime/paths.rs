@@ -136,21 +136,48 @@ impl OrchestratorPaths {
         &self.root
     }
 
-    /// Orchestrator runtime state file.
+    /// Root directory for bidding-group state files.
     ///
-    /// Records every bidding group and every worker within it. This is
-    /// the single source of truth for runtime state — there are no
-    /// per-worker state files.
-    pub fn state(&self) -> PathBuf {
-        self.root.join("state.toml")
+    /// Each file is named `<Perspective>.toml` and stores the
+    /// perspective's pinned base commit plus its compiled boundary.
+    pub fn group_root(&self) -> PathBuf {
+        self.root.join("group")
+    }
+
+    /// Path to one persisted bidding-group state file.
+    ///
+    /// Note: Perspective names are validated ASCII alphanumeric
+    /// identifiers, so Multorum can map them directly to stable file
+    /// names without extra escaping.
+    pub fn group_state(
+        &self, perspective: &crate::schema::perspective::PerspectiveName,
+    ) -> PathBuf {
+        self.group_root().join(format!("{perspective}.toml"))
+    }
+
+    /// Root directory for worker state files.
+    ///
+    /// Each file is named `<worker>.toml` and stores one worker's
+    /// runtime lifecycle state plus its managed worktree path.
+    pub fn worker_root(&self) -> PathBuf {
+        self.root.join("worker")
+    }
+
+    /// Path to one persisted worker state file.
+    ///
+    /// Note: Worker ids are validated kebab-case ASCII identifiers, so
+    /// Multorum can map them directly to stable file names without
+    /// extra escaping.
+    pub fn worker_state(&self, worker_id: &WorkerId) -> PathBuf {
+        self.worker_root().join(format!("{worker_id}.toml"))
     }
 
     /// Materialized orchestrator exclusion set.
     ///
-    /// A flat projection of `state.toml`: the union of all read and
-    /// write sets from groups that still have live workers. A pre-commit
-    /// hook reads this file to reject orchestrator commits that touch
-    /// protected files.
+    /// A flat projection of persisted group and worker state: the
+    /// union of all read and write sets from groups that still have
+    /// live workers. A pre-commit hook reads this file to reject
+    /// orchestrator commits that touch protected files.
     pub fn exclusion_set(&self) -> PathBuf {
         self.root.join("exclusion-set.txt")
     }

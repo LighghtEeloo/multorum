@@ -279,7 +279,8 @@ pub enum RuntimeCommand {
     /// Creates `.multorum/rulebook.toml` from the checked-in default
     /// template, ensures `.multorum/.gitignore` ignores the runtime
     /// directories, prepares the local orchestrator runtime
-    /// directories, and creates an empty `state.toml`.
+    /// directories, and creates empty `group/` and `worker/` state
+    /// folders under `.multorum/orchestrator/`.
     Init,
 
     /// Inspect and validate perspectives from the current rulebook.
