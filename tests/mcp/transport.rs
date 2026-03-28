@@ -362,7 +362,7 @@ fn orchestrator_hint_worker() {
     assert!(!hint_body.exists(), "body should be moved into .multorum storage");
 
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let inbox = worker_svc.read_inbox(None).unwrap();
+    let inbox = worker_svc.read_inbox(None, false).unwrap();
     let hint = inbox.iter().find(|message| message.kind == MessageKind::Hint).unwrap();
     assert_eq!(hint.kind, MessageKind::Hint);
     worker_svc.ack_inbox(hint.sequence).unwrap();
@@ -776,7 +776,7 @@ fn worker_send_report() {
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
 
-    let inbox = worker_svc.read_inbox(None).unwrap();
+    let inbox = worker_svc.read_inbox(None, false).unwrap();
     for msg in &inbox {
         worker_svc.ack_inbox(msg.sequence).unwrap();
     }
@@ -797,7 +797,7 @@ fn worker_send_report_accepts_inline_body_text() {
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
 
-    let inbox = worker_svc.read_inbox(None).unwrap();
+    let inbox = worker_svc.read_inbox(None, false).unwrap();
     for msg in &inbox {
         worker_svc.ack_inbox(msg.sequence).unwrap();
     }

@@ -26,10 +26,14 @@ pub trait WorkerService {
     fn contract(&self) -> Result<WorkerContractView>;
 
     /// Read messages sent by the orchestrator to this worker.
-    fn read_inbox(&self, after: Option<Sequence>) -> Result<Vec<MailboxMessageView>>;
+    fn read_inbox(
+        &self, after: Option<Sequence>, include_body: bool,
+    ) -> Result<Vec<MailboxMessageView>>;
 
     /// Read messages sent by this worker to the orchestrator.
-    fn read_outbox(&self, after: Option<Sequence>) -> Result<Vec<MailboxMessageView>>;
+    fn read_outbox(
+        &self, after: Option<Sequence>, include_body: bool,
+    ) -> Result<Vec<MailboxMessageView>>;
 
     /// Acknowledge an inbox message.
     fn ack_inbox(&self, sequence: Sequence) -> Result<AckRef>;
@@ -149,7 +153,9 @@ impl WorkerService for FsWorkerService {
         self.contract_view()
     }
 
-    fn read_inbox(&self, after: Option<Sequence>) -> Result<Vec<MailboxMessageView>> {
+    fn read_inbox(
+        &self, after: Option<Sequence>, include_body: bool,
+    ) -> Result<Vec<MailboxMessageView>> {
         let contract = self.contract_view()?;
         tracing::trace!(
             worktree_root = %self.worktree_root.display(),
@@ -162,10 +168,13 @@ impl WorkerService for FsWorkerService {
             &contract.worker_id,
             MailboxDirection::Inbox,
             after,
+            include_body,
         )
     }
 
-    fn read_outbox(&self, after: Option<Sequence>) -> Result<Vec<MailboxMessageView>> {
+    fn read_outbox(
+        &self, after: Option<Sequence>, include_body: bool,
+    ) -> Result<Vec<MailboxMessageView>> {
         let contract = self.contract_view()?;
         tracing::trace!(
             worktree_root = %self.worktree_root.display(),
@@ -178,6 +187,7 @@ impl WorkerService for FsWorkerService {
             &contract.worker_id,
             MailboxDirection::Outbox,
             after,
+            include_body,
         )
     }
 

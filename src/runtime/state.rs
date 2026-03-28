@@ -403,6 +403,9 @@ pub struct MailboxMessageView {
     pub head_commit: Option<CanonicalCommitHash>,
     /// Short summary for compact listings.
     pub summary: String,
+    /// Full body content, present when the caller requests it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
     /// Absolute path to the bundle directory.
     pub bundle_path: PathBuf,
 }

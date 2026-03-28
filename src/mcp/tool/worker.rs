@@ -3,8 +3,8 @@
 use crate::mcp::dto::{ToolDescriptor, ToolInputDescriptor};
 
 use super::{
-    optional_integer_input, optional_string_input, optional_string_list_input,
-    required_integer_input, required_string_input,
+    optional_boolean_input, optional_integer_input, optional_string_input,
+    optional_string_list_input, required_integer_input, required_string_input,
 };
 
 const SET_WORKING_DIRECTORY_INPUTS: &[ToolInputDescriptor] = &[required_string_input(
@@ -12,15 +12,27 @@ const SET_WORKING_DIRECTORY_INPUTS: &[ToolInputDescriptor] = &[required_string_i
     "Absolute path to the managed worker worktree root.",
 )];
 
-const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[optional_integer_input(
-    "after",
-    "Optional sequence number; only inbox bundles after it are returned.",
-)];
+const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[
+    optional_integer_input(
+        "after",
+        "Optional sequence number; only inbox bundles after it are returned.",
+    ),
+    optional_boolean_input(
+        "include_body",
+        "Include full body.md content for each returned message.",
+    ),
+];
 
-const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[optional_integer_input(
-    "after",
-    "Optional sequence number; only outbox bundles after it are returned.",
-)];
+const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
+    optional_integer_input(
+        "after",
+        "Optional sequence number; only outbox bundles after it are returned.",
+    ),
+    optional_boolean_input(
+        "include_body",
+        "Include full body.md content for each returned message.",
+    ),
+];
 
 const ACK_INPUTS: &[ToolInputDescriptor] =
     &[required_integer_input("sequence", "Inbox sequence number to acknowledge.")];

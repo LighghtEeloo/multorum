@@ -112,12 +112,12 @@ pub trait OrchestratorService {
 
     /// Read messages sent by a worker to the orchestrator.
     fn read_outbox(
-        &self, worker_id: WorkerId, after: Option<Sequence>,
+        &self, worker_id: WorkerId, after: Option<Sequence>, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>>;
 
     /// Read messages sent by the orchestrator to a worker.
     fn read_inbox(
-        &self, worker_id: WorkerId, after: Option<Sequence>,
+        &self, worker_id: WorkerId, after: Option<Sequence>, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>>;
 
     /// Acknowledge one consumed worker outbox bundle.
@@ -333,6 +333,7 @@ impl FsOrchestratorService {
                 &worker.worker_id,
                 MailboxDirection::Outbox,
                 None,
+                false,
             )?;
             let report = messages
                 .into_iter()
@@ -492,7 +493,7 @@ impl OrchestratorService for FsOrchestratorService {
     }
 
     fn read_outbox(
-        &self, worker_id: WorkerId, after: Option<Sequence>,
+        &self, worker_id: WorkerId, after: Option<Sequence>, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
         let state = self.fs.load_state()?;
         let (_, worker) = state
@@ -503,11 +504,12 @@ impl OrchestratorService for FsOrchestratorService {
             &worker.worker_id,
             MailboxDirection::Outbox,
             after,
+            include_body,
         )
     }
 
     fn read_inbox(
-        &self, worker_id: WorkerId, after: Option<Sequence>,
+        &self, worker_id: WorkerId, after: Option<Sequence>, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
         let state = self.fs.load_state()?;
         let (_, worker) = state
@@ -518,6 +520,7 @@ impl OrchestratorService for FsOrchestratorService {
             &worker.worker_id,
             MailboxDirection::Inbox,
             after,
+            include_body,
         )
     }
 

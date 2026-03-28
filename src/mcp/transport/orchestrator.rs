@@ -110,12 +110,14 @@ impl OrchestratorHandler {
             | "read_worker_outbox" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let after = optional_u64(&args, "after").map(crate::runtime::Sequence);
-                dispatch_tool(service.read_outbox(worker_id, after))
+                let include_body = optional_bool(&args, "include_body").unwrap_or(false);
+                dispatch_tool(service.read_outbox(worker_id, after, include_body))
             }
             | "read_worker_inbox" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
                 let after = optional_u64(&args, "after").map(crate::runtime::Sequence);
-                dispatch_tool(service.read_inbox(worker_id, after))
+                let include_body = optional_bool(&args, "include_body").unwrap_or(false);
+                dispatch_tool(service.read_inbox(worker_id, after, include_body))
             }
             | "ack_worker_outbox_message" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
@@ -237,7 +239,7 @@ impl OrchestratorHandler {
             }
             | Some("outbox") => {
                 let messages =
-                    service.read_outbox(worker_id, None).map_err(runtime_to_resource_error)?;
+                    service.read_outbox(worker_id, None, false).map_err(runtime_to_resource_error)?;
                 resource_success(uri, &messages)
             }
             | Some("contract" | "transcript" | "checks") => Err(ErrorData::resource_not_found(

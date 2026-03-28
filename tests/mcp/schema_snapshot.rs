@@ -82,7 +82,11 @@ fn orchestrator_tool_input_schemas_stable() {
     let (_, inputs) = schemas.iter().find(|(n, _)| *n == "read_worker_outbox").unwrap();
     assert_eq!(
         inputs,
-        &[("worker", ToolInputType::String, true), ("after", ToolInputType::Integer, false),]
+        &[
+            ("worker", ToolInputType::String, true),
+            ("after", ToolInputType::Integer, false),
+            ("include_body", ToolInputType::Boolean, false),
+        ]
     );
 
     // ack_worker_outbox_message
@@ -222,7 +226,13 @@ fn worker_tool_input_schemas_stable() {
 
     // read_inbox
     let (_, inputs) = schemas.iter().find(|(n, _)| *n == "read_inbox").unwrap();
-    assert_eq!(inputs, &[("after", ToolInputType::Integer, false)]);
+    assert_eq!(
+        inputs,
+        &[
+            ("after", ToolInputType::Integer, false),
+            ("include_body", ToolInputType::Boolean, false),
+        ]
+    );
 
     // ack_inbox_message
     let (_, inputs) = schemas.iter().find(|(n, _)| *n == "ack_inbox_message").unwrap();

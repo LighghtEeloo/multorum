@@ -1019,9 +1019,12 @@ impl RuntimeFs {
     }
 
     /// Read mailbox bundles after an optional sequence threshold.
+    ///
+    /// When `include_body` is true, each returned view includes the full
+    /// `body.md` content. Otherwise only the first-line summary is set.
     pub(crate) fn list_mailbox_messages(
         &self, worktree_root: &Path, worker_id: &WorkerId, direction: MailboxDirection,
-        after: Option<Sequence>,
+        after: Option<Sequence>, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>, RuntimeError> {
         let worker_paths = WorkerPaths::new(worktree_root.to_path_buf());
         let new_root = worker_paths.mailbox_new(direction);
@@ -1052,6 +1055,11 @@ impl RuntimeFs {
             }
 
             let acknowledged = ack_root.join(Self::ack_file_name(envelope.sequence)).exists();
+            let body = if include_body {
+                fs::read_to_string(bundle_path.join(BODY_FILE_NAME)).ok()
+            } else {
+                None
+            };
             messages.push(MailboxMessageView {
                 worker_id: worker_id.clone(),
                 perspective: envelope.perspective.clone(),
@@ -1062,6 +1070,7 @@ impl RuntimeFs {
                 acknowledged,
                 head_commit: envelope.head_commit.clone(),
                 summary: self.bundle_summary(&bundle_path, &envelope.kind),
+                body,
                 bundle_path,
             });
         }

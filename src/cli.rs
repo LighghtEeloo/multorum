@@ -375,6 +375,10 @@ pub enum WorkerCommand {
         /// Only return messages after this sequence number.
         #[arg(long = "after", value_name = "SEQUENCE")]
         after: Option<u64>,
+
+        /// Include full body.md content for each message.
+        #[arg(long)]
+        body: bool,
     },
 
     /// List messages sent by the orchestrator to a worker.
@@ -385,6 +389,10 @@ pub enum WorkerCommand {
         /// Only return messages after this sequence number.
         #[arg(long = "after", value_name = "SEQUENCE")]
         after: Option<u64>,
+
+        /// Include full body.md content for each message.
+        #[arg(long)]
+        body: bool,
     },
 
     /// Acknowledge one worker outbox message.
@@ -486,6 +494,10 @@ pub enum LocalCommand {
         /// Only return messages after this sequence number.
         #[arg(long = "after", value_name = "SEQUENCE")]
         after: Option<u64>,
+
+        /// Include full body.md content for each message.
+        #[arg(long)]
+        body: bool,
     },
 
     /// List messages sent by this worker to the orchestrator.
@@ -493,6 +505,10 @@ pub enum LocalCommand {
         /// Only return messages after this sequence number.
         #[arg(long = "after", value_name = "SEQUENCE")]
         after: Option<u64>,
+
+        /// Include full body.md content for each message.
+        #[arg(long)]
+        body: bool,
     },
 
     /// Acknowledge one inbox message.
@@ -665,16 +681,16 @@ impl WorkerCommand {
                 let result = services.orchestrator()?.get_worker(worker_id)?;
                 println!("{result:#?}");
             }
-            | Self::Outbox { worker_id, after } => {
+            | Self::Outbox { worker_id, after, body } => {
                 let result = services
                     .orchestrator()?
-                    .read_outbox(worker_id, after.map(runtime::Sequence))?;
+                    .read_outbox(worker_id, after.map(runtime::Sequence), body)?;
                 println!("{result:#?}");
             }
-            | Self::Inbox { worker_id, after } => {
+            | Self::Inbox { worker_id, after, body } => {
                 let result = services
                     .orchestrator()?
-                    .read_inbox(worker_id, after.map(runtime::Sequence))?;
+                    .read_inbox(worker_id, after.map(runtime::Sequence), body)?;
                 println!("{result:#?}");
             }
             | Self::Ack { worker_id, sequence } => {
@@ -740,12 +756,12 @@ impl LocalCommand {
                 let result = worker.status()?;
                 println!("{result:#?}");
             }
-            | Self::Inbox { after } => {
-                let result = worker.read_inbox(after.map(runtime::Sequence))?;
+            | Self::Inbox { after, body } => {
+                let result = worker.read_inbox(after.map(runtime::Sequence), body)?;
                 println!("{result:#?}");
             }
-            | Self::Outbox { after } => {
-                let result = worker.read_outbox(after.map(runtime::Sequence))?;
+            | Self::Outbox { after, body } => {
+                let result = worker.read_outbox(after.map(runtime::Sequence), body)?;
                 println!("{result:#?}");
             }
             | Self::Ack { sequence } => {

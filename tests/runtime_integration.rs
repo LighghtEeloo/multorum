@@ -195,7 +195,7 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     let contract = worker.contract().unwrap();
     assert!(contract.read_set_path.is_absolute());
     assert!(contract.write_set_path.is_absolute());
-    let inbox = worker.read_inbox(None).unwrap();
+    let inbox = worker.read_inbox(None, false).unwrap();
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].kind, MessageKind::Task);
     assert!(inbox[0].bundle_path.is_absolute());
@@ -213,7 +213,7 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
         .unwrap();
     assert!(!hint_body.exists(), "hint body should be moved into the inbox bundle");
 
-    let hinted = worker.read_inbox(Some(inbox[0].sequence)).unwrap();
+    let hinted = worker.read_inbox(Some(inbox[0].sequence), false).unwrap();
     assert_eq!(hinted.len(), 1);
     assert_eq!(hinted[0].kind, MessageKind::Hint);
     worker.ack_inbox(hinted[0].sequence).unwrap();
@@ -232,12 +232,12 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     assert!(!report_body.exists(), "report body should be moved into the outbox bundle");
     assert_eq!(worker.status().unwrap().state, WorkerState::Blocked);
 
-    let outbox = orchestrator.read_outbox(provision.worker_id.clone(), None).unwrap();
+    let outbox = orchestrator.read_outbox(provision.worker_id.clone(), None, false).unwrap();
     assert_eq!(outbox.len(), 1);
     assert_eq!(outbox[0].kind, MessageKind::Report);
     assert!(!outbox[0].acknowledged);
     orchestrator.ack_outbox(provision.worker_id.clone(), outbox[0].sequence).unwrap();
-    let acknowledged = orchestrator.read_outbox(provision.worker_id.clone(), None).unwrap();
+    let acknowledged = orchestrator.read_outbox(provision.worker_id.clone(), None, false).unwrap();
     assert!(acknowledged[0].acknowledged);
 
     let resolve_body = repo.path().join("resolve.md");
@@ -251,7 +251,7 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
         .unwrap();
     assert!(!resolve_body.exists(), "resolve body should be moved into the inbox bundle");
 
-    let follow_up = worker.read_inbox(hinted.last().map(|message| message.sequence)).unwrap();
+    let follow_up = worker.read_inbox(hinted.last().map(|message| message.sequence), false).unwrap();
     assert_eq!(follow_up.len(), 1);
     assert_eq!(follow_up[0].kind, MessageKind::Resolve);
     assert!(follow_up[0].bundle_path.is_absolute());
@@ -268,7 +268,7 @@ fn worker_creation_without_payload_still_seeds_initial_task_bundle() {
     assert!(provision.created_task_path.is_absolute());
 
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
-    let inbox = worker.read_inbox(None).unwrap();
+    let inbox = worker.read_inbox(None, false).unwrap();
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].kind, MessageKind::Task);
     assert_eq!(inbox[0].sequence.0, 1);

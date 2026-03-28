@@ -22,6 +22,10 @@ const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
         "after",
         "Optional sequence number; only outbox bundles after it are returned.",
     ),
+    optional_boolean_input(
+        "include_body",
+        "Include full body.md content for each returned message.",
+    ),
 ];
 
 const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[
@@ -29,6 +33,10 @@ const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[
     optional_integer_input(
         "after",
         "Optional sequence number; only inbox bundles after it are returned.",
+    ),
+    optional_boolean_input(
+        "include_body",
+        "Include full body.md content for each returned message.",
     ),
 ];
 
