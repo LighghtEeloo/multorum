@@ -16,6 +16,7 @@ use rmcp::model::{
     ListToolsResult, RawContent, RawResource, RawResourceTemplate, ReadResourceResult, Resource,
     ResourceContents, ResourceTemplate, ServerCapabilities, ServerInfo, Tool,
 };
+use rmcp::ErrorData;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -284,6 +285,27 @@ fn optional_u64(args: &serde_json::Map<String, Value>, key: &str) -> Option<u64>
 /// Extract an optional boolean argument.
 fn optional_bool(args: &serde_json::Map<String, Value>, key: &str) -> Option<bool> {
     args.get(key).and_then(Value::as_bool)
+}
+
+/// Parse mutually exclusive sequence filter arguments (`from`/`to` vs `exact`).
+fn extract_sequence_filter(
+    args: &serde_json::Map<String, Value>,
+) -> Result<crate::runtime::SequenceFilter, ErrorData> {
+    let from = optional_u64(args, "from").map(crate::runtime::Sequence);
+    let to = optional_u64(args, "to").map(crate::runtime::Sequence);
+    let exact = optional_u64(args, "exact").map(crate::runtime::Sequence);
+
+    if exact.is_some() && (from.is_some() || to.is_some()) {
+        return Err(ErrorData::invalid_params(
+            "exact is mutually exclusive with from/to",
+            None,
+        ));
+    }
+
+    Ok(match exact {
+        | Some(seq) => crate::runtime::SequenceFilter::Exact(seq),
+        | None => crate::runtime::SequenceFilter::Range { from, to },
+    })
 }
 
 /// Extract an optional string list argument.

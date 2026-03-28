@@ -177,3 +177,51 @@ pub struct AckRef {
     /// Message being acknowledged.
     pub message: MessageRef,
 }
+
+/// Filter for mailbox message listing.
+///
+/// Either a half-open range (`from`/`to`, both optional) or an exact
+/// match on a single sequence number. The two modes are mutually
+/// exclusive — `exact` may not be combined with `from`/`to`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SequenceFilter {
+    /// Return all messages whose sequence falls within
+    /// `[from, to]` (inclusive on both ends). Either bound may be
+    /// `None` for an unbounded side.
+    Range {
+        /// Inclusive lower bound. `None` means no lower bound.
+        from: Option<Sequence>,
+        /// Inclusive upper bound. `None` means no upper bound.
+        to: Option<Sequence>,
+    },
+    /// Return exactly the message with this sequence number.
+    Exact(Sequence),
+}
+
+impl Default for SequenceFilter {
+    fn default() -> Self {
+        Self::Range { from: None, to: None }
+    }
+}
+
+impl SequenceFilter {
+    /// Test whether a sequence passes this filter.
+    pub fn matches(self, seq: Sequence) -> bool {
+        match self {
+            | Self::Range { from, to } => {
+                if let Some(lo) = from {
+                    if seq < lo {
+                        return false;
+                    }
+                }
+                if let Some(hi) = to {
+                    if seq > hi {
+                        return false;
+                    }
+                }
+                true
+            }
+            | Self::Exact(target) => seq == target,
+        }
+    }
+}

@@ -19,8 +19,16 @@ const GET_WORKER_INPUTS: &[ToolInputDescriptor] =
 const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
     required_string_input("worker", "Runtime worker identity whose outbox should be read."),
     optional_integer_input(
-        "after",
-        "Optional sequence number; only outbox bundles after it are returned.",
+        "from",
+        "Inclusive lower-bound sequence number. Mutually exclusive with exact.",
+    ),
+    optional_integer_input(
+        "to",
+        "Inclusive upper-bound sequence number. Mutually exclusive with exact.",
+    ),
+    optional_integer_input(
+        "exact",
+        "Return exactly one message by sequence number. Mutually exclusive with from/to.",
     ),
     optional_boolean_input(
         "include_body",
@@ -31,8 +39,16 @@ const READ_OUTBOX_INPUTS: &[ToolInputDescriptor] = &[
 const READ_INBOX_INPUTS: &[ToolInputDescriptor] = &[
     required_string_input("worker", "Runtime worker identity whose inbox should be read."),
     optional_integer_input(
-        "after",
-        "Optional sequence number; only inbox bundles after it are returned.",
+        "from",
+        "Inclusive lower-bound sequence number. Mutually exclusive with exact.",
+    ),
+    optional_integer_input(
+        "to",
+        "Inclusive upper-bound sequence number. Mutually exclusive with exact.",
+    ),
+    optional_integer_input(
+        "exact",
+        "Return exactly one message by sequence number. Mutually exclusive with from/to.",
     ),
     optional_boolean_input(
         "include_body",

@@ -20,7 +20,7 @@ pub use crate::bundle::BundlePayload;
 pub use error::{Result, RuntimeError};
 pub use mailbox::{
     AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, PublishedBundle,
-    ReplyReference, Sequence,
+    ReplyReference, Sequence, SequenceFilter,
 };
 pub use orchestrator::{CreateWorker, FsOrchestratorService, OrchestratorService};
 pub use paths::{MultorumPaths, OrchestratorPaths, WorkerPaths};

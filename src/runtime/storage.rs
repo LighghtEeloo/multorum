@@ -28,7 +28,7 @@ use crate::runtime::{
     WorkerId, WorkerPaths,
     mailbox::{
         AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, ProtocolVersion,
-        PublishedBundle, ReplyReference, Sequence,
+        PublishedBundle, ReplyReference, Sequence, SequenceFilter,
     },
 };
 use crate::schema::rulebook::{
@@ -1018,13 +1018,13 @@ impl RuntimeFs {
         })
     }
 
-    /// Read mailbox bundles after an optional sequence threshold.
+    /// Read mailbox bundles matching a sequence filter.
     ///
     /// When `include_body` is true, each returned view includes the full
     /// `body.md` content. Otherwise only the first-line summary is set.
     pub(crate) fn list_mailbox_messages(
         &self, worktree_root: &Path, worker_id: &WorkerId, direction: MailboxDirection,
-        after: Option<Sequence>, include_body: bool,
+        filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>, RuntimeError> {
         let worker_paths = WorkerPaths::new(worktree_root.to_path_buf());
         let new_root = worker_paths.mailbox_new(direction);
@@ -1048,9 +1048,7 @@ impl RuntimeFs {
             }
 
             let envelope: BundleEnvelope = Self::read_toml(&bundle_path.join(ENVELOPE_FILE_NAME))?;
-            if let Some(after) = after
-                && envelope.sequence <= after
-            {
+            if !filter.matches(envelope.sequence) {
                 continue;
             }
 

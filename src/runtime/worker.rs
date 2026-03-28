@@ -14,7 +14,10 @@ use crate::bundle::BundlePayload;
 use super::{
     WorkerPaths,
     error::{Result, RuntimeError},
-    mailbox::{AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence},
+    mailbox::{
+        AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence,
+        SequenceFilter,
+    },
     project::CurrentProject,
     state::{MailboxMessageView, WorkerContractView, WorkerStatus},
     storage::RuntimeFs,
@@ -27,12 +30,12 @@ pub trait WorkerService {
 
     /// Read messages sent by the orchestrator to this worker.
     fn read_inbox(
-        &self, after: Option<Sequence>, include_body: bool,
+        &self, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>>;
 
     /// Read messages sent by this worker to the orchestrator.
     fn read_outbox(
-        &self, after: Option<Sequence>, include_body: bool,
+        &self, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>>;
 
     /// Acknowledge an inbox message.
@@ -154,39 +157,39 @@ impl WorkerService for FsWorkerService {
     }
 
     fn read_inbox(
-        &self, after: Option<Sequence>, include_body: bool,
+        &self, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
         let contract = self.contract_view()?;
         tracing::trace!(
             worktree_root = %self.worktree_root.display(),
             worker_id = %contract.worker_id,
-            after_sequence = ?after.map(|s| s.0),
+            filter = ?filter,
             "reading worker inbox"
         );
         self.fs.list_mailbox_messages(
             &self.worktree_root,
             &contract.worker_id,
             MailboxDirection::Inbox,
-            after,
+            filter,
             include_body,
         )
     }
 
     fn read_outbox(
-        &self, after: Option<Sequence>, include_body: bool,
+        &self, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
         let contract = self.contract_view()?;
         tracing::trace!(
             worktree_root = %self.worktree_root.display(),
             worker_id = %contract.worker_id,
-            after_sequence = ?after.map(|s| s.0),
+            filter = ?filter,
             "reading worker outbox"
         );
         self.fs.list_mailbox_messages(
             &self.worktree_root,
             &contract.worker_id,
             MailboxDirection::Outbox,
-            after,
+            filter,
             include_body,
         )
     }

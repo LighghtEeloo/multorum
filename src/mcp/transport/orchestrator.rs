@@ -18,8 +18,8 @@ use crate::runtime::{CreateWorker, FsOrchestratorService, OrchestratorService, W
 
 use super::{
     DeferredService, ServiceState, args_or_empty, dispatch_tool, extract_payload, extract_reply,
-    list_resource_templates_result, list_resources_result, list_tools_result,
-    mcp_to_resource_error, optional_bool, optional_str, optional_string_list, optional_u64,
+    extract_sequence_filter, list_resource_templates_result, list_resources_result,
+    list_tools_result, mcp_to_resource_error, optional_bool, optional_str, optional_string_list,
     required_str, required_u64, resource_success, resource_text_success,
     runtime_to_resource_error, server_info, tool_error_result, validate_tool_arguments,
 };
@@ -109,15 +109,15 @@ impl OrchestratorHandler {
             }
             | "read_worker_outbox" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
-                let after = optional_u64(&args, "after").map(crate::runtime::Sequence);
+                let filter = extract_sequence_filter(&args)?;
                 let include_body = optional_bool(&args, "include_body").unwrap_or(false);
-                dispatch_tool(service.read_outbox(worker_id, after, include_body))
+                dispatch_tool(service.read_outbox(worker_id, filter, include_body))
             }
             | "read_worker_inbox" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
-                let after = optional_u64(&args, "after").map(crate::runtime::Sequence);
+                let filter = extract_sequence_filter(&args)?;
                 let include_body = optional_bool(&args, "include_body").unwrap_or(false);
-                dispatch_tool(service.read_inbox(worker_id, after, include_body))
+                dispatch_tool(service.read_inbox(worker_id, filter, include_body))
             }
             | "ack_worker_outbox_message" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
@@ -238,8 +238,9 @@ impl OrchestratorHandler {
                 resource_success(uri, &detail)
             }
             | Some("outbox") => {
-                let messages =
-                    service.read_outbox(worker_id, None, false).map_err(runtime_to_resource_error)?;
+                let messages = service
+                    .read_outbox(worker_id, Default::default(), false)
+                    .map_err(runtime_to_resource_error)?;
                 resource_success(uri, &messages)
             }
             | Some("contract" | "transcript" | "checks") => Err(ErrorData::resource_not_found(

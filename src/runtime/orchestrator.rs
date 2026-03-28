@@ -20,7 +20,10 @@ use crate::{
 
 use super::{
     error::{Result, RuntimeError},
-    mailbox::{AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence},
+    mailbox::{
+        AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence,
+        SequenceFilter,
+    },
     project::CurrentProject,
     state::{
         ActivePerspectiveSummary, CreateResult, DeleteResult, DiscardResult, MailboxMessageView,
@@ -112,12 +115,12 @@ pub trait OrchestratorService {
 
     /// Read messages sent by a worker to the orchestrator.
     fn read_outbox(
-        &self, worker_id: WorkerId, after: Option<Sequence>, include_body: bool,
+        &self, worker_id: WorkerId, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>>;
 
     /// Read messages sent by the orchestrator to a worker.
     fn read_inbox(
-        &self, worker_id: WorkerId, after: Option<Sequence>, include_body: bool,
+        &self, worker_id: WorkerId, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>>;
 
     /// Acknowledge one consumed worker outbox bundle.
@@ -332,7 +335,7 @@ impl FsOrchestratorService {
                 &worker.worktree_path,
                 &worker.worker_id,
                 MailboxDirection::Outbox,
-                None,
+                SequenceFilter::default(),
                 false,
             )?;
             let report = messages
@@ -493,7 +496,7 @@ impl OrchestratorService for FsOrchestratorService {
     }
 
     fn read_outbox(
-        &self, worker_id: WorkerId, after: Option<Sequence>, include_body: bool,
+        &self, worker_id: WorkerId, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
         let state = self.fs.load_state()?;
         let (_, worker) = state
@@ -503,13 +506,13 @@ impl OrchestratorService for FsOrchestratorService {
             &worker.worktree_path,
             &worker.worker_id,
             MailboxDirection::Outbox,
-            after,
+            filter,
             include_body,
         )
     }
 
     fn read_inbox(
-        &self, worker_id: WorkerId, after: Option<Sequence>, include_body: bool,
+        &self, worker_id: WorkerId, filter: SequenceFilter, include_body: bool,
     ) -> Result<Vec<MailboxMessageView>> {
         let state = self.fs.load_state()?;
         let (_, worker) = state
@@ -519,7 +522,7 @@ impl OrchestratorService for FsOrchestratorService {
             &worker.worktree_path,
             &worker.worker_id,
             MailboxDirection::Inbox,
-            after,
+            filter,
             include_body,
         )
     }

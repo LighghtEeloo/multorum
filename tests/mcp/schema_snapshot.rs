@@ -84,7 +84,9 @@ fn orchestrator_tool_input_schemas_stable() {
         inputs,
         &[
             ("worker", ToolInputType::String, true),
-            ("after", ToolInputType::Integer, false),
+            ("from", ToolInputType::Integer, false),
+            ("to", ToolInputType::Integer, false),
+            ("exact", ToolInputType::Integer, false),
             ("include_body", ToolInputType::Boolean, false),
         ]
     );
@@ -229,7 +231,9 @@ fn worker_tool_input_schemas_stable() {
     assert_eq!(
         inputs,
         &[
-            ("after", ToolInputType::Integer, false),
+            ("from", ToolInputType::Integer, false),
+            ("to", ToolInputType::Integer, false),
+            ("exact", ToolInputType::Integer, false),
             ("include_body", ToolInputType::Boolean, false),
         ]
     );

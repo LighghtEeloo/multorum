@@ -18,9 +18,9 @@ use crate::runtime::{FsWorkerService, Sequence, WorkerService};
 
 use super::{
     DeferredService, ServiceState, args_or_empty, dispatch_tool, extract_payload, extract_reply,
-    list_resource_templates_result, list_resources_result, list_tools_result,
-    mcp_to_resource_error, optional_bool, optional_str, optional_u64, required_str, required_u64,
-    resource_success, resource_text_success, runtime_to_resource_error, server_info,
+    extract_sequence_filter, list_resource_templates_result, list_resources_result,
+    list_tools_result, mcp_to_resource_error, optional_bool, optional_str, required_str,
+    required_u64, resource_success, resource_text_success, runtime_to_resource_error, server_info,
     tool_error_result, validate_tool_arguments,
 };
 
@@ -90,14 +90,14 @@ impl WorkerHandler {
         match name {
             | "get_contract" => dispatch_tool(service.contract()),
             | "read_inbox" => {
-                let after = optional_u64(&args, "after").map(Sequence);
+                let filter = extract_sequence_filter(&args)?;
                 let include_body = optional_bool(&args, "include_body").unwrap_or(false);
-                dispatch_tool(service.read_inbox(after, include_body))
+                dispatch_tool(service.read_inbox(filter, include_body))
             }
             | "read_outbox" => {
-                let after = optional_u64(&args, "after").map(Sequence);
+                let filter = extract_sequence_filter(&args)?;
                 let include_body = optional_bool(&args, "include_body").unwrap_or(false);
-                dispatch_tool(service.read_outbox(after, include_body))
+                dispatch_tool(service.read_outbox(filter, include_body))
             }
             | "ack_inbox_message" => {
                 let sequence = required_u64(&args, "sequence")?;
@@ -140,7 +140,9 @@ impl WorkerHandler {
                 resource_success(uri, &contract)
             }
             | "multorum://worker/inbox" => {
-                let messages = service.read_inbox(None, false).map_err(runtime_to_resource_error)?;
+                let messages = service
+                    .read_inbox(Default::default(), false)
+                    .map_err(runtime_to_resource_error)?;
                 resource_success(uri, &messages)
             }
             | "multorum://worker/status" => {

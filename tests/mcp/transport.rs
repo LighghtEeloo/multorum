@@ -362,7 +362,7 @@ fn orchestrator_hint_worker() {
     assert!(!hint_body.exists(), "body should be moved into .multorum storage");
 
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    let inbox = worker_svc.read_inbox(None, false).unwrap();
+    let inbox = worker_svc.read_inbox(Default::default(), false).unwrap();
     let hint = inbox.iter().find(|message| message.kind == MessageKind::Hint).unwrap();
     assert_eq!(hint.kind, MessageKind::Hint);
     worker_svc.ack_inbox(hint.sequence).unwrap();
@@ -729,7 +729,7 @@ fn worker_read_inbox() {
 }
 
 #[test]
-fn worker_read_inbox_with_after() {
+fn worker_read_inbox_with_filter() {
     let (_dir, svc) = setup_repo();
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
@@ -740,7 +740,7 @@ fn worker_read_inbox_with_after() {
     assert_eq!(tool_json(&inbox).as_array().unwrap().len(), 1);
     assert_eq!(tool_json(&inbox).as_array().unwrap()[0]["kind"], "task");
 
-    let result = handler.dispatch("read_inbox", json_args(json!({"after": 999}))).unwrap();
+    let result = handler.dispatch("read_inbox", json_args(json!({"from": 999}))).unwrap();
     assert_tool_success(&result);
     assert!(tool_json(&result).as_array().unwrap().is_empty());
 }
@@ -776,7 +776,7 @@ fn worker_send_report() {
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
 
-    let inbox = worker_svc.read_inbox(None, false).unwrap();
+    let inbox = worker_svc.read_inbox(Default::default(), false).unwrap();
     for msg in &inbox {
         worker_svc.ack_inbox(msg.sequence).unwrap();
     }
@@ -797,7 +797,7 @@ fn worker_send_report_accepts_inline_body_text() {
     let (_, worktree) = create_worker_runtime(&svc);
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
 
-    let inbox = worker_svc.read_inbox(None, false).unwrap();
+    let inbox = worker_svc.read_inbox(Default::default(), false).unwrap();
     for msg in &inbox {
         worker_svc.ack_inbox(msg.sequence).unwrap();
     }

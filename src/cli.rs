@@ -172,6 +172,38 @@ impl BundlePayloadArgs {
     }
 }
 
+/// Shared sequence filtering options for mailbox read commands.
+///
+/// `--exact` is mutually exclusive with `--from` and `--to`.
+#[derive(Debug, Clone, Args)]
+pub struct SequenceFilterArgs {
+    /// Inclusive lower-bound sequence number.
+    #[arg(long = "from", value_name = "SEQUENCE", conflicts_with = "exact")]
+    pub from: Option<u64>,
+
+    /// Inclusive upper-bound sequence number.
+    #[arg(long = "to", value_name = "SEQUENCE", conflicts_with = "exact")]
+    pub to: Option<u64>,
+
+    /// Return exactly one message by sequence number.
+    #[arg(long = "exact", value_name = "SEQUENCE", conflicts_with_all = ["from", "to"])]
+    pub exact: Option<u64>,
+}
+
+impl SequenceFilterArgs {
+    /// Convert CLI filter arguments into runtime sequence filter.
+    pub fn into_runtime(self) -> runtime::SequenceFilter {
+        if let Some(seq) = self.exact {
+            runtime::SequenceFilter::Exact(runtime::Sequence(seq))
+        } else {
+            runtime::SequenceFilter::Range {
+                from: self.from.map(runtime::Sequence),
+                to: self.to.map(runtime::Sequence),
+            }
+        }
+    }
+}
+
 /// Shared reply metadata for mailbox bundles that answer earlier messages.
 #[derive(Debug, Clone, Args)]
 pub struct ReplyReferenceArgs {
@@ -372,9 +404,8 @@ pub enum WorkerCommand {
         /// Worker identity whose outbox should be read.
         worker_id: WorkerId,
 
-        /// Only return messages after this sequence number.
-        #[arg(long = "after", value_name = "SEQUENCE")]
-        after: Option<u64>,
+        #[command(flatten)]
+        filter: SequenceFilterArgs,
 
         /// Include full body.md content for each message.
         #[arg(long)]
@@ -386,9 +417,8 @@ pub enum WorkerCommand {
         /// Worker identity whose inbox should be read.
         worker_id: WorkerId,
 
-        /// Only return messages after this sequence number.
-        #[arg(long = "after", value_name = "SEQUENCE")]
-        after: Option<u64>,
+        #[command(flatten)]
+        filter: SequenceFilterArgs,
 
         /// Include full body.md content for each message.
         #[arg(long)]
@@ -491,9 +521,8 @@ pub enum LocalCommand {
 
     /// List messages sent by the orchestrator to this worker.
     Inbox {
-        /// Only return messages after this sequence number.
-        #[arg(long = "after", value_name = "SEQUENCE")]
-        after: Option<u64>,
+        #[command(flatten)]
+        filter: SequenceFilterArgs,
 
         /// Include full body.md content for each message.
         #[arg(long)]
@@ -502,9 +531,8 @@ pub enum LocalCommand {
 
     /// List messages sent by this worker to the orchestrator.
     Outbox {
-        /// Only return messages after this sequence number.
-        #[arg(long = "after", value_name = "SEQUENCE")]
-        after: Option<u64>,
+        #[command(flatten)]
+        filter: SequenceFilterArgs,
 
         /// Include full body.md content for each message.
         #[arg(long)]
@@ -681,16 +709,16 @@ impl WorkerCommand {
                 let result = services.orchestrator()?.get_worker(worker_id)?;
                 println!("{result:#?}");
             }
-            | Self::Outbox { worker_id, after, body } => {
+            | Self::Outbox { worker_id, filter, body } => {
                 let result = services
                     .orchestrator()?
-                    .read_outbox(worker_id, after.map(runtime::Sequence), body)?;
+                    .read_outbox(worker_id, filter.into_runtime(), body)?;
                 println!("{result:#?}");
             }
-            | Self::Inbox { worker_id, after, body } => {
+            | Self::Inbox { worker_id, filter, body } => {
                 let result = services
                     .orchestrator()?
-                    .read_inbox(worker_id, after.map(runtime::Sequence), body)?;
+                    .read_inbox(worker_id, filter.into_runtime(), body)?;
                 println!("{result:#?}");
             }
             | Self::Ack { worker_id, sequence } => {
@@ -756,12 +784,12 @@ impl LocalCommand {
                 let result = worker.status()?;
                 println!("{result:#?}");
             }
-            | Self::Inbox { after, body } => {
-                let result = worker.read_inbox(after.map(runtime::Sequence), body)?;
+            | Self::Inbox { filter, body } => {
+                let result = worker.read_inbox(filter.into_runtime(), body)?;
                 println!("{result:#?}");
             }
-            | Self::Outbox { after, body } => {
-                let result = worker.read_outbox(after.map(runtime::Sequence), body)?;
+            | Self::Outbox { filter, body } => {
+                let result = worker.read_outbox(filter.into_runtime(), body)?;
                 println!("{result:#?}");
             }
             | Self::Ack { sequence } => {
