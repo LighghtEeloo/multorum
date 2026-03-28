@@ -5,7 +5,7 @@ Multorum is the infrastructure for orchestrated parallel development on a single
 > Belua multorum es capitums!
 > 
 > <p align="center">
->   <img src="assets/multorum-20260325.png" alt="Multorum logo" width="40%">
+>   <img src="assets/multorum-20260327.png" alt="Multorum logo" width="40%">
 > </p>
 
 ## Definition by Negation
