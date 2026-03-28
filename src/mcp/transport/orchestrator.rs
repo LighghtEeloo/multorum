@@ -38,6 +38,12 @@ pub struct OrchestratorHandler {
     resource_templates: ListResourceTemplatesResult,
 }
 
+impl Default for OrchestratorHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrchestratorHandler {
     /// Construct the handler with a pre-bound service.
     ///

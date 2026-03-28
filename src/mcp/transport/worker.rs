@@ -38,6 +38,12 @@ pub struct WorkerHandler {
     resource_templates: ListResourceTemplatesResult,
 }
 
+impl Default for WorkerHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorkerHandler {
     /// Construct the handler with a pre-bound service.
     ///

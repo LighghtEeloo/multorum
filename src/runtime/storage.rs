@@ -364,6 +364,23 @@ impl PreparedPromotion {
     }
 }
 
+/// Pre-merge verification results collected before the canonical branch is
+/// mutated.
+///
+/// Bundles the four values produced by the verification phase so that
+/// [`RuntimeFs::prepare_merge_artifacts`] does not exceed the argument limit
+/// and callers can access individual fields after the call.
+pub(crate) struct MergeVerification {
+    /// Resolved head commit submitted by the worker.
+    pub(crate) head_commit: CanonicalCommitHash,
+    /// Files changed by the worker relative to the base commit.
+    pub(crate) changed_files: BTreeSet<PathBuf>,
+    /// Checks that executed during integration.
+    pub(crate) ran_checks: Vec<String>,
+    /// Checks skipped due to trusted evidence.
+    pub(crate) skipped_checks: Vec<String>,
+}
+
 /// Merge-time runtime artifacts staged in the system temporary directory.
 ///
 /// The staged directory is invisible to readers until promotion. This
@@ -848,9 +865,10 @@ impl RuntimeFs {
     /// `.multorum/orchestrator/`.
     pub(crate) fn prepare_merge_artifacts(
         &self, updated_state: &StateFile, worker: &WorkerEntry, group: &BiddingGroupRecord,
-        head_commit: &CanonicalCommitHash, changed_files: &BTreeSet<PathBuf>,
-        ran_checks: &[String], skipped_checks: &[String], payload: BundlePayload,
+        verification: &MergeVerification, payload: BundlePayload,
     ) -> Result<StagedMergeArtifacts, RuntimeError> {
+        let MergeVerification { head_commit, changed_files, ran_checks, skipped_checks } =
+            verification;
         payload.validate()?;
 
         fs::create_dir_all(self.paths.audit())?;

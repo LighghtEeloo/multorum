@@ -995,21 +995,24 @@ impl OrchestratorService for FsOrchestratorService {
         }
         group_mut.clear_boundary();
 
+        let verification = crate::runtime::storage::MergeVerification {
+            head_commit,
+            changed_files,
+            ran_checks,
+            skipped_checks,
+        };
         let mut staged_merge = self.fs.prepare_merge_artifacts(
             &updated_state,
             &worker_entry_for_audit,
             &group_for_audit,
-            &head_commit,
-            &changed_files,
-            &ran_checks,
-            &skipped_checks,
+            &verification,
             audit_payload,
         )?;
 
         self.fs.vcs().ensure_clean_workspace(self.fs.workspace_root())?;
-        let empty_submission = changed_files.is_empty();
+        let empty_submission = verification.changed_files.is_empty();
         if !empty_submission {
-            self.fs.vcs().begin_integration(self.fs.workspace_root(), &head_commit)?;
+            self.fs.vcs().begin_integration(self.fs.workspace_root(), &verification.head_commit)?;
         }
         if let Err(error) = staged_merge.promote() {
             let abort_error = if empty_submission {
@@ -1021,7 +1024,7 @@ impl OrchestratorService for FsOrchestratorService {
             return Err(abort_error.map(RuntimeError::from).unwrap_or(error));
         }
         if let Err(error) =
-            self.fs.vcs().finalize_integration(self.fs.workspace_root(), &head_commit)
+            self.fs.vcs().finalize_integration(self.fs.workspace_root(), &verification.head_commit)
         {
             let rollback_error = staged_merge.rollback().err();
             let abort_error = if empty_submission {
@@ -1053,15 +1056,15 @@ impl OrchestratorService for FsOrchestratorService {
         tracing::info!(
             worker_id = %worker_id,
             perspective = %perspective,
-            head_commit = %head_commit,
+            head_commit = %verification.head_commit,
             "merged worker"
         );
         Ok(MergeResult {
             worker_id,
             perspective,
             state: WorkerState::Merged,
-            ran_checks,
-            skipped_checks,
+            ran_checks: verification.ran_checks,
+            skipped_checks: verification.skipped_checks,
         })
     }
 
