@@ -22,7 +22,7 @@ const VALIDATE_PERSPECTIVES_INPUTS: &[ToolInputDescriptor] = &[
 
 const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[required_string_input(
     "perspective",
-    "Perspective whose blocked bidding group should move to HEAD.",
+    "Perspective whose non-active bidding group should move to HEAD.",
 )];
 
 const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] =
@@ -53,7 +53,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "forward_perspective",
-            description: "Move one blocked bidding group to HEAD.",
+            description: "Move one non-active bidding group to HEAD.",
             inputs: FORWARD_PERSPECTIVE_INPUTS,
         },
         ToolDescriptor {

@@ -103,13 +103,15 @@ The orchestrator can check whether a set of perspectives satisfies the conflict-
 
 The recompiled boundary must be a superset of the group's current materialized boundary, both read and write sets independently. Boundary expansion is permitted. Boundary reduction is rejected, because it would break the contract that live workers were created under.
 
+Before moving any worktree, Multorum validates the whole live bidding group: every live worker must be non-`ACTIVE`, must have a durable replay checkpoint, and must still be clean at that checkpoint. Worktrees are then forwarded one by one. If a later worker fails to forward, Multorum rolls back every worker it already moved and does not persist the new group base or boundary. The atomicity boundary is therefore the persisted runtime state, not each individual Git operation.
+
 The operation is intentionally narrow:
 
 - it addresses the whole live bidding group for one perspective, never one worker in isolation
-- it is rejected unless every live worker in that bidding group is exactly `BLOCKED`
-- it preserves progress only from the `head_commit` recorded in each worker's latest blocking `report`
+- it is rejected unless every live worker in that bidding group is non-`ACTIVE`
+- it preserves progress only from a durable checkpoint already recorded for each worker: the latest blocking `report` for `BLOCKED` workers, or the submitted head commit for `COMMITTED` workers
 - it rejects dirty or drifted worktrees rather than trying to invent recovery
-- it leaves every forwarded worker in `BLOCKED`; the orchestrator must still issue `resolve` afterward
+- it leaves every forwarded worker in its current non-`ACTIVE` state; blocked workers still need `resolve`, and committed workers still need `revise`, `merge`, or `discard`
 
 ---
 
@@ -456,7 +458,7 @@ Once one worker in a bidding group reaches `MERGED`, every sibling in that group
 
 `delete` is not a lifecycle transition. It removes the worktree and the worker's state file. If that worker was the last member of its perspective, it also removes the group's state file.
 
-`perspective forward` is also not a lifecycle transition. It repins a blocked bidding group to HEAD while leaving worker states unchanged.
+`perspective forward` is also not a lifecycle transition. It repins a bidding group whose live workers are all non-`ACTIVE` to HEAD while leaving worker states unchanged.
 
 ### Transitions
 
@@ -645,7 +647,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 
 - `multorum perspective list` — List perspectives from the current rulebook.
 - `multorum perspective validate <perspectives>...` — Compile the named perspectives from the current rulebook, check conflict-freedom between them, and check them against active bidding groups. With `--no-live`, check only the named perspectives against each other.
-- `multorum perspective forward <perspective>` — Move the whole live bidding group for `perspective` to HEAD. Recompile the perspective boundary from the current rulebook. Rejected unless every live worker in that bidding group is `BLOCKED` and the recompiled boundary is a superset of the current materialized boundary. Progress is preserved only from the `head_commit` recorded in each worker's latest blocking `report`. No lifecycle transition.
+- `multorum perspective forward <perspective>` — Move the whole live bidding group for `perspective` to HEAD. Recompile the perspective boundary from the current rulebook. Rejected unless every live worker in that bidding group is non-`ACTIVE` and the recompiled boundary is a superset of the current materialized boundary. Progress is preserved only from durable checkpoints already recorded for each worker: the latest blocking `report` for `BLOCKED` workers, or the submitted head commit for `COMMITTED` workers. No lifecycle transition.
 
 ### Orchestrator Worker Commands
 

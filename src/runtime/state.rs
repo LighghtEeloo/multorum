@@ -76,6 +76,17 @@ impl WorkerState {
     pub fn can_submit(self) -> bool {
         matches!(self, Self::Active)
     }
+
+    /// Whether the worker can participate in `perspective forward`.
+    ///
+    /// Forwarding is allowed only after execution has paused at a
+    /// durable checkpoint: either a blocker report (`BLOCKED`) or a
+    /// submitted commit (`COMMITTED`). `ACTIVE` workers may still be
+    /// mutating their worktrees, and finalized workers no longer belong
+    /// to the live bidding group.
+    pub fn can_forward_perspective(self) -> bool {
+        matches!(self, Self::Blocked | Self::Committed)
+    }
 }
 
 impl MessageKind {

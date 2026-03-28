@@ -129,13 +129,13 @@ pub enum RuntimeError {
         perspective: PerspectiveName,
     },
 
-    /// Forwarding requires every live worker in the bidding group to be blocked.
+    /// Forwarding requires every live worker in the bidding group to be non-active.
     #[error(
-        "cannot forward perspective `{perspective}` because not every live worker is BLOCKED: {workers}",
+        "cannot forward perspective `{perspective}` because some live workers are still ACTIVE: {workers}",
         workers = format_worker_states(workers)
     )]
-    PerspectiveForwardRequiresBlocked {
-        /// Perspective whose live workers failed the blocked-only check.
+    PerspectiveForwardRequiresNonActive {
+        /// Perspective whose live workers failed the non-active check.
         perspective: PerspectiveName,
         /// Live workers whose states prevent forwarding.
         workers: Vec<(WorkerId, WorkerState)>,
@@ -170,6 +170,17 @@ pub enum RuntimeError {
         perspective: PerspectiveName,
     },
 
+    /// A committed worker had no submitted head commit to anchor forwarding.
+    #[error(
+        "cannot forward worker `{worker_id}` (`{perspective}`) because its submitted head commit is missing"
+    )]
+    PerspectiveForwardMissingSubmittedHead {
+        /// Worker whose committed submission omitted the replay head.
+        worker_id: WorkerId,
+        /// Perspective held by the worker.
+        perspective: PerspectiveName,
+    },
+
     /// A blocked worker drifted away from the commit recorded in its blocker report.
     #[error(
         "cannot forward worker `{worker_id}` (`{perspective}`) because its current head `{current_head_commit}` no longer matches the blocking report head `{reported_head_commit}`"
@@ -181,6 +192,21 @@ pub enum RuntimeError {
         perspective: PerspectiveName,
         /// Commit recorded in the latest blocking report.
         reported_head_commit: CanonicalCommitHash,
+        /// Commit currently checked out in the worker worktree.
+        current_head_commit: CanonicalCommitHash,
+    },
+
+    /// A committed worker drifted away from the submitted commit.
+    #[error(
+        "cannot forward worker `{worker_id}` (`{perspective}`) because its current head `{current_head_commit}` no longer matches the submitted head `{submitted_head_commit}`"
+    )]
+    PerspectiveForwardSubmittedHeadMismatch {
+        /// Worker whose current head drifted after submission.
+        worker_id: WorkerId,
+        /// Perspective held by the worker.
+        perspective: PerspectiveName,
+        /// Commit recorded in the committed worker state.
+        submitted_head_commit: CanonicalCommitHash,
         /// Commit currently checked out in the worker worktree.
         current_head_commit: CanonicalCommitHash,
     },

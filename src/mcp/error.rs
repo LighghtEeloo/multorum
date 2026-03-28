@@ -80,11 +80,13 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::ConflictWithActiveBiddingGroup { .. }
             | RuntimeError::BiddingGroupBoundaryMismatch { .. }
             | RuntimeError::BiddingGroupBaseMismatch { .. } => McpErrorCode::BiddingGroupConflict,
-            | RuntimeError::PerspectiveForwardRequiresBlocked { .. }
+            | RuntimeError::PerspectiveForwardRequiresNonActive { .. }
             | RuntimeError::PerspectiveForwardMissingGroup { .. }
             | RuntimeError::PerspectiveForwardMissingReport { .. }
             | RuntimeError::PerspectiveForwardMissingReportedHead { .. }
             | RuntimeError::PerspectiveForwardHeadMismatch { .. }
+            | RuntimeError::PerspectiveForwardMissingSubmittedHead { .. }
+            | RuntimeError::PerspectiveForwardSubmittedHeadMismatch { .. }
             | RuntimeError::CheckFailed(_) => McpErrorCode::CheckFailed,
             | RuntimeError::WriteSetViolation { .. } => McpErrorCode::WriteSetViolation,
             | RuntimeError::MailboxConflict => McpErrorCode::MailboxConflict,

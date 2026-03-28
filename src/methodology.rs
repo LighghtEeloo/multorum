@@ -83,7 +83,7 @@ Operate from the canonical workspace root. Treat Multorum as reactive infrastruc
 - The orchestrator owns `.multorum/rulebook.toml` in the canonical workspace.
 - Edit the rulebook before creating workers when the ownership model needs to change.
 - Validate perspective combinations when concurrency assumptions matter.
-- Forward a blocked bidding group only after updating the canonical workspace and the current rulebook, and only when every live worker in that group is `BLOCKED`.
+- Forward a bidding group only after updating the canonical workspace and the current rulebook, and only when every live worker in that group is non-`ACTIVE`.
 
 ## Preferred surfaces
 

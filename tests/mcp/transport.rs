@@ -102,7 +102,7 @@ fn orchestrator_list_perspectives() {
 }
 
 #[test]
-fn orchestrator_forward_perspective_requires_blocked_worker() {
+fn orchestrator_forward_perspective_requires_non_active_worker() {
     let (_dir, svc) = setup_repo();
     svc.create_worker(CreateWorker::new(perspective())).unwrap();
     let handler = OrchestratorHandler::with_service(svc);

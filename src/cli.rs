@@ -360,7 +360,7 @@ pub enum PerspectiveCommand {
         no_live: bool,
     },
 
-    /// Forward one blocked bidding group to HEAD.
+    /// Forward one non-active bidding group to HEAD.
     Forward {
         /// Perspective whose live bidding group should move forward.
         perspective: PerspectiveName,

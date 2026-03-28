@@ -46,8 +46,8 @@ pub trait WorkerService {
     /// Any path-backed payload files are moved into `.multorum/`
     /// storage if publication succeeds.
     ///
-    /// Note: A later perspective-forward operation can preserve worker
-    /// progress only from the `head_commit` recorded here.
+    /// Note: A later perspective-forward operation can preserve
+    /// `BLOCKED` workers only from the `head_commit` recorded here.
     fn send_report(
         &self, head_commit: Option<String>, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;
@@ -56,6 +56,9 @@ pub trait WorkerService {
     ///
     /// Any path-backed payload files are moved into `.multorum/`
     /// storage if publication succeeds.
+    ///
+    /// Note: A later perspective-forward operation can preserve
+    /// `COMMITTED` workers only from the submitted head recorded here.
     fn send_commit(&self, head_commit: String, payload: BundlePayload) -> Result<PublishedBundle>;
 
     /// Return the current worker status projection.
