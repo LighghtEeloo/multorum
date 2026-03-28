@@ -133,14 +133,14 @@ Multorum ships the high-level orchestrator and worker guidance inside the binary
 
 ### 1) Add the orchestrator MCP server
 
-Add this to your MCP host config. Pass the canonical workspace root explicitly so the server cannot bind itself from an accidental host `cwd`.
+Add this to your MCP host config. Optionally, pass the canonical workspace root explicitly so the server cannot bind itself from an accidental host `cwd`.
 
 ```json
 {
   "mcpServers": {
     "multorum-orchestrator": {
       "command": "/absolute/path/to/multorum",
-      "args": ["serve", "orchestrator", "--workspace-root", "/absolute/path/to/your/repo"],
+      "args": ["serve", "orchestrator"],
       "cwd": "/absolute/path/to/your/repo"
     }
   }
@@ -149,14 +149,14 @@ Add this to your MCP host config. Pass the canonical workspace root explicitly s
 
 ### 2) Add a worker MCP server
 
-Repeat for each worker worktree. Pass that specific worktree explicitly so the worker server cannot accidentally bind to the canonical root or another repo.
+Repeat for each worker worktree. Optionally, pass that specific worktree explicitly so the worker server cannot accidentally bind to the canonical root or another repo.
 
 ```json
 {
   "mcpServers": {
     "multorum-worker": {
       "command": "/absolute/path/to/multorum",
-      "args": ["serve", "worker", "--worktree-root", "/absolute/path/to/worker-worktree"],
+      "args": ["serve", "worker"],
       "cwd": "/absolute/path/to/worker-worktree"
     }
   }
