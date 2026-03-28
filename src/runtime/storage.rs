@@ -14,9 +14,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use tempfile::TempDir;
 
 use crate::bundle::{BODY_FILE_NAME, BundlePayload, BundleWriter};
 use crate::runtime::{
@@ -246,7 +246,7 @@ impl PreparedPromotion {
     }
 }
 
-/// Merge-time runtime artifacts staged under `.multorum/orchestrator/`.
+/// Merge-time runtime artifacts staged in the system temporary directory.
 ///
 /// The staged directory is invisible to readers until promotion. This
 /// lets `merge_worker` validate audit payloads and prepare the final
@@ -254,7 +254,7 @@ impl PreparedPromotion {
 #[derive(Debug)]
 pub(crate) struct StagedMergeArtifacts {
     promotions: Vec<PreparedPromotion>,
-    staging_root: PathBuf,
+    staging_dir: Option<TempDir>,
 }
 
 impl StagedMergeArtifacts {
@@ -285,15 +285,16 @@ impl StagedMergeArtifacts {
     ///
     /// Note: Cleanup happens after the canonical commit is finalized, so
     /// failures here must not change the merge result.
-    pub(crate) fn cleanup(self) {
-        if self.staging_root.exists()
-            && let Err(error) = fs::remove_dir_all(&self.staging_root)
-        {
-            tracing::warn!(
-                path = %self.staging_root.display(),
-                error = %error,
-                "failed to clean up merge staging"
-            );
+    pub(crate) fn cleanup(mut self) {
+        if let Some(staging_dir) = self.staging_dir.take() {
+            let staging_path = staging_dir.path().to_path_buf();
+            if let Err(error) = staging_dir.close() {
+                tracing::warn!(
+                    path = %staging_path.display(),
+                    error = %error,
+                    "failed to clean up merge staging"
+                );
+            }
         }
     }
 }
@@ -632,6 +633,10 @@ impl RuntimeFs {
     /// Note: This prepares audit state, `state.toml`, and the exclusion
     /// set before canonical integration starts. Promotion still happens
     /// later, after the worker patch has been applied in no-commit mode.
+    ///
+    /// Note: Merge staging is allocated with `tempfile` in the system
+    /// temp directory so transient artifacts do not pollute
+    /// `.multorum/orchestrator/`.
     pub(crate) fn prepare_merge_artifacts(
         &self, updated_state: &StateFile, worker: &WorkerEntry, group: &BiddingGroupRecord,
         head_commit: &CanonicalCommitHash, changed_files: &BTreeSet<PathBuf>,
@@ -641,16 +646,10 @@ impl RuntimeFs {
 
         fs::create_dir_all(self.paths.audit())?;
         let orchestrator_paths = self.paths.orchestrator();
-        let staging_nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock is after unix epoch")
-            .as_nanos();
-        let staging_root = orchestrator_paths.root().join(format!(
-            ".merge-{}-{}",
-            worker.worker_id.as_str(),
-            staging_nonce
-        ));
-        fs::create_dir_all(&staging_root)?;
+        let staging_dir = tempfile::Builder::new()
+            .prefix(&format!("multorum-merge-{}-", worker.worker_id.as_str()))
+            .tempdir()?;
+        let staging_root = staging_dir.path();
 
         let staged_state_path = staging_root.join("state.toml");
         Self::write_toml(&staged_state_path, updated_state)?;
@@ -687,7 +686,7 @@ impl RuntimeFs {
             promotions.push(PreparedPromotion::new(
                 staged_bundle_root,
                 final_bundle_root,
-                &staging_root,
+                staging_root,
                 "backup-audit-bundle",
             ));
         }
@@ -710,23 +709,23 @@ impl RuntimeFs {
         promotions.push(PreparedPromotion::new(
             staged_audit_entry,
             final_audit_entry,
-            &staging_root,
+            staging_root,
             "backup-audit-entry.toml",
         ));
         promotions.push(PreparedPromotion::new(
             staged_state_path,
             orchestrator_paths.state(),
-            &staging_root,
+            staging_root,
             "backup-state.toml",
         ));
         promotions.push(PreparedPromotion::new(
             staged_exclusion_path,
             orchestrator_paths.exclusion_set(),
-            &staging_root,
+            staging_root,
             "backup-exclusion-set.txt",
         ));
 
-        Ok(StagedMergeArtifacts { promotions, staging_root })
+        Ok(StagedMergeArtifacts { promotions, staging_dir: Some(staging_dir) })
     }
 
     fn ensure_multorum_gitignore(&self) -> Result<Vec<&'static str>, RuntimeError> {

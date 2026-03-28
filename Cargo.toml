@@ -13,10 +13,10 @@ serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt", "macros", "io-std", "io-util"] }
 toml = "1.0"
+tempfile = "3"
 tracing = "0.1"
 wax = "0.7"
 
 [dev-dependencies]
 rmcp = { version = "1.2.0", features = ["server", "client", "transport-io"] }
-tempfile = "3"
 tokio = { version = "1", features = ["rt", "macros", "io-std", "io-util", "rt-multi-thread", "process"] }
