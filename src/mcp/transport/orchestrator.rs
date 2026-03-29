@@ -139,6 +139,9 @@ impl OrchestratorHandler {
                 if optional_bool(&args, "overwriting_worktree").unwrap_or(false) {
                     request = request.with_overwriting_worktree();
                 }
+                if optional_bool(&args, "no_auto_forward").unwrap_or(false) {
+                    request = request.without_auto_forward();
+                }
                 request = request.with_task(extract_required_payload(&args)?);
                 dispatch_tool(service.create_worker(request))
             }
@@ -148,6 +151,7 @@ impl OrchestratorHandler {
                     worker_id,
                     extract_reply(&args),
                     extract_required_payload(&args)?,
+                    !optional_bool(&args, "no_auto_forward").unwrap_or(false),
                 ))
             }
             | "hint_worker" => {

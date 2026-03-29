@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
+use super::forward::{AutoForwardNotice, ForwardIntent};
 use super::mailbox::{MailboxDirection, MessageKind, Sequence};
 use super::timestamp::Timestamp;
 use super::worker_id::WorkerId;
@@ -225,6 +226,9 @@ pub struct CreateResult {
     /// worker transcript has one stable bootstrap shape even when the
     /// orchestrator supplied no body text or artifacts.
     pub created_task_path: PathBuf,
+    /// Auto-forward decisions observed before worker creation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<AutoForwardNotice>,
 }
 
 /// Result of forwarding one live bidding group to HEAD.
@@ -412,6 +416,12 @@ pub struct MailboxMessageView {
     pub acknowledged: bool,
     /// Optional canonical commit hash attached to the message.
     pub head_commit: Option<CanonicalCommitHash>,
+    /// Optional typed request to evolve the perspective before replay.
+    ///
+    /// Note: Present only on blocker reports that explicitly request
+    /// perspective replay semantics.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forward_request: Option<ForwardIntent>,
     /// Short summary for compact listings.
     pub summary: String,
     /// Full body content, present when the caller requests it.

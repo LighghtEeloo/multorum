@@ -80,6 +80,7 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::ConflictWithActiveBiddingGroup { .. }
             | RuntimeError::BiddingGroupBoundaryMismatch { .. }
             | RuntimeError::BiddingGroupBaseMismatch { .. } => McpErrorCode::BiddingGroupConflict,
+            | RuntimeError::ManualPerspectiveForwardRequired { .. } => McpErrorCode::InvalidState,
             | RuntimeError::PerspectiveForwardRequiresNonActive { .. }
             | RuntimeError::PerspectiveForwardMissingGroup { .. }
             | RuntimeError::PerspectiveForwardMissingReport { .. }

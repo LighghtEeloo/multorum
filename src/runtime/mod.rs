@@ -6,6 +6,7 @@
 //! through which frontends interact with that state.
 
 pub mod error;
+pub mod forward;
 pub mod mailbox;
 pub(crate) mod storage;
 pub mod orchestrator;
@@ -18,6 +19,10 @@ pub mod worker_id;
 
 pub use crate::bundle::BundlePayload;
 pub use error::{Result, RuntimeError};
+pub use forward::{
+    AutoForwardNotice, AutoForwardNoticeKind, AutoForwardTrigger, ForwardIntent,
+    PerspectiveForwardProof,
+};
 pub use mailbox::{
     AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, PublishedBundle,
     ReplyReference, Sequence, SequenceFilter,

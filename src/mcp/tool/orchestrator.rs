@@ -89,7 +89,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         ToolDescriptor {
             name: "resolve_worker",
             description: "Send a resolve bundle to a blocked worker, unblocking it to continue work; path-backed payload files are moved into .multorum storage.",
-            inputs: ToolInputSets::ORCHESTRATOR_REPLY_BUNDLE,
+            inputs: ToolInputSets::ORCHESTRATOR_RESOLVE_BUNDLE,
         },
         ToolDescriptor {
             name: "hint_worker",

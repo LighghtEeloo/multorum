@@ -23,8 +23,8 @@ use clap_complete::Shell;
 use crate::{
     methodology::{MethodologyDocument, MethodologyRole},
     runtime::{
-        self, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerId,
-        WorkerService,
+        self, CreateWorker, ForwardIntent, FsOrchestratorService, FsWorkerService,
+        OrchestratorService, WorkerId, WorkerService,
     },
     schema::perspective::PerspectiveName,
 };
@@ -387,6 +387,10 @@ pub enum WorkerCommand {
         #[arg(long = "overwriting-worktree")]
         overwriting_worktree: bool,
 
+        /// Disable auto-forward before creating the worker.
+        #[arg(long = "no-auto-forward")]
+        no_auto_forward: bool,
+
         /// Payload for the initial `task` bundle.
         #[command(flatten)]
         payload: BundlePayloadArgs,
@@ -440,6 +444,10 @@ pub enum WorkerCommand {
     Resolve {
         /// Worker identity to resolve.
         worker_id: WorkerId,
+
+        /// Disable auto-forward before publishing the resolve bundle.
+        #[arg(long = "no-auto-forward")]
+        no_auto_forward: bool,
 
         /// Payload for the `resolve` bundle.
         #[command(flatten)]
@@ -552,6 +560,10 @@ pub enum LocalCommand {
         /// Optional git commit hash relevant to the report.
         #[arg(long = "head-commit", value_name = "COMMIT")]
         head_commit: Option<String>,
+
+        /// Optional typed request to evolve the perspective before replay.
+        #[arg(long = "forward-request", value_name = "INTENT")]
+        forward_request: Option<ForwardIntent>,
 
         /// Optional reply metadata for the `report` bundle.
         #[command(flatten)]
@@ -687,13 +699,22 @@ impl WorkerCommand {
     /// Execute one orchestrator-side worker command.
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
         match self {
-            | Self::Create { perspective, worker_id, overwriting_worktree, payload } => {
+            | Self::Create {
+                perspective,
+                worker_id,
+                overwriting_worktree,
+                no_auto_forward,
+                payload,
+            } => {
                 let mut request = CreateWorker::new(perspective);
                 if let Some(worker_id) = worker_id {
                     request = request.with_worker_id(worker_id);
                 }
                 if overwriting_worktree {
                     request = request.with_overwriting_worktree();
+                }
+                if no_auto_forward {
+                    request = request.without_auto_forward();
                 }
                 request = request.with_task(payload.into_runtime());
                 let result = services.orchestrator()?.create_worker(request)?;
@@ -722,11 +743,12 @@ impl WorkerCommand {
                     services.orchestrator()?.ack_outbox(worker_id, runtime::Sequence(sequence))?;
                 println!("{result:#?}");
             }
-            | Self::Resolve { worker_id, payload, reply } => {
+            | Self::Resolve { worker_id, no_auto_forward, payload, reply } => {
                 let result = services.orchestrator()?.resolve_worker(
                     worker_id,
                     reply.into_runtime(),
                     payload.into_runtime(),
+                    !no_auto_forward,
                 )?;
                 println!("{result:#?}");
             }
@@ -792,9 +814,10 @@ impl LocalCommand {
                 let result = worker.ack_inbox(runtime::Sequence(sequence))?;
                 println!("{result:#?}");
             }
-            | Self::Report { head_commit, reply, payload } => {
+            | Self::Report { head_commit, forward_request, reply, payload } => {
                 let result = worker.send_report(
                     head_commit,
+                    forward_request,
                     reply.into_runtime(),
                     payload.into_runtime(),
                 )?;

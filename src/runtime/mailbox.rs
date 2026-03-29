@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
+use super::forward::{AutoForwardNotice, ForwardIntent};
 use super::timestamp::Timestamp;
 use super::worker_id::WorkerId;
 
@@ -149,7 +150,14 @@ pub struct BundleEnvelope {
     /// Optional answered message sequence number.
     pub in_reply_to: Option<Sequence>,
     /// Optional canonical commit hash relevant to the message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head_commit: Option<CanonicalCommitHash>,
+    /// Optional typed request to evolve the perspective before replay.
+    ///
+    /// Note: Present only on blocker reports that intentionally ask the
+    /// orchestrator to consider `perspective forward`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forward_request: Option<ForwardIntent>,
 }
 
 /// Result of publishing a mailbox bundle.
@@ -159,6 +167,12 @@ pub struct PublishedBundle {
     pub message: MessageRef,
     /// Filesystem path to the published bundle directory.
     pub bundle_path: PathBuf,
+    /// Caller-visible notes observed while publishing the bundle.
+    ///
+    /// Note: Worker-authored submissions leave this empty. Only
+    /// orchestrator actions that considered auto-forward populate it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<AutoForwardNotice>,
 }
 
 /// Direction of a mailbox relative to the worker.

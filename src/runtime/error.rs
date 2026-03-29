@@ -129,6 +129,19 @@ pub enum RuntimeError {
         perspective: PerspectiveName,
     },
 
+    /// The caller must run `perspective forward` manually before retrying.
+    #[error(
+        "{operation} requires the live bidding group for `{perspective}` to move first: {reason}; run `multorum perspective forward {perspective}` and retry"
+    )]
+    ManualPerspectiveForwardRequired {
+        /// Operation that could not continue on the stale bidding group.
+        operation: &'static str,
+        /// Perspective whose live group must be forwarded.
+        perspective: PerspectiveName,
+        /// Human-readable explanation for why manual forward is needed.
+        reason: String,
+    },
+
     /// Forwarding requires every live worker in the bidding group to be non-active.
     #[error(
         "cannot forward perspective `{perspective}` because some live workers are still ACTIVE: {workers}",

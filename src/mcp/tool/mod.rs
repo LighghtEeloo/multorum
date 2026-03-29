@@ -123,6 +123,10 @@ impl ToolInputSets {
             "overwriting_worktree",
             "Optional flag to replace an existing finalized workspace for the same explicit worker.",
         ),
+        optional_boolean_input(
+            "no_auto_forward",
+            "Optional flag to disable auto-forward before creating the worker.",
+        ),
         optional_string_input(
             "body_text",
             "Required when body_path is absent: inline Markdown content written into the created task bundle body.",
@@ -137,9 +141,34 @@ impl ToolInputSets {
         ),
     ];
 
-    /// Orchestrator follow-up bundle fields for resolve, hint, and revise.
+    /// Orchestrator follow-up bundle fields for hint and revise.
     pub(crate) const ORCHESTRATOR_REPLY_BUNDLE: &'static [ToolInputDescriptor] = &[
         required_string_input("worker", "Runtime worker identity that owns the inbox."),
+        optional_integer_input(
+            "reply_to",
+            "Optional mailbox sequence number answered by this bundle.",
+        ),
+        optional_string_input(
+            "body_text",
+            "Required when body_path is absent: inline Markdown content written into the bundle body.",
+        ),
+        optional_string_input(
+            "body_path",
+            "Required when body_text is absent: Markdown file to move into the bundle body.",
+        ),
+        optional_string_list_input(
+            "artifacts",
+            "Optional files to move into the bundle artifacts directory.",
+        ),
+    ];
+
+    /// Orchestrator resolve bundle fields.
+    pub(crate) const ORCHESTRATOR_RESOLVE_BUNDLE: &'static [ToolInputDescriptor] = &[
+        required_string_input("worker", "Runtime worker identity that owns the inbox."),
+        optional_boolean_input(
+            "no_auto_forward",
+            "Optional flag to disable auto-forward before publishing the resolve bundle.",
+        ),
         optional_integer_input(
             "reply_to",
             "Optional mailbox sequence number answered by this bundle.",
@@ -163,6 +192,10 @@ impl ToolInputSets {
         optional_string_input(
             "head_commit",
             "Optional git commit hash relevant to the blocker report.",
+        ),
+        optional_string_input(
+            "forward_request",
+            "Optional typed request to evolve the perspective before replay.",
         ),
         optional_integer_input(
             "reply_to",

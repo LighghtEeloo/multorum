@@ -106,14 +106,30 @@ fn orchestrator_tool_input_schemas_stable() {
             ("perspective", ToolInputType::String, true),
             ("worker", ToolInputType::String, false),
             ("overwriting_worktree", ToolInputType::Boolean, false),
+            ("no_auto_forward", ToolInputType::Boolean, false),
             ("body_text", ToolInputType::String, false),
             ("body_path", ToolInputType::String, false),
             ("artifacts", ToolInputType::StringList, false),
         ]
     );
 
-    // resolve_worker, hint_worker, and revise_worker share the same schema.
-    for name in ["resolve_worker", "hint_worker", "revise_worker"] {
+    // resolve_worker
+    let (_, inputs) = schemas.iter().find(|(n, _)| *n == "resolve_worker").unwrap();
+    assert_eq!(
+        inputs,
+        &[
+            ("worker", ToolInputType::String, true),
+            ("no_auto_forward", ToolInputType::Boolean, false),
+            ("reply_to", ToolInputType::Integer, false),
+            ("body_text", ToolInputType::String, false),
+            ("body_path", ToolInputType::String, false),
+            ("artifacts", ToolInputType::StringList, false),
+        ],
+        "resolve_worker schema mismatch"
+    );
+
+    // hint_worker and revise_worker share the same schema.
+    for name in ["hint_worker", "revise_worker"] {
         let (_, inputs) = schemas.iter().find(|(n, _)| *n == name).unwrap();
         assert_eq!(
             inputs,
@@ -248,6 +264,7 @@ fn worker_tool_input_schemas_stable() {
         inputs,
         &[
             ("head_commit", ToolInputType::String, false),
+            ("forward_request", ToolInputType::String, false),
             ("reply_to", ToolInputType::Integer, false),
             ("body_text", ToolInputType::String, false),
             ("body_path", ToolInputType::String, false),
