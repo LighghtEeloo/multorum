@@ -3,8 +3,8 @@
 [fileset]
 
 # Add one table per perspective under `[perspective.<Name>]`.
-# `write` names the files that perspective may modify.
-# `read` names stable context files that concurrent work must not write.
+# `write` names the files that perspective may modify (optional, default empty).
+# `read` names stable context files that concurrent work must not write (optional, default empty).
 [perspective]
 
 # Add pre-merge gates in execution order.

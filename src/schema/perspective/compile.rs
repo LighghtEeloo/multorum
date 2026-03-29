@@ -84,8 +84,14 @@ impl PerspectiveTable {
         let mut compiled = BTreeMap::new();
 
         for (name, decl) in self.declarations() {
-            let read = fileset::Compiler::evaluate(decl.read(), compiled_filesets);
-            let write = fileset::Compiler::evaluate(decl.write(), compiled_filesets);
+            let read = decl
+                .read()
+                .map(|expr| fileset::Compiler::evaluate(expr, compiled_filesets))
+                .unwrap_or_default();
+            let write = decl
+                .write()
+                .map(|expr| fileset::Compiler::evaluate(expr, compiled_filesets))
+                .unwrap_or_default();
 
             if write.is_empty() {
                 tracing::warn!(
@@ -106,8 +112,12 @@ impl PerspectiveTable {
         &self, compiled_filesets: &BTreeMap<fileset::Name, BTreeSet<PathBuf>>,
     ) -> Result<(), PerspectiveError> {
         for (perspective, decl) in self.declarations() {
-            Self::validate_expr_references(perspective, decl.read(), compiled_filesets)?;
-            Self::validate_expr_references(perspective, decl.write(), compiled_filesets)?;
+            if let Some(expr) = decl.read() {
+                Self::validate_expr_references(perspective, expr, compiled_filesets)?;
+            }
+            if let Some(expr) = decl.write() {
+                Self::validate_expr_references(perspective, expr, compiled_filesets)?;
+            }
         }
         Ok(())
     }
@@ -276,6 +286,47 @@ mod tests {
         let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
         let compiled = table.compile(&filesets).unwrap();
         assert_eq!(compiled.len(), 2);
+    }
+
+    #[test]
+    fn empty_read_compiles_to_empty_set() {
+        let filesets = design_doc_filesets();
+        let toml_str = r#"
+            [WriteOnly]
+            write = "AuthFiles"
+        "#;
+        let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
+        let compiled = table.compile(&filesets).unwrap();
+        let p = compiled.get(&PerspectiveName::new("WriteOnly").unwrap()).unwrap();
+        assert!(p.read().is_empty());
+        assert!(!p.write().is_empty());
+    }
+
+    #[test]
+    fn empty_write_compiles_to_empty_set() {
+        let filesets = design_doc_filesets();
+        let toml_str = r#"
+            [ReadOnly]
+            read = "AuthSpecs"
+        "#;
+        let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
+        let compiled = table.compile(&filesets).unwrap();
+        let p = compiled.get(&PerspectiveName::new("ReadOnly").unwrap()).unwrap();
+        assert!(!p.read().is_empty());
+        assert!(p.write().is_empty());
+    }
+
+    #[test]
+    fn both_empty_compiles_to_empty_sets() {
+        let filesets = design_doc_filesets();
+        let toml_str = r#"
+            [Bare]
+        "#;
+        let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
+        let compiled = table.compile(&filesets).unwrap();
+        let p = compiled.get(&PerspectiveName::new("Bare").unwrap()).unwrap();
+        assert!(p.read().is_empty());
+        assert!(p.write().is_empty());
     }
 
     #[test]

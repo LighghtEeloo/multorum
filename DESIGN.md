@@ -63,6 +63,8 @@ A perspective is a named role in the rulebook. It declares:
 - a write set: the files a worker from this role may modify
 - a read set: the files that must remain stable while this role is active
 
+Either set may be empty (omitted or set to `""`), meaning the perspective claims no files for that role. A perspective with an empty write set cannot modify any files. A perspective with an empty read set places no stability constraints on the rest of the repository.
+
 The write set is a closed list of existing files. Workers may not create files outside it. When a blocked worker discovers that the task really needs a new file, the orchestrator must update the canonical workspace and the rulebook, then forward the blocked bidding group to HEAD before resolving the blocker. The read set is not a visibility filter — workers may read any file in the repository. The read set exists to tell Multorum which files must remain untouched by other concurrent work, and to tell the worker what the orchestrator considers stable context.
 
 A worker is a runtime instantiation of a perspective. Perspectives are static policy. Workers are ephemeral executions with state.
@@ -212,8 +214,8 @@ The write-set scope check is always mandatory and cannot be configured away.
 [fileset]
 
 # Add one table per perspective under `[perspective.<Name>]`.
-# `write` names the files that perspective may modify.
-# `read` names stable context files that concurrent work must not write.
+# `write` names the files that perspective may modify (optional, default empty).
+# `read` names stable context files that concurrent work must not write (optional, default empty).
 [perspective]
 
 # Add pre-merge gates in execution order.
@@ -242,8 +244,8 @@ A perspective is a role, not a task. Name it for the kind of work it authorizes,
 
 Each perspective declares two things:
 
-- **write**: the closed set of existing files this role may modify. Workers cannot create files outside it. If a task genuinely needs a new file, the orchestrator must create the file and update the rulebook before the worker can proceed.
-- **read**: the files that must remain stable while this role is active. This is not a visibility filter — workers can still read the entire repository. The read set tells Multorum which files concurrent work must not disturb, and tells the worker what the orchestrator considers stable context.
+- **write**: the closed set of existing files this role may modify. Workers cannot create files outside it. If a task genuinely needs a new file, the orchestrator must create the file and update the rulebook before the worker can proceed. May be omitted or empty for read-only perspectives.
+- **read**: the files that must remain stable while this role is active. This is not a visibility filter — workers can still read the entire repository. The read set tells Multorum which files concurrent work must not disturb, and tells the worker what the orchestrator considers stable context. May be omitted or empty when no stability guarantee is needed.
 
 The conflict-free invariant operates at the bidding-group level: for any two distinct active groups, their write sets must be disjoint, and neither may write into the other's read set. Design perspectives so that the ones you intend to run concurrently satisfy this naturally. If two perspectives cannot run at the same time because their write sets overlap, they are not actually parallel work — they are sequential work wearing a parallel costume.
 

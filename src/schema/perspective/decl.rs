@@ -18,21 +18,24 @@ use super::name::PerspectiveName;
 ///
 /// Created during deserialization of the `[perspective]` table.
 /// Not yet compiled against concrete file sets.
+///
+/// Either field may be `None`, meaning the empty set: the perspective
+/// claims no read dependencies or no write permissions respectively.
 #[derive(Debug, Clone)]
 pub struct PerspectiveDecl {
-    read: Expr,
-    write: Expr,
+    read: Option<Expr>,
+    write: Option<Expr>,
 }
 
 impl PerspectiveDecl {
-    /// The read set expression.
-    pub fn read(&self) -> &Expr {
-        &self.read
+    /// The read set expression, or `None` for the empty set.
+    pub fn read(&self) -> Option<&Expr> {
+        self.read.as_ref()
     }
 
-    /// The write set expression.
-    pub fn write(&self) -> &Expr {
-        &self.write
+    /// The write set expression, or `None` for the empty set.
+    pub fn write(&self) -> Option<&Expr> {
+        self.write.as_ref()
     }
 }
 
@@ -60,15 +63,44 @@ impl PerspectiveTable {
 
 /// Raw TOML shape for a single perspective entry.
 ///
+/// Both fields are optional. A missing field or an empty string
+/// means the perspective claims no files for that role (empty set).
+///
 /// ```toml
 /// [perspective.AuthImplementor]
 /// read  = "AuthSpecs | AuthTests"
 /// write = "AuthFiles - AuthSpecs - AuthTests"
+///
+/// [perspective.Observer]
+/// read  = "AuthSpecs"
 /// ```
 #[derive(serde::Deserialize)]
 struct RawPerspective {
-    read: String,
-    write: String,
+    #[serde(default)]
+    read: Option<String>,
+    #[serde(default)]
+    write: Option<String>,
+}
+
+impl PerspectiveTable {
+    /// Parse an optional expression string into `Option<Expr>`.
+    ///
+    /// `None` or an empty/whitespace-only string yields `None` (empty set).
+    /// A non-empty string is parsed as a file-set expression.
+    fn parse_optional_expr(
+        perspective: &PerspectiveName, raw: Option<&str>,
+    ) -> Result<Option<Expr>, PerspectiveError> {
+        match raw {
+            | None => Ok(None),
+            | Some(s) if s.trim().is_empty() => Ok(None),
+            | Some(s) => {
+                let expr = ExprParser::new(s).parse().map_err(|source| {
+                    PerspectiveError::Parse { perspective: perspective.clone(), source }
+                })?;
+                Ok(Some(expr))
+            }
+        }
+    }
 }
 
 impl<'de> de::Deserialize<'de> for PerspectiveTable {
@@ -82,13 +114,11 @@ impl<'de> de::Deserialize<'de> for PerspectiveTable {
         for (key, value) in raw {
             let name = PerspectiveName::new(&key).map_err(de::Error::custom)?;
 
-            let read = ExprParser::new(&value.read).parse().map_err(|e| {
-                de::Error::custom(PerspectiveError::Parse { perspective: name.clone(), source: e })
-            })?;
+            let read = Self::parse_optional_expr(&name, value.read.as_deref())
+                .map_err(de::Error::custom)?;
 
-            let write = ExprParser::new(&value.write).parse().map_err(|e| {
-                de::Error::custom(PerspectiveError::Parse { perspective: name.clone(), source: e })
-            })?;
+            let write = Self::parse_optional_expr(&name, value.write.as_deref())
+                .map_err(de::Error::custom)?;
 
             declarations.insert(name, PerspectiveDecl { read, write });
         }
@@ -144,21 +174,64 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_rejects_missing_write() {
+    fn missing_write_defaults_to_empty_set() {
         let toml_str = r#"
-            [Bad]
+            [ReadOnly]
             read = "A"
         "#;
-        assert!(toml::from_str::<PerspectiveTable>(toml_str).is_err());
+        let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
+        let decl = &table.declarations()[&PerspectiveName::new("ReadOnly").unwrap()];
+        assert!(decl.read().is_some());
+        assert!(decl.write().is_none());
     }
 
     #[test]
-    fn deserialize_rejects_missing_read() {
+    fn missing_read_defaults_to_empty_set() {
         let toml_str = r#"
-            [Bad]
+            [WriteOnly]
             write = "A"
         "#;
-        assert!(toml::from_str::<PerspectiveTable>(toml_str).is_err());
+        let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
+        let decl = &table.declarations()[&PerspectiveName::new("WriteOnly").unwrap()];
+        assert!(decl.read().is_none());
+        assert!(decl.write().is_some());
+    }
+
+    #[test]
+    fn empty_string_read_is_empty_set() {
+        let toml_str = r#"
+            [P]
+            read = ""
+            write = "A"
+        "#;
+        let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
+        let decl = &table.declarations()[&PerspectiveName::new("P").unwrap()];
+        assert!(decl.read().is_none());
+        assert!(decl.write().is_some());
+    }
+
+    #[test]
+    fn empty_string_write_is_empty_set() {
+        let toml_str = r#"
+            [P]
+            read = "A"
+            write = ""
+        "#;
+        let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
+        let decl = &table.declarations()[&PerspectiveName::new("P").unwrap()];
+        assert!(decl.read().is_some());
+        assert!(decl.write().is_none());
+    }
+
+    #[test]
+    fn both_empty_is_valid() {
+        let toml_str = r#"
+            [Bare]
+        "#;
+        let table: PerspectiveTable = toml::from_str(toml_str).unwrap();
+        let decl = &table.declarations()[&PerspectiveName::new("Bare").unwrap()];
+        assert!(decl.read().is_none());
+        assert!(decl.write().is_none());
     }
 
     #[test]
