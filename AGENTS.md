@@ -26,6 +26,11 @@ All written documentation must be concise, clear, and accurate.
 No emojis unless strictly necessary.
 Add bold text only if it emphasizes truly valuable information.
 All documentation should be written in English unless explicitly stated.
+Prefer direct definitions over defensive framing.
+- Define what the system does before explaining limits or exclusions.
+- Keep definition-by-negation to a minimum; use it only when a nearby confusion is likely and the contrast is genuinely clarifying.
+- Avoid prose that reads like a rebuttal, disclaimer, or argument with an imaginary reviewer.
+- When documenting a constraint, state the positive rule first, then the consequence if needed.
 
 ### Canonical Documentation Location
 

@@ -107,18 +107,18 @@ The recompiled boundary must be a superset of the group's current materialized b
 
 Before moving any worktree, Multorum validates the whole live bidding group: every live worker must be non-`ACTIVE`, must have a durable replay checkpoint, and must still be clean at that checkpoint. Worktrees are then forwarded one by one. If a later worker fails to forward, Multorum rolls back every worker it already moved and does not persist the new group base or boundary. The atomicity boundary is therefore the persisted runtime state, not each individual Git operation.
 
-Auto-forward is an orchestrator-side convenience layered on top of this same operation. It is not background autonomy and it is not a weaker path. Multorum may auto-forward only from orchestrator actions that already mean "continue this perspective under current HEAD", and only after proving that the whole live bidding group could be forwarded successfully by the normal `perspective forward` rules.
+Auto-forward applies this same operation from orchestrator actions that already mean "continue this perspective under current HEAD". Multorum may auto-forward only after proving that the whole live bidding group can be forwarded successfully by the normal `perspective forward` rules.
 
-The correctness bar is strict: auto-forward is allowed only when it would be observationally equivalent to the orchestrator manually running `perspective forward <perspective>` first and then retrying the original command. When that equivalence cannot be established, the action remains manual and Multorum should tell the user to run `multorum perspective forward <perspective>` explicitly if they still want to proceed.
+Auto-forward is valid only when it is observationally equivalent to the orchestrator running `perspective forward <perspective>` first and then retrying the original command. When that proof is unavailable, Multorum leaves the group unchanged and tells the user to run `multorum perspective forward <perspective>` explicitly if they still want to move the group.
 
-The operation is intentionally narrow:
+The rules are:
 
 - it addresses the whole live bidding group for one perspective, never one worker in isolation
 - it is rejected unless every live worker in that bidding group is non-`ACTIVE`
 - it preserves progress only from a durable checkpoint already recorded for each worker: the latest blocking `report` for `BLOCKED` workers, or the submitted head commit for `COMMITTED` workers
 - it rejects dirty or drifted worktrees rather than trying to invent recovery
 - it leaves every forwarded worker in its current non-`ACTIVE` state; blocked workers still need `resolve`, and committed workers still need `revise`, `merge`, or `discard`
-- successful auto-forward must be announced to the caller; it is never silent
+- every successful auto-forward is announced to the caller
 
 ---
 
@@ -459,7 +459,7 @@ All non-terminal state transitions belong to the worker: it writes `BLOCKED` whe
 
 The orchestrator may also issue `hint` while a worker is `ACTIVE`. A hint is advisory rather than transitional: it carries new information or asks the worker to take a follow-up action such as reporting a blocker, but publishing or acknowledging the hint does not change lifecycle state on its own.
 
-`worker create` and `worker resolve` may trigger auto-forward before continuing, but only when the full bidding-group proof described above succeeds. Auto-forward is not itself a lifecycle transition. It does not make a blocked worker active, does not revise a committed worker, and does not bypass the requirement that the whole live group be safe to replay together. If the proof fails, the original action stays manual-safe: Multorum leaves the group untouched and directs the user toward manual `perspective forward`.
+`worker create` and `worker resolve` may auto-forward the bidding group before their own execution, but only when the full bidding-group proof described above succeeds. Auto-forward leaves worker lifecycle state unchanged. If the proof fails, Multorum leaves the group untouched and directs the user toward manual `perspective forward`.
 
 For analysis-only tasks that intentionally produce no code diff, workers should still submit through the normal commit/merge path: create an empty commit (for example `git commit --allow-empty`), then publish it with `local commit` and attach evidence in `body.md` and optional artifacts. The orchestrator can merge that submission normally, preserving a reviewable audit trail and an explicit lifecycle completion.
 
