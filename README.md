@@ -58,10 +58,18 @@ The orchestrator composes the rulebook, then creates workers from its perspectiv
 
 ## Installation
 
-If anything above intrigued you (or at least didn't scare you away), after installing [Rust](https://rust-lang.org/tools/install), you can install Multorum with Cargo:
+If anything above intrigued you (or at least didn't scare you away), after installing [Rust](https://rust-lang.org/tools/install), you can install stable Multorum with Cargo:
 
 ```bash
 cargo install multorum
+```
+
+Distribution packages and prebuilt binaries are on their way, once the project is production ready.
+
+If you want the latest yet potentially unstable features, you can install directly from the GitHub repository:
+
+```bash
+cargo install --git https://github.com/LighghtEeloo/multorum.git
 ```
 
 ## Using Multorum with MCP and Methodology
