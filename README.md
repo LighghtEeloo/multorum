@@ -31,89 +31,27 @@ Our approach is meant to be correct by construction. Coordination is not left to
 
 Everything revolves around three things: the orchestrator, the rulebook, and the workers.
 
-The orchestrator is the sole coordinator. Human, model, or some suspicious hybrid creature — Multorum does not care. It decides what work gets split up, which role gets which task, and which results deserve to survive.
+The *orchestrator* is the sole coordinator. Human, model, or hybrid — Multorum does not care. It decides what work gets split up, which role gets which task, and which results deserve to survive.
 
-The rulebook lives at `.multorum/rulebook.toml`. It defines named perspectives. A perspective is a role with two boundaries: a write set and a read set.
+The *rulebook* (`.multorum/rulebook.toml`) defines named perspectives. A perspective is a role with two boundaries: a *write set* (what it may modify) and a *read set* (what must stay stable while it works). The read set is not a visibility filter. Workers can inspect the whole repo. It exists so Multorum knows what concurrent work is forbidden to disturb.
 
-The write set is the territory that role may modify. The read set is the territory that must stay stable while that role is active. It is not a visibility filter. Workers can still inspect the whole repo. The read set exists so Multorum knows what other concurrent work is forbidden to disturb.
+A *worker* is a live instance of a perspective. Multorum gives it an isolated *git worktree*, a pinned base snapshot, and materialized boundary files. The contract becomes a real workspace with real limits. Before a worker's changes land, Multorum enforces write-scope compliance and runs project checks (build, lint, test) through *git hooks* declared in the rulebook.
 
-A worker is a live instance of a perspective. When one is created, Multorum gives it an isolated git worktree, a pinned base snapshot, and materialized boundary files. The contract stops being theory and becomes a real workspace with real limits.
-
-## The Guarantee That Matters
+## The Guarantee
 
 Multorum is built around one invariant:
 
 > A file may be written by exactly one active bidding group, or read by any number of active bidding groups, but never both.
 
-That is the product. The rest is plumbing.
+That is it. The soul of this product. The rest is just plumbing.
 
-In practice, this means concurrent write scopes cannot overlap, and no active group may write into files another active group depends on as stable context. So instead of discovering conflicts after parallel work has already happened, Multorum rejects bad overlap before the work starts.
+Concurrent write scopes cannot overlap, and no active group may write into files another group depends on as stable context. Multorum rejects bad overlap before work starts. After all, it is better to fail people fast than after hours of work ending in a merge conflict.
 
-That is a much nicer time to disappoint people.
+## The Lifecycle
 
-## Bidding Groups
+The orchestrator installs a rulebook, then creates workers from its perspectives. Each worker operates inside its own worktree, reports progress through the runtime surface, and eventually submits work. The orchestrator can merge the result, revise it, or discard it.
 
-Sometimes the orchestrator does not want one attempt. Sometimes it wants a small knife fight.
-
-Multorum allows multiple workers to be created from the same perspective on the same pinned base. Those workers form a bidding group. They share the same boundaries, start from the same snapshot, and race independently.
-
-At most one may merge.
-
-The others are discarded, which is not cruelty. It is standards.
-
-## What Workers May Actually Do
-
-A worker may read the whole repository, because code without context tends to produce garbage with excellent self-esteem.
-
-A worker may write only inside its materialized write set. That write set is closed over existing files. Workers do not get to expand their own authority by casually touching random paths or inventing new files outside the contract.
-
-If new files are genuinely needed, the orchestrator updates the canonical workspace and the rulebook explicitly. Multorum is strict here on purpose. A boundary that grows itself is not a boundary. It is a bedtime story.
-
-## How Work Flows
-
-The orchestrator defines perspectives in the rulebook and installs it. Then it creates workers from those perspectives. Each worker runs inside its own workspace, reports blockers or results through the runtime surface, and eventually submits work for consideration.
-
-Before anything lands, Multorum performs a mandatory write-scope check and then runs whatever project checks the rulebook declares. The orchestrator can merge the result, revise it, or discard it.
-
-Discarding is healthy. Not every artifact deserves citizenship.
-
-## The Rulebook
-
-The rulebook gives the repository a vocabulary for ownership. It lets you describe regions of the tree and assign them to roles in a way Multorum can actually enforce.
-
-A tiny example:
-
-```toml
-[fileset]
-SpecFiles.path = "**/*.spec.md"
-TestFiles.path = "**/test/**"
-
-AuthFiles.path = "auth/**"
-AuthSpecs = "AuthFiles & SpecFiles"
-AuthTests = "AuthFiles & TestFiles"
-
-[perspective.AuthImplementor]
-read = "AuthSpecs"
-write = "AuthFiles - AuthSpecs - AuthTests"
-
-[perspective.AuthTester]
-read = "AuthSpecs | AuthTests"
-write = "AuthTests"
-```
-
-This says one role owns auth implementation, another owns auth tests, and both depend on the auth specs staying stable. Since their write scopes do not overlap, they can run concurrently without stepping on each other like amateurs.
-
-## Runtime Shape
-
-The main workspace keeps orchestrator state under `.multorum/orchestrator/`. Each worker workspace gets its own `.multorum/` directory containing its contract, its materialized read and write sets, and file-based inbox and outbox mailboxes.
-
-That choice is deliberately boring. The runtime is visible on disk, easy to inspect, easy to script, and not held together by some daemon mumbling in the attic. Workers do not talk to each other directly. Everything routes through the orchestrator, where coordination belongs.
-
-## Merging
-
-Before a worker result is allowed to land, Multorum verifies that the worker touched only files inside its write set. Then it runs the project checks declared by the rulebook: build, lint, test, whatever the repository demands.
-
-Some project checks may be skippable if the orchestrator accepts evidence. The write-scope check is not skippable, because once that becomes optional the entire model collapses into decorative fraud.
+When the orchestrator wants competition, it creates multiple workers from the same perspective on the same base. They race independently: at most one merges, and the others are discarded.
 
 
 ## Installation
