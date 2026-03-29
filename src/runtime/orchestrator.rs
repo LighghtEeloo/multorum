@@ -20,7 +20,9 @@ use crate::{
 
 use super::{
     error::{Result, RuntimeError},
-    forward::{AutoForwardNotice, AutoForwardTrigger, ForwardIntent, PerspectiveForwardProof},
+    forward::{
+        AutoForwardNotice, AutoForwardTrigger, PerspectiveForwardProof, forward_change_description,
+    },
     mailbox::{
         AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence,
         SequenceFilter,
@@ -208,13 +210,6 @@ struct ForwardWorker {
     replay_checkpoint: ForwardReplayCheckpoint,
 }
 
-/// Latest blocking report relevant to perspective replay.
-#[derive(Debug, Clone)]
-struct BlockingReport {
-    head_commit: Option<CanonicalCommitHash>,
-    forward_request: Option<ForwardIntent>,
-}
-
 /// Durable replay checkpoint for one forwardable worker.
 ///
 /// Note: Forwardability is modeled by this type, not by ad hoc state
@@ -223,7 +218,7 @@ struct BlockingReport {
 #[derive(Debug, Clone)]
 enum ForwardReplayCheckpoint {
     /// Replay from the head commit recorded by the latest blocker report.
-    BlockingReport(BlockingReport),
+    ReportedHead(CanonicalCommitHash),
     /// Replay from the head commit submitted for review.
     SubmittedCommit(CanonicalCommitHash),
 }
@@ -232,10 +227,7 @@ impl ForwardReplayCheckpoint {
     /// Return the canonical commit that must still be checked out before replay.
     fn head_commit(&self) -> &CanonicalCommitHash {
         match self {
-            | Self::BlockingReport(report) => report
-                .head_commit
-                .as_ref()
-                .expect("blocking replay checkpoints always carry a head commit"),
+            | Self::ReportedHead(head_commit) => head_commit,
             | Self::SubmittedCommit(head_commit) => head_commit,
         }
     }
@@ -394,7 +386,6 @@ impl FsOrchestratorService {
                 &group.perspective,
                 reply,
                 None,
-                None,
                 payload,
             );
         }
@@ -406,15 +397,18 @@ impl FsOrchestratorService {
         })
     }
 
-    /// Describe the repository drift that would make forwarding meaningful.
-    fn forward_intent_for_group(
+    /// Return whether current HEAD and rulebook drifted from the live group.
+    ///
+    /// Note: Auto-forward now reasons directly about the two drift
+    /// dimensions instead of carrying a separate intent enum.
+    fn forward_changes_for_group(
         &self, group: &BiddingGroupRecord, target: &CompiledPerspective,
         new_base_commit: &CanonicalCommitHash,
-    ) -> Option<ForwardIntent> {
-        ForwardIntent::from_changes(
-            group.base_commit != *new_base_commit,
-            group.read_set != *target.read() || group.write_set != *target.write(),
-        )
+    ) -> Option<(bool, bool)> {
+        let base_changed = group.base_commit != *new_base_commit;
+        let boundary_changed =
+            group.read_set != *target.read() || group.write_set != *target.write();
+        if base_changed || boundary_changed { Some((base_changed, boundary_changed)) } else { None }
     }
 
     fn load_forward_workers(
@@ -447,14 +441,11 @@ impl FsOrchestratorService {
             let current_head_commit = self.fs.vcs().head_commit(&worker.worktree_path)?;
             if current_head_commit != *replay_checkpoint.head_commit() {
                 return Err(match &replay_checkpoint {
-                    | ForwardReplayCheckpoint::BlockingReport(report) => {
+                    | ForwardReplayCheckpoint::ReportedHead(reported_head_commit) => {
                         RuntimeError::PerspectiveForwardHeadMismatch {
                             worker_id: worker.worker_id.clone(),
                             perspective: perspective.clone(),
-                            reported_head_commit: report
-                                .head_commit
-                                .clone()
-                                .expect("blocking replay checkpoints always carry a head commit"),
+                            reported_head_commit: reported_head_commit.clone(),
                             current_head_commit,
                         }
                     }
@@ -490,7 +481,9 @@ impl FsOrchestratorService {
             .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?
             .clone();
         let new_base_commit = self.fs.vcs().head_commit(self.fs.workspace_root())?;
-        let Some(intent) = self.forward_intent_for_group(group, &target, &new_base_commit) else {
+        let Some((base_changed, boundary_changed)) =
+            self.forward_changes_for_group(group, &target, &new_base_commit)
+        else {
             return Ok(ForwardProofDecision::NotNeeded);
         };
 
@@ -509,7 +502,8 @@ impl FsOrchestratorService {
                 worker_ids,
                 previous_base_commit: group.base_commit.clone(),
                 new_base_commit,
-                intent,
+                base_changed,
+                boundary_changed,
             },
             workers,
             target,
@@ -525,19 +519,9 @@ impl FsOrchestratorService {
         &self, perspective: &PerspectiveName, worker: &WorkerEntry,
     ) -> Result<ForwardReplayCheckpoint> {
         match worker.state {
-            | WorkerState::Blocked => {
-                let report = self.load_latest_blocking_report(perspective, worker)?;
-                let head_commit = report.head_commit.ok_or_else(|| {
-                    RuntimeError::PerspectiveForwardMissingReportedHead {
-                        worker_id: worker.worker_id.clone(),
-                        perspective: perspective.clone(),
-                    }
-                })?;
-                Ok(ForwardReplayCheckpoint::BlockingReport(BlockingReport {
-                    head_commit: Some(head_commit),
-                    forward_request: report.forward_request,
-                }))
-            }
+            | WorkerState::Blocked => self
+                .load_latest_blocking_report_head_commit(perspective, worker)
+                .map(ForwardReplayCheckpoint::ReportedHead),
             | WorkerState::Committed => worker
                 .submitted_head_commit
                 .clone()
@@ -553,9 +537,9 @@ impl FsOrchestratorService {
     }
 
     /// Load the latest blocking report relevant to perspective replay.
-    fn load_latest_blocking_report(
+    fn load_latest_blocking_report_head_commit(
         &self, perspective: &PerspectiveName, worker: &WorkerEntry,
-    ) -> Result<BlockingReport> {
+    ) -> Result<CanonicalCommitHash> {
         let messages = self.fs.list_mailbox_messages(
             &worker.worktree_path,
             &worker.worker_id,
@@ -571,9 +555,9 @@ impl FsOrchestratorService {
                 worker_id: worker.worker_id.clone(),
                 perspective: perspective.clone(),
             })?;
-        Ok(BlockingReport {
-            head_commit: report.head_commit,
-            forward_request: report.forward_request,
+        report.head_commit.ok_or_else(|| RuntimeError::PerspectiveForwardMissingReportedHead {
+            worker_id: worker.worker_id.clone(),
+            perspective: perspective.clone(),
         })
     }
 
@@ -645,7 +629,8 @@ impl FsOrchestratorService {
             worker_count = worker_ids.len(),
             previous_base_commit = %previous_base_commit,
             new_base_commit = %new_base_commit,
-            intent = %proof.intent,
+            base_changed = proof.base_changed,
+            boundary_changed = proof.boundary_changed,
             "forwarded proven bidding group"
         );
 
@@ -675,13 +660,6 @@ impl FsOrchestratorService {
         }
     }
 
-    fn skipped_auto_forward_notice(
-        &self, trigger: AutoForwardTrigger, perspective: PerspectiveName, intent: ForwardIntent,
-        worker_ids: Vec<WorkerId>, message: impl Into<String>,
-    ) -> AutoForwardNotice {
-        AutoForwardNotice::skipped(trigger, perspective, intent, worker_ids, message.into())
-    }
-
     fn maybe_auto_forward_for_resolve(
         &self, worker_id: &WorkerId, auto_forward: bool,
     ) -> Result<Vec<AutoForwardNotice>> {
@@ -691,11 +669,18 @@ impl FsOrchestratorService {
             return Ok(Vec::new());
         }
 
-        let report = self.load_latest_blocking_report(&group.perspective, worker)?;
-        let Some(requested_intent) = report.forward_request else {
+        let compiled = self.fs.load_working_tree_rulebook()?;
+        let target = compiled
+            .perspectives()
+            .get(&group.perspective)
+            .ok_or_else(|| RuntimeError::UnknownPerspective(group.perspective.to_string()))?
+            .clone();
+        let current_head = self.fs.vcs().head_commit(self.fs.workspace_root())?;
+        let Some((base_changed, boundary_changed)) =
+            self.forward_changes_for_group(group, &target, &current_head)
+        else {
             return Ok(Vec::new());
         };
-
         let worker_ids: Vec<WorkerId> = group
             .workers
             .iter()
@@ -704,34 +689,16 @@ impl FsOrchestratorService {
             .collect();
 
         match self.prove_forward_perspective(&group.perspective, &state) {
-            | Ok(ForwardProofDecision::NotNeeded) => Ok(vec![self.skipped_auto_forward_notice(
-                AutoForwardTrigger::ResolveWorker,
-                group.perspective.clone(),
-                requested_intent,
-                worker_ids,
-                "latest blocking report requested perspective replay, but current HEAD and rulebook do not require a forward yet; manual perspective forward remains available after canonical changes",
-            )]),
+            | Ok(ForwardProofDecision::NotNeeded) => Ok(Vec::new()),
             | Ok(ForwardProofDecision::Ready(proof)) if !auto_forward => {
-                Ok(vec![self.skipped_auto_forward_notice(
+                Ok(vec![AutoForwardNotice::skipped(
                     AutoForwardTrigger::ResolveWorker,
                     group.perspective.clone(),
-                    proof.proof.intent,
+                    proof.proof.base_changed,
+                    proof.proof.boundary_changed,
                     worker_ids,
-                    "auto-forward was disabled for this resolve; manual perspective forward remains available",
-                )])
-            }
-            | Ok(ForwardProofDecision::Ready(proof))
-                if !requested_intent.is_satisfied_by(proof.proof.intent) =>
-            {
-                Ok(vec![self.skipped_auto_forward_notice(
-                    AutoForwardTrigger::ResolveWorker,
-                    group.perspective.clone(),
-                    requested_intent,
-                    worker_ids,
-                    format!(
-                        "latest blocking report requested `{requested_intent}`, but current replay need is `{}`; manual perspective forward remains available",
-                        proof.proof.intent
-                    ),
+                    "auto-forward was disabled for this resolve; manual perspective forward remains available"
+                        .to_owned(),
                 )])
             }
             | Ok(ForwardProofDecision::Ready(proof)) => {
@@ -740,10 +707,11 @@ impl FsOrchestratorService {
                 self.execute_proven_forward(&group.perspective, &state, proof)?;
                 Ok(vec![notice])
             }
-            | Err(error) => Ok(vec![self.skipped_auto_forward_notice(
+            | Err(error) => Ok(vec![AutoForwardNotice::skipped(
                 AutoForwardTrigger::ResolveWorker,
                 group.perspective.clone(),
-                requested_intent,
+                base_changed,
+                boundary_changed,
                 worker_ids,
                 format!(
                     "auto-forward was skipped before resolve because the whole bidding group was not yet proven movable: {error}. manual perspective forward remains available once those blockers are cleared"
@@ -895,8 +863,8 @@ impl OrchestratorService for FsOrchestratorService {
 
         if let Some(group) = &existing_group {
             let current_head = self.fs.vcs().head_commit(self.fs.workspace_root())?;
-            if let Some(intent) =
-                self.forward_intent_for_group(group, &compiled_perspective, &current_head)
+            if let Some((base_changed, boundary_changed)) =
+                self.forward_changes_for_group(group, &compiled_perspective, &current_head)
             {
                 if auto_forward {
                     match self.prove_forward_perspective(&perspective, &state) {
@@ -909,7 +877,7 @@ impl OrchestratorService for FsOrchestratorService {
                             state = self.fs.load_state()?;
                         }
                         | Ok(ForwardProofDecision::NotNeeded) => {
-                            unreachable!("forward intent was already computed for the live group")
+                            unreachable!("forward drift was already computed for the live group")
                         }
                         | Err(error) => {
                             return Err(RuntimeError::ManualPerspectiveForwardRequired {
@@ -926,7 +894,8 @@ impl OrchestratorService for FsOrchestratorService {
                         operation: "create worker",
                         perspective: perspective.clone(),
                         reason: format!(
-                            "current HEAD requires `{intent}` for the live bidding group, but auto-forward was disabled"
+                            "{}, but auto-forward was disabled",
+                            forward_change_description(base_changed, boundary_changed)
                         ),
                     });
                 }
@@ -1003,7 +972,6 @@ impl OrchestratorService for FsOrchestratorService {
                 &worker_id,
                 &perspective,
                 ReplyReference::default(),
-                None,
                 None,
                 task.unwrap_or_default(),
             )?
@@ -1488,7 +1456,7 @@ mod tests {
 
     use crate::bundle::BundlePayload;
     use crate::runtime::{
-        AutoForwardNoticeKind, AutoForwardTrigger, ForwardIntent, FsWorkerService, ReplyReference,
+        AutoForwardNoticeKind, AutoForwardTrigger, FsWorkerService, ReplyReference,
         WorkerContractView, WorkerService,
     };
 
@@ -1604,7 +1572,6 @@ mod tests {
         worker_service
             .send_report(
                 Some(reported_head.clone()),
-                None,
                 ReplyReference::default(),
                 BundlePayload::default(),
             )
@@ -1666,7 +1633,6 @@ mod tests {
         blocked_service
             .send_report(
                 Some(blocked_head.clone()),
-                None,
                 ReplyReference::default(),
                 BundlePayload::default(),
             )
@@ -1712,7 +1678,7 @@ mod tests {
         let (dir, orchestrator) = setup_repo();
         let worker = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
         worker_service(&worker.worktree_path)
-            .send_report(None, None, ReplyReference::default(), BundlePayload::default())
+            .send_report(None, ReplyReference::default(), BundlePayload::default())
             .unwrap();
         expand_rulebook(&dir);
 
@@ -1735,7 +1701,6 @@ mod tests {
         worker_service
             .send_report(
                 Some(reported_head.clone()),
-                None,
                 ReplyReference::default(),
                 BundlePayload::default(),
             )
@@ -1774,12 +1739,7 @@ mod tests {
         let first_worker = worker_service(&first.worktree_path);
         let reported_head = git(&first.worktree_path, &["rev-parse", "HEAD"]);
         first_worker
-            .send_report(
-                Some(reported_head),
-                None,
-                ReplyReference::default(),
-                BundlePayload::default(),
-            )
+            .send_report(Some(reported_head), ReplyReference::default(), BundlePayload::default())
             .unwrap();
 
         expand_rulebook(&dir);
@@ -1808,12 +1768,7 @@ mod tests {
         let first_worker = worker_service(&first.worktree_path);
         let reported_head = git(&first.worktree_path, &["rev-parse", "HEAD"]);
         first_worker
-            .send_report(
-                Some(reported_head),
-                None,
-                ReplyReference::default(),
-                BundlePayload::default(),
-            )
+            .send_report(Some(reported_head), ReplyReference::default(), BundlePayload::default())
             .unwrap();
 
         expand_rulebook(&dir);
@@ -1832,18 +1787,13 @@ mod tests {
     }
 
     #[test]
-    fn resolve_worker_auto_forwards_from_typed_blocker_request() {
+    fn resolve_worker_auto_forwards_when_group_is_provably_movable() {
         let (dir, orchestrator) = setup_repo();
         let worker = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
         let worker_service = worker_service(&worker.worktree_path);
         let reported_head = git(&worker.worktree_path, &["rev-parse", "HEAD"]);
         worker_service
-            .send_report(
-                Some(reported_head),
-                Some(ForwardIntent::ExpandBoundary),
-                ReplyReference::default(),
-                BundlePayload::default(),
-            )
+            .send_report(Some(reported_head), ReplyReference::default(), BundlePayload::default())
             .unwrap();
 
         expand_rulebook(&dir);
@@ -1872,12 +1822,7 @@ mod tests {
         let worker_service = worker_service(&worker.worktree_path);
         let reported_head = git(&worker.worktree_path, &["rev-parse", "HEAD"]);
         worker_service
-            .send_report(
-                Some(reported_head),
-                Some(ForwardIntent::ExpandBoundary),
-                ReplyReference::default(),
-                BundlePayload::default(),
-            )
+            .send_report(Some(reported_head), ReplyReference::default(), BundlePayload::default())
             .unwrap();
 
         expand_rulebook(&dir);

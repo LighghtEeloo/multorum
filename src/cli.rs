@@ -23,8 +23,8 @@ use clap_complete::Shell;
 use crate::{
     methodology::{MethodologyDocument, MethodologyRole},
     runtime::{
-        self, CreateWorker, ForwardIntent, FsOrchestratorService, FsWorkerService,
-        OrchestratorService, WorkerId, WorkerService,
+        self, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerId,
+        WorkerService,
     },
     schema::perspective::PerspectiveName,
 };
@@ -561,10 +561,6 @@ pub enum LocalCommand {
         #[arg(long = "head-commit", value_name = "COMMIT")]
         head_commit: Option<String>,
 
-        /// Optional typed request to evolve the perspective before replay.
-        #[arg(long = "forward-request", value_name = "INTENT")]
-        forward_request: Option<ForwardIntent>,
-
         /// Optional reply metadata for the `report` bundle.
         #[command(flatten)]
         reply: ReplyReferenceArgs,
@@ -814,10 +810,9 @@ impl LocalCommand {
                 let result = worker.ack_inbox(runtime::Sequence(sequence))?;
                 println!("{result:#?}");
             }
-            | Self::Report { head_commit, forward_request, reply, payload } => {
+            | Self::Report { head_commit, reply, payload } => {
                 let result = worker.send_report(
                     head_commit,
-                    forward_request,
                     reply.into_runtime(),
                     payload.into_runtime(),
                 )?;

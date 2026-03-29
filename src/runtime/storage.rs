@@ -24,8 +24,8 @@ use tempfile::TempDir;
 
 use crate::bundle::{BODY_FILE_NAME, BundlePayload, BundleWriter};
 use crate::runtime::{
-    AuditEntry, ForwardIntent, MailboxMessageView, MultorumPaths, RulebookInit, RuntimeError,
-    WorkerContractView, WorkerId, WorkerPaths,
+    AuditEntry, MailboxMessageView, MultorumPaths, RulebookInit, RuntimeError, WorkerContractView,
+    WorkerId, WorkerPaths,
     mailbox::{
         AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, ProtocolVersion,
         PublishedBundle, ReplyReference, Sequence, SequenceFilter,
@@ -994,8 +994,7 @@ impl RuntimeFs {
     pub(crate) fn publish_bundle(
         &self, worktree_root: &Path, direction: MailboxDirection, kind: MessageKind,
         worker_id: &WorkerId, perspective: &crate::schema::perspective::PerspectiveName,
-        reply: ReplyReference, head_commit: Option<CanonicalCommitHash>,
-        forward_request: Option<ForwardIntent>, payload: BundlePayload,
+        reply: ReplyReference, head_commit: Option<CanonicalCommitHash>, payload: BundlePayload,
     ) -> Result<PublishedBundle, RuntimeError> {
         let worker_paths = WorkerPaths::new(worktree_root.to_path_buf());
         let new_root = worker_paths.mailbox_new(direction);
@@ -1020,7 +1019,6 @@ impl RuntimeFs {
             created_at: Timestamp::now(),
             in_reply_to: reply.in_reply_to,
             head_commit,
-            forward_request,
         };
         Self::write_toml(&temp_dir.join(ENVELOPE_FILE_NAME), &envelope)?;
 
@@ -1088,7 +1086,6 @@ impl RuntimeFs {
                 created_at: envelope.created_at,
                 acknowledged,
                 head_commit: envelope.head_commit.clone(),
-                forward_request: envelope.forward_request,
                 summary: self.bundle_summary(&bundle_path, &envelope.kind),
                 body,
                 bundle_path,

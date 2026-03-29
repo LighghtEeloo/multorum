@@ -213,7 +213,6 @@ fn orchestrator_read_worker_outbox() {
     worker_svc
         .send_report(
             None,
-            None,
             multorum::runtime::ReplyReference::default(),
             BundlePayload { body_path: Some(report_body), ..BundlePayload::default() },
         )
@@ -243,7 +242,6 @@ fn orchestrator_ack_worker_outbox_message() {
     fs::write(&report_body, "Need clarification.\n").unwrap();
     worker_svc
         .send_report(
-            None,
             None,
             multorum::runtime::ReplyReference::default(),
             BundlePayload { body_path: Some(report_body), ..BundlePayload::default() },
@@ -315,7 +313,6 @@ fn orchestrator_resolve_worker() {
     fs::write(&report_body, "Need clarification.\n").unwrap();
     worker_svc
         .send_report(
-            None,
             None,
             multorum::runtime::ReplyReference::default(),
             BundlePayload { body_path: Some(report_body), ..BundlePayload::default() },
@@ -466,9 +463,7 @@ fn orchestrator_hint_worker_rejected_for_blocked_worker() {
     let worktree = tool_json(&create)["worktree_path"].as_str().unwrap().to_string();
 
     let worker_svc = FsWorkerService::new(&worktree).unwrap();
-    worker_svc
-        .send_report(None, None, ReplyReference::default(), BundlePayload::default())
-        .unwrap();
+    worker_svc.send_report(None, ReplyReference::default(), BundlePayload::default()).unwrap();
 
     let result = handler
         .dispatch(
@@ -585,7 +580,6 @@ fn orchestrator_resource_worker_outbox() {
     fs::write(&report_body, "Need clarification.\n").unwrap();
     worker_svc
         .send_report(
-            None,
             None,
             multorum::runtime::ReplyReference::default(),
             BundlePayload { body_path: Some(report_body), ..BundlePayload::default() },
@@ -764,7 +758,6 @@ fn worker_send_report() {
             "send_report",
             json_args(json!({
                 "body_path": report_body.to_str().unwrap(),
-                "forward_request": "expand-boundary",
             })),
         )
         .unwrap();

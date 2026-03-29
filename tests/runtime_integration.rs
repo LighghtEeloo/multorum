@@ -7,9 +7,9 @@ use tempfile::TempDir;
 use toml::Value;
 
 use multorum::runtime::{
-    BundlePayload, CreateWorker, ForwardIntent, FsOrchestratorService, FsWorkerService,
-    MessageKind, OrchestratorService, ReplyReference, RuntimeError, Sequence, SequenceFilter,
-    WorkerService, WorkerState,
+    BundlePayload, CreateWorker, FsOrchestratorService, FsWorkerService, MessageKind,
+    OrchestratorService, ReplyReference, RuntimeError, Sequence, SequenceFilter, WorkerService,
+    WorkerState,
 };
 use multorum::schema::perspective::PerspectiveName;
 use multorum::schema::rulebook::Rulebook;
@@ -230,7 +230,6 @@ fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     let report = worker
         .send_report(
             None,
-            None,
             ReplyReference::default(),
             BundlePayload { body_path: Some(report_body.clone()), ..BundlePayload::default() },
         )
@@ -298,7 +297,7 @@ fn hint_worker_requires_active_state() {
     let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
 
-    worker.send_report(None, None, ReplyReference::default(), BundlePayload::default()).unwrap();
+    worker.send_report(None, ReplyReference::default(), BundlePayload::default()).unwrap();
     let hint_body = repo.path().join("hint.md");
     fs::write(&hint_body, "Please pause and report your current head.\n").unwrap();
 
@@ -698,7 +697,6 @@ fn send_report_canonicalizes_optional_head_commit_before_storage() {
     let report = worker
         .send_report(
             Some(short_commit(&head_commit)),
-            None,
             ReplyReference::default(),
             BundlePayload::default(),
         )
@@ -707,26 +705,6 @@ fn send_report_canonicalizes_optional_head_commit_before_storage() {
     let envelope = fs::read_to_string(report.bundle_path.join("envelope.toml")).unwrap();
     let envelope: Value = toml::from_str(&envelope).unwrap();
     assert_eq!(envelope["head_commit"].as_str(), Some(head_commit.as_str()));
-}
-
-#[test]
-fn send_report_persists_forward_request_before_storage() {
-    let (_repo, orchestrator, _) = setup_repo();
-    let provision = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
-    let worker = FsWorkerService::new(&provision.worktree_path).unwrap();
-
-    let report = worker
-        .send_report(
-            None,
-            Some(ForwardIntent::ExpandBoundary),
-            ReplyReference::default(),
-            BundlePayload::default(),
-        )
-        .unwrap();
-
-    let envelope = fs::read_to_string(report.bundle_path.join("envelope.toml")).unwrap();
-    let envelope: Value = toml::from_str(&envelope).unwrap();
-    assert_eq!(envelope["forward_request"].as_str(), Some("expand-boundary"));
 }
 
 #[test]
@@ -943,7 +921,7 @@ fn discard_worker_accepts_blocked_state_and_clears_exclusion_set() {
     let result = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
     let worker = FsWorkerService::new(&result.worktree_path).unwrap();
 
-    worker.send_report(None, None, ReplyReference::default(), BundlePayload::default()).unwrap();
+    worker.send_report(None, ReplyReference::default(), BundlePayload::default()).unwrap();
     assert_eq!(worker.status().unwrap().state, WorkerState::Blocked);
     assert!(!read_exclusion_set(dir.path()).is_empty());
 

@@ -14,7 +14,7 @@ use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler};
 
 use crate::methodology::{MethodologyDocument, MethodologyRole};
-use crate::runtime::{ForwardIntent, FsWorkerService, Sequence, WorkerService};
+use crate::runtime::{FsWorkerService, Sequence, WorkerService};
 
 use super::{
     DeferredService, ServiceState, args_or_empty, dispatch_tool, extract_reply,
@@ -111,13 +111,8 @@ impl WorkerHandler {
             }
             | "send_report" => {
                 let head_commit = optional_str(&args, "head_commit").map(String::from);
-                let forward_request = optional_str(&args, "forward_request")
-                    .map(str::parse::<ForwardIntent>)
-                    .transpose()
-                    .map_err(|error| ErrorData::invalid_params(error, None))?;
                 dispatch_tool(service.send_report(
                     head_commit,
-                    forward_request,
                     extract_reply(&args),
                     extract_required_payload(&args)?,
                 ))

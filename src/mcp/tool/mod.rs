@@ -193,10 +193,6 @@ impl ToolInputSets {
             "head_commit",
             "Optional git commit hash relevant to the blocker report.",
         ),
-        optional_string_input(
-            "forward_request",
-            "Optional typed request to evolve the perspective before replay.",
-        ),
         optional_integer_input(
             "reply_to",
             "Optional mailbox sequence number answered by this report.",

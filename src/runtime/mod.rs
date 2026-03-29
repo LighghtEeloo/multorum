@@ -20,8 +20,7 @@ pub mod worker_id;
 pub use crate::bundle::BundlePayload;
 pub use error::{Result, RuntimeError};
 pub use forward::{
-    AutoForwardNotice, AutoForwardNoticeKind, AutoForwardTrigger, ForwardIntent,
-    PerspectiveForwardProof,
+    AutoForwardNotice, AutoForwardNoticeKind, AutoForwardTrigger, PerspectiveForwardProof,
 };
 pub use mailbox::{
     AckRef, BundleEnvelope, MailboxDirection, MessageKind, MessageRef, PublishedBundle,

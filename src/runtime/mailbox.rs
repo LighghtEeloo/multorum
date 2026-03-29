@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::schema::perspective::PerspectiveName;
 use crate::vcs::CanonicalCommitHash;
 
-use super::forward::{AutoForwardNotice, ForwardIntent};
+use super::forward::AutoForwardNotice;
 use super::timestamp::Timestamp;
 use super::worker_id::WorkerId;
 
@@ -152,12 +152,6 @@ pub struct BundleEnvelope {
     /// Optional canonical commit hash relevant to the message.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub head_commit: Option<CanonicalCommitHash>,
-    /// Optional typed request to evolve the perspective before replay.
-    ///
-    /// Note: Present only on blocker reports that intentionally ask the
-    /// orchestrator to consider `perspective forward`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub forward_request: Option<ForwardIntent>,
 }
 
 /// Result of publishing a mailbox bundle.

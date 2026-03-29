@@ -264,7 +264,6 @@ fn worker_tool_input_schemas_stable() {
         inputs,
         &[
             ("head_commit", ToolInputType::String, false),
-            ("forward_request", ToolInputType::String, false),
             ("reply_to", ToolInputType::Integer, false),
             ("body_text", ToolInputType::String, false),
             ("body_path", ToolInputType::String, false),

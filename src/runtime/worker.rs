@@ -14,7 +14,6 @@ use crate::bundle::BundlePayload;
 use super::{
     WorkerPaths,
     error::{Result, RuntimeError},
-    forward::ForwardIntent,
     mailbox::{
         AckRef, MailboxDirection, MessageKind, PublishedBundle, ReplyReference, Sequence,
         SequenceFilter,
@@ -50,8 +49,7 @@ pub trait WorkerService {
     /// Note: A later perspective-forward operation can preserve
     /// `BLOCKED` workers only from the `head_commit` recorded here.
     fn send_report(
-        &self, head_commit: Option<String>, forward_request: Option<ForwardIntent>,
-        reply: ReplyReference, payload: BundlePayload,
+        &self, head_commit: Option<String>, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle>;
 
     /// Publish a completed worker commit submission.
@@ -201,7 +199,7 @@ impl FsWorkerService {
     fn publish_submission(
         &self, contract: &WorkerContractView, kind: MessageKind, reply: ReplyReference,
         payload: BundlePayload, bundle_head_commit: Option<CanonicalCommitHash>,
-        state_head_commit: Option<CanonicalCommitHash>, forward_request: Option<ForwardIntent>,
+        state_head_commit: Option<CanonicalCommitHash>,
     ) -> Result<PublishedBundle> {
         let message = self.fs.publish_bundle(
             &self.worktree_root,
@@ -211,7 +209,6 @@ impl FsWorkerService {
             &contract.perspective,
             reply,
             bundle_head_commit,
-            forward_request,
             payload,
         )?;
         self.update_submission_state(contract, kind, state_head_commit)?;
@@ -255,8 +252,7 @@ impl WorkerService for FsWorkerService {
     }
 
     fn send_report(
-        &self, head_commit: Option<String>, forward_request: Option<ForwardIntent>,
-        reply: ReplyReference, payload: BundlePayload,
+        &self, head_commit: Option<String>, reply: ReplyReference, payload: BundlePayload,
     ) -> Result<PublishedBundle> {
         let contract = self.contract_view()?;
         let head_commit = head_commit
@@ -269,15 +265,7 @@ impl WorkerService for FsWorkerService {
                 )
             })
             .transpose()?;
-        self.publish_submission(
-            &contract,
-            MessageKind::Report,
-            reply,
-            payload,
-            head_commit,
-            None,
-            forward_request,
-        )
+        self.publish_submission(&contract, MessageKind::Report, reply, payload, head_commit, None)
     }
 
     fn send_commit(&self, head_commit: String, payload: BundlePayload) -> Result<PublishedBundle> {
@@ -294,7 +282,6 @@ impl WorkerService for FsWorkerService {
             payload,
             Some(head_commit.clone()),
             Some(head_commit),
-            None,
         )
     }
 
