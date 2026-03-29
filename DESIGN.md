@@ -25,7 +25,7 @@ The system exists to solve one concrete tension in parallel development:
 
 Multorum solves this by separating authoring scope from execution scope. A worker may only write within its declared write set, but it compiles, tests, and navigates against the full codebase.
 
-Multorum is infrastructure, not an agent. It enforces invariants, materializes worker environments, and records state transitions. All coordination intelligence stays in the orchestrator, and every state transition happens only because the orchestrator or a worker issues an explicit instruction.
+Multorum is an infrastructure, NOT an agent. It enforces invariants, materializes worker environments, and records state transitions. All coordination intelligence stays in the orchestrator, and every state transition happens only because the orchestrator or a worker issues an explicit instruction.
 
 There is one canonical codebase under version control. Workers never modify it directly. All changes flow through Multorum's merge pipeline before the orchestrator integrates them.
 
@@ -65,7 +65,7 @@ A perspective is a named role in the rulebook. It declares:
 
 Either set may be empty (omitted or set to `""`), meaning the perspective claims no files for that role. A perspective with an empty write set cannot modify any files. A perspective with an empty read set places no stability constraints on the rest of the repository.
 
-The write set is a closed list of existing files. Workers may not create files outside it. When a blocked worker discovers that the task really needs a new file, the orchestrator must update the canonical workspace and the rulebook, then forward the blocked bidding group to HEAD before resolving the blocker. The read set is not a visibility filter — workers may read any file in the repository. The read set exists to tell Multorum which files must remain untouched by other concurrent work, and to tell the worker what the orchestrator considers stable context.
+The write set is a closed list of existing files. Workers may not write to or create files outside it. When a blocked worker discovers that the task really needs a new file, the orchestrator must update the canonical workspace and the rulebook, then forward the blocked bidding group to HEAD before resolving the blocker. The read set declares which files must remain untouched by other concurrent work and tells the worker what the orchestrator considers stable context. Workers may read any file in the repository regardless of the read set.
 
 A worker is a runtime instantiation of a perspective. Perspectives are static policy. Workers are ephemeral executions with state.
 
@@ -250,9 +250,9 @@ A perspective is a role, not a task. Name it for the kind of work it authorizes,
 Each perspective declares two things:
 
 - **write**: the closed set of existing files this role may modify. Workers cannot create files outside it. If a task genuinely needs a new file, the orchestrator must create the file and update the rulebook before the worker can proceed. May be omitted or empty for read-only perspectives.
-- **read**: the files that must remain stable while this role is active. This is not a visibility filter — workers can still read the entire repository. The read set tells Multorum which files concurrent work must not disturb, and tells the worker what the orchestrator considers stable context. May be omitted or empty when no stability guarantee is needed.
+- **read**: the files that must remain stable while this role is active. The read set tells Multorum which files concurrent work must not disturb, and tells the worker what the orchestrator considers stable context. Workers can still read the entire repository regardless. May be omitted or empty when no stability guarantee is needed.
 
-The conflict-free invariant operates at the bidding-group level: for any two distinct active groups, their write sets must be disjoint, and neither may write into the other's read set. Design perspectives so that the ones you intend to run concurrently satisfy this naturally. If two perspectives cannot run at the same time because their write sets overlap, they are not actually parallel work — they are sequential work wearing a parallel costume.
+The conflict-free invariant operates at the bidding-group level: for any two distinct active groups, their write sets must be disjoint, and neither may write into the other's read set. Design perspectives so that the ones you intend to run concurrently satisfy this naturally. Two perspectives whose write sets overlap are not actually parallel work, so they must run sequentially.
 
 Keep read sets narrow. Listing every file in the repository as a read dependency blocks all concurrent writes, which defeats the purpose. Include only the files that the worker genuinely depends on as stable context: specs, interfaces, shared types, configuration. The project's own rulebook demonstrates this — perspectives read `ProjectSurfaceFiles` (manifests, docs, entrypoints) rather than the entire tree.
 
@@ -488,9 +488,7 @@ Once one worker in a bidding group reaches `MERGED`, every sibling in that group
 
 ## Mailbox Protocol
 
-All orchestrator-worker communication is file-based. There is no socket protocol, broker, or resident service.
-
-Each worker exposes two mailbox trees in its `.multorum/` directory:
+All orchestrator-worker communication is file-based. Each worker exposes two mailbox trees in its `.multorum/` directory:
 
 - `inbox/`: messages from the orchestrator to the worker
 - `outbox/`: messages from the worker to the orchestrator
@@ -553,7 +551,7 @@ Multorum verifies that every touched file is inside the worker's compiled write 
 
 An intentionally empty worker commit is valid: it touches no files, so scope enforcement passes with an empty changed-file set. This supports analysis-only merges that carry evidence in bundle content rather than code diffs.
 
-Client-side hooks may serve as early warnings in worker worktrees, but they are not authoritative.
+Client-side hooks in worker worktrees serve as early warnings only; scope enforcement at merge time is authoritative.
 
 ### Project Checks
 
@@ -604,8 +602,6 @@ Tool results are JSON payloads. Runtime failures remain tool-level failures rath
 MCP resources expose read-only projections of runtime state.
 
 Most resources return JSON snapshots. The role methodology resources return Markdown because they are advisory operating guides meant for direct agent or human consumption.
-
-Concrete resources should list only currently implemented projections. Parameterized URIs belong in resource templates rather than in the concrete resource list.
 
 #### Orchestrator-mode resources
 
