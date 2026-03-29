@@ -7,6 +7,8 @@ Multorum is the infrastructure for orchestrated parallel development on a single
 > <p align="center">
 >   <img src="assets/multorum-20260327.png" alt="Multorum logo" width="40%">
 > </p>
+>
+> [EN](README.md) | [CN](README-CN.md)
 
 ## Definition by Negation
 
@@ -160,7 +162,7 @@ It assumes the opposite, because it believes in the power of hard boundaries and
 
 ## Versioning
 
-Multorum follows semantic versioning, but it's a bit boring. So addtionally, Multorum follows *shift versioning*. 
+Multorum follows semantic versioning, but it's a bit boring. So addtionally, Multorum follows *shift versioning™*. 
 - The first version will be `0.0.1`, releasing when the core model is well understood without obvious issues.
 - The second version will be `0.1.0`, releasing when the implementation details are solidified and battle-tested.
 - The third version will be `1.0.0`, releasing when all interfaces are stable and ready for production use.
