@@ -37,6 +37,8 @@ The *rulebook* (`.multorum/rulebook.toml`) defines named perspectives. A perspec
 
 A *worker* is a live instance of a perspective. Multorum gives it an isolated *git worktree*, a pinned base snapshot, and materialized boundary files. The contract becomes a real workspace with real limits. Before a worker's changes land, Multorum enforces write-scope compliance and runs project checks (build, lint, test) through *git hooks* declared in the rulebook.
 
+Multiple workers created from the same perspective form a *bidding group*. They share the same boundaries, start from the same snapshot, and race independently. At most one merges. The others are discarded.
+
 ## The Guarantee
 
 Multorum is built around one invariant:
@@ -45,16 +47,16 @@ Multorum is built around one invariant:
 
 That is it. The soul of this product. The rest is just plumbing.
 
-Concurrent write scopes cannot overlap, and no active group may write into files another group depends on as stable context. Multorum rejects bad overlap before work starts. After all, it is better to fail people fast than after hours of work ending in a merge conflict.
+Concurrent write scopes should never overlap, and no active group may write into files another group depends on as stable context. Multorum rejects bad overlap before work starts. After all, it is better to fail people fast with realistic disappointment, rather than after hours of work ending in a catastrophic merge conflict.
 
 ## The Lifecycle
 
-The orchestrator installs a rulebook, then creates workers from its perspectives. Each worker operates inside its own worktree, reports progress through the runtime surface, and eventually submits work. The orchestrator can merge the result, revise it, or discard it.
-
-When the orchestrator wants competition, it creates multiple workers from the same perspective on the same base. They race independently: at most one merges, and the others are discarded.
+The orchestrator composes the rulebook, then creates workers from its perspectives. Each worker operates inside its own worktree, reports progress through the runtime surface, and eventually submits work. The orchestrator can merge the result, revise it, or discard it. The worker can work in the worktree no matter what, and when it's done, the worktree can be deleted along with the worker itself.
 
 
 ## Installation
+
+If anything above intrigued you (or at least didn't scare you away), after installing [Rust](https://rust-lang.org/tools/install), you can install Multorum with Cargo:
 
 ```bash
 cargo install multorum
@@ -155,6 +157,15 @@ Those files are convenience wrappers, not an independent source of truth.
 Multorum is not a merge tool with a better attitude. It is not a chat protocol pretending to be a runtime. It is not a replacement for orchestration logic. It is not a system that assumes parallel work will behave nicely if everyone expresses themselves clearly.
 
 It assumes the opposite, because it believes in the power of hard boundaries and mechanical guarantees.
+
+## Versioning
+
+Multorum follows semantic versioning, but it's a bit boring. So addtionally, Multorum follows *shift versioning*. 
+- The first version will be `0.0.1`, releasing when the core model is well understood without obvious issues.
+- The second version will be `0.1.0`, releasing when the implementation details are solidified and battle-tested.
+- The third version will be `1.0.0`, releasing when all interfaces are stable and ready for production use.
+
+After that will come the infinite boring maintenance versions, and the development will shift towards ecosystem integration, quality of life improvements, and daily maintenance. I sincerely hope these versions are never surprising to anyone forever.
 
 ## In Conclusion (❁´◡`❁)
 

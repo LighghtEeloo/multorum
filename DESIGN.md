@@ -124,7 +124,7 @@ The rules are:
 
 ## Rulebook
 
-The rulebook lives at `.multorum/rulebook.toml`, committed to version control alongside the codebase it governs.
+The rulebook lives at `.multorum/rulebook.toml`, committed to version control alongside the codebase it governs. That said, the rulebook is an empharal declaration of perspectives that is not pinned to a specific version, so to some extent it acts more like a convenient shorthand for reasoning about the project's structure and layout, and how harnessed production can be tested and verified.
 
 ### File-Set Algebra
 
