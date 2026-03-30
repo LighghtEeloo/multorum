@@ -16,10 +16,10 @@ Multorum is not an agent. It does not plan, negotiate, ideate, or otherwise hall
 
 ## Y?
 
-Problem: parallel development breaks in two ways.
+Parallel development breaks in two ways:
 
-- Either people work freely and pay for it later in merge hell, or..
-- ..They are boxed into such narrow sandboxes that they lose the context needed to do good work.
+- either people work freely and pay for it later in merge hell, or ..
+- .. they are boxed into such narrow sandboxes that they lose the context needed to do good work.
 
 Multorum is built to avoid that tradeoff. Each worker keeps the full repository as readable context, but authorship is constrained to an explicit write scope, so the system preserves both global understanding and local isolation.
 
