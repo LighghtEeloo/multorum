@@ -113,16 +113,22 @@ pub trait VersionControl: std::fmt::Debug + Send + Sync {
         &self, worktree_root: &Path, from_base: &CanonicalCommitHash, to_base: &CanonicalCommitHash,
     ) -> Result<CanonicalCommitHash>;
 
-    /// Install backend-local ignore rules and mutation guards inside a
-    /// worker worktree created during worker creation.
+    /// Install backend-local ignore rules and shared mutation guards
+    /// needed by one worker worktree.
+    ///
+    /// Note: The shared hook installation must stay idempotent because
+    /// linked Git worktrees resolve the same hook path as the canonical
+    /// workspace.
     fn install_worker_runtime_support(&self, worktree_root: &Path) -> Result<()>;
 
-    /// Install or update the orchestrator pre-commit hook in the
+    /// Install or update repository-wide hook support for the
     /// canonical workspace.
     ///
-    /// The hook reads the materialized exclusion set and rejects commits
-    /// that touch any listed file.
-    fn install_orchestrator_hook(&self, workspace_root: &Path) -> Result<()>;
+    /// Implementations may skip the installation when `workspace_root`
+    /// is not yet backed by an initialized repository. `multorum init`
+    /// uses this behavior so it can prepare `.multorum/` before
+    /// `git init` has necessarily run.
+    fn install_shared_runtime_support(&self, workspace_root: &Path) -> Result<()>;
 
     /// Read one repository-relative file from a specific commit.
     fn show_file_at_commit(

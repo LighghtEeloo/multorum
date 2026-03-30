@@ -677,6 +677,7 @@ impl RuntimeFs {
             let state = self.load_state()?;
             self.rewrite_exclusion_set(&state)?;
         }
+        self.vcs().install_shared_runtime_support(self.workspace_root())?;
         tracing::info!(
             multorum_root = %multorum_root.display(),
             rulebook_path = %rulebook_path.display(),

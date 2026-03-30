@@ -166,7 +166,11 @@ impl GitVcs {
         Ok(())
     }
 
-    /// Install or update the multorum pre-commit hook section.
+    /// Install or update the shared Multorum pre-commit hook section.
+    ///
+    /// Git worktrees share the repository hook directory by default, so
+    /// both `multorum init` and worker creation can safely call this
+    /// helper.
     ///
     /// Instead of overwriting the entire hook file, the hook logic is
     /// injected between unique guard markers ([`HOOK_GUARD_BEGIN`] /
@@ -174,6 +178,15 @@ impl GitVcs {
     /// in-place; otherwise the block is appended. A missing file is
     /// created with a POSIX shebang.
     fn install_pre_commit_hook(&self, repo_root: &Path) -> Result<()> {
+        if !repo_root.join(".git").exists() {
+            tracing::trace!(
+                backend = self.backend_name(),
+                root = %repo_root.display(),
+                "skipping pre-commit hook installation because no git directory marker exists"
+            );
+            return Ok(());
+        }
+
         let mut command = self.git_command(repo_root);
         command.arg("rev-parse").arg("--git-path").arg("hooks/pre-commit");
         let output = self.run_command(command, "resolve pre-commit hook path")?;
@@ -408,7 +421,7 @@ impl VersionControl for GitVcs {
         self.install_pre_commit_hook(worktree_root)
     }
 
-    fn install_orchestrator_hook(&self, workspace_root: &Path) -> Result<()> {
+    fn install_shared_runtime_support(&self, workspace_root: &Path) -> Result<()> {
         self.install_pre_commit_hook(workspace_root)
     }
 

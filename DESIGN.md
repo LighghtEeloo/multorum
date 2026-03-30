@@ -646,7 +646,7 @@ This section lists the instructions that the orchestrator and workers may issue,
 
 ### Initialization
 
-- `multorum init` — Initialize `.multorum/`, write the default committed artifacts if absent, prepare `.multorum/.gitignore`, and create orchestrator runtime directories.
+- `multorum init` — Initialize `.multorum/`, write the default committed artifacts if absent, prepare `.multorum/.gitignore`, create orchestrator runtime directories, and install the shared pre-commit hook when the repository backend is already available.
 
 ### Perspective
 

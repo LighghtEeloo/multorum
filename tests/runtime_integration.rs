@@ -175,6 +175,25 @@ fn rulebook_init_repairs_runtime_surface_without_overwriting_existing_rulebook()
 }
 
 #[test]
+fn rulebook_init_installs_pre_commit_hook_after_git_init() {
+    let dir = tempfile::tempdir().unwrap();
+    let orchestrator = FsOrchestratorService::new(dir.path()).unwrap();
+
+    git(dir.path(), &["init"]);
+    git(dir.path(), &["config", "user.name", "Multorum Test"]);
+    git(dir.path(), &["config", "user.email", "multorum@test.invalid"]);
+
+    orchestrator.rulebook_init().unwrap();
+
+    let hook_path = git_path(dir.path(), "hooks/pre-commit");
+    let hook = fs::read_to_string(&hook_path).unwrap();
+    assert!(
+        hook.contains("BEGIN MULTORUM HOOK"),
+        "expected rulebook init to inject the shared pre-commit hook"
+    );
+}
+
+#[test]
 fn mailbox_flow_moves_payloads_and_transitions_worker_state() {
     let (repo, orchestrator, _) = setup_repo();
     let task_body = repo.path().join("task.md");
