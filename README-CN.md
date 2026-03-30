@@ -1,3 +1,42 @@
+---
+本文档由LLM协助翻译。虽已尽力而为，但若有不准确之处，请以英文版本为准。
+翻译时，遇到代码或命令行输入时，请保持原文不变，并尽可能在上下文中解释它们的含义和用途。
+以下是术语表。在第一次出现时，术语会以斜体显示，并在括号中提供原文：
+- Multorum：墨缇斯
+- agent：代行者
+- orchestration：野蜂飞舞
+- orchestrator：女王蜂
+- worker：工蜂
+- rulebook：指导意见
+- perspective：切入点
+- bidding group：竞标组
+- workspace：工作区
+- bundle：包裹
+- mailbox：邮箱
+- A、B、C：甲、乙、丙
+- read-set：读文件集合
+- write-set：写文件集合
+- MCP：模型上下文协议
+- invariant：不变条件
+- ACTIVE：工作中
+- BLOCKED：停滞
+- COMMITTED：已提交
+- MERGED：已验收
+- DISCARDED：已废弃
+- create：创建
+- resolve：解决
+- revise：修订
+- report：报告
+- commit：提交
+- merge：验收
+- discard：废弃
+- forward：前移
+- body.md：正文
+- artifacts：附件
+- check pipeline：验收检查流程
+- audit：审计
+---
+
 # Multorum
 
 Multorum 是为单一代码库上的协调并行开发而构建的基底，它支持隔离的工作空间、明确的文件所有权，以及通过架构设计实现的冲突自由。它不关心你使用的具体工作流程、代理工具链或开发流程。它是一个通用工具，用于使并行工作安全且高效，无论你选择如何组织和执行你的计划。
