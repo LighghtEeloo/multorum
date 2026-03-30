@@ -72,6 +72,8 @@ If you want the latest yet potentially unstable features, you can install direct
 cargo install --git https://github.com/LighghtEeloo/multorum.git
 ```
 
+Use `cargo uninstall multorum` to completely remove it. We won't litter. Promise.
+
 ## Using Multorum with MCP and Methodology
 
 If your orchestrator is an MCP-capable agent, you can run the whole Multorum loop through tool calls instead of ad-hoc shell choreography.
