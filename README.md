@@ -184,3 +184,7 @@ After that will come the infinite boring maintenance versions, and the developme
 Multorum is for orchestrated parallel development on a single repository with isolated workspaces, explicit file ownership, and conflict freedom enforced by construction.
 
 If you are running multiple workers against one codebase and are tired of treating merge pain as an immutable law of the universe, Multorum is the tool.
+
+## Credits
+
+I'd like to take a moment here to thank everyone who has contributed to the design and development of Multorum, especially [@17-qxm](https://github.com/17-qxm), [@Yanmeeei](https://github.com/Yanmeeei), and [@TomCC7](https://github.com/TomCC7), as early supporters and adopters.
