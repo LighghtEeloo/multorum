@@ -197,4 +197,4 @@ If you are running multiple workers against one codebase and are tired of treati
 
 ## Credits
 
-I'd like to take a moment here to thank everyone who has contributed to the design and development of Multorum, especially [@17-qxm](https://github.com/17-qxm), [@Yanmeeei](https://github.com/Yanmeeei), and [@TomCC7](https://github.com/TomCC7), as early supporters and adopters.
+I'd like to take a moment here to thank everyone who has contributed to the design and development of Multorum, especially [@17-qxm](https://github.com/17-qxm), [@Yanmeeei](https://github.com/Yanmeeei), and [@TomCC7](https://github.com/TomCC7), as early supporters and adopters. Mascot designed by @矣發, after the image of [Mortis](https://bandori.fandom.com/wiki/Mortis_(Alter)).
