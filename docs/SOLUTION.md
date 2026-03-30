@@ -21,8 +21,7 @@ What should the orchestrator do?
 
 - Workers may not create new files on their own because the write set is a closed list of existing paths.
 - The orchestrator must update the canonical workspace and rulebook so the new file exists and belongs to the perspective.
-- Those canonical changes must be committed before activation.
-- The orchestrator must run `multorum rulebook install`.
+- Those canonical changes should be committed for reproducibility, though on-disk edits take effect immediately for subsequent operations.
 - The orchestrator must run `multorum perspective forward <perspective>` for the whole blocked bidding group, not just one worker.
 - The orchestrator must then send `multorum worker resolve <worker>`.
 - The answer should not suggest direct ad hoc file creation inside the blocked worker worktree.
@@ -39,7 +38,7 @@ What should the orchestrator tell the worker, and what should happen next?
 
 - The worker must not edit outside its write set.
 - The orchestrator must decide whether to change the rulebook, create a different worker from a better perspective, or re-scope the task.
-- If the boundary needs to expand for the same perspective, the answer should mention rulebook update, commit, install, forward, and resolve.
+- If the boundary needs to expand for the same perspective, the answer should mention rulebook update, commit, forward, and resolve.
 - The answer should not suggest bypassing Multorum's boundary model.
 
 ## 3. Active Bidding Group Is Still On An Older Base
@@ -53,10 +52,10 @@ What should the orchestrator do?
 **A correct answer should include**
 
 - Multorum does not automatically move live workers to the new rulebook snapshot.
-- The orchestrator must forward the existing live bidding group for that perspective before creating more same-perspective workers from the newer active rulebook.
+- The orchestrator must forward the existing live bidding group for that perspective before creating more same-perspective workers from the newer rulebook.
 - `multorum perspective forward <perspective>` applies to the whole bidding group.
-- Forwarding requires every live worker in that bidding group to be `BLOCKED`.
-- The answer should not say that `rulebook install` alone updates the workers' pinned code snapshot.
+- Forwarding requires every live worker in that bidding group to be non-`ACTIVE` (i.e. `BLOCKED` or `COMMITTED`).
+- The answer should not say that committing the rulebook alone updates the workers' pinned code snapshot.
 
 ## 4. One Worker In A Bidding Group Is Merged
 
@@ -113,8 +112,8 @@ What should the orchestrator do?
 
 **A correct answer should include**
 
-- Perspective forwarding preserves progress from the `head_commit` recorded in the latest blocking report.
-- Without that `head_commit`, Multorum should reject the forward.
+- Perspective forwarding preserves progress from a durable checkpoint already recorded for each worker: the latest blocking `report` for `BLOCKED` workers, or the submitted head commit for `COMMITTED` workers.
+- Without a durable checkpoint (e.g. a report lacking `head_commit`), Multorum should reject the forward.
 - The orchestrator should unblock the worker with a `resolve` message that asks for a new blocker report with the relevant `head_commit` if forwarding is still needed.
 - The answer should not invent a manual replay or guess the commit.
 
@@ -178,20 +177,20 @@ What should the orchestrator rely on during merge?
 - If the submitted commit is not the desired result, the orchestrator should use `revise` rather than guessing from the worktree.
 - The answer should not treat stray uncommitted edits as part of the merge candidate.
 
-## 12. Rulebook Change Looks Valid On Disk But Is Not Active
+## 12. Rulebook Change On Disk Versus Worker Snapshots
 
 **Scenario**
 
 The orchestrator edited `.multorum/rulebook.toml` in the main workspace and assumes the new policy is already in force for future worker creation.
 
-Is that correct?
+Is that correct? What about existing workers?
 
 **A correct answer should include**
 
-- Editing the rulebook on disk does nothing by itself.
-- The changed rulebook must be committed and installed explicitly.
+- Editing the rulebook on disk does take effect immediately for subsequent operations that compile policy (`perspective list`, `perspective validate`, `worker create`, `perspective forward`). There is no separate activation step.
+- For reproducible orchestration decisions, the changed rulebook should be committed before creating workers.
 - Active workers continue to follow their pinned snapshot until an explicit forward happens.
-- The answer should distinguish committed policy, active rulebook activation, and worker snapshot movement.
+- The answer should distinguish on-disk policy (affects new operations immediately) from worker snapshots (change only when the orchestrator forwards the bidding group to HEAD).
 
 ## 13. Finalized Workspace Reuse With An Explicit Worker Id
 
@@ -218,7 +217,6 @@ Write the minimum safe sequence of orchestrator actions.
 **A correct answer should include**
 
 - Commit the canonical workspace and rulebook changes that add the file and assign it correctly.
-- Run `multorum rulebook install`.
 - Run `multorum perspective forward AuthImplementor`.
 - Run `multorum worker resolve <worker>`.
-- The sequence should not omit the commit, install, or forward steps.
+- The sequence should not omit the commit or forward steps.

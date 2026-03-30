@@ -91,13 +91,13 @@ The worker says the code is complete, but the worktree contains unrelated uncomm
 
 What should the orchestrator rely on during merge?
 
-## 12. Rulebook Change Looks Valid On Disk But Is Not Active
+## 12. Rulebook Change On Disk Versus Worker Snapshots
 
 **Scenario**
 
 The orchestrator edited `.multorum/rulebook.toml` in the main workspace and assumes the new policy is already in force for future worker creation.
 
-Is that correct?
+Is that correct? What about existing workers?
 
 ## 13. Finalized Workspace Reuse With An Explicit Worker Id
 
