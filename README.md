@@ -76,7 +76,45 @@ cargo install --git https://github.com/LighghtEeloo/multorum.git
 
 Use `cargo uninstall multorum` to completely remove it. We won't litter. Promise.
 
-## Using Multorum with MCP and Methodology
+<details>
+<summary><strong>Shell completion</strong></summary>
+Multorum can generate shell completion scripts for Bash, Zsh, Fish, Elvish, and PowerShell. You can source those scripts directly from the binary for an always-up-to-date experience.
+
+```bash
+# bash
+command -v multorum &>/dev/null && source <(multorum util completion bash)
+
+# zsh
+autoload -U compinit
+compinit
+command -v multorum &>/dev/null && source <(multorum util completion zsh)
+
+# fish
+command -v multorum &>/dev/null && multorum util completion fish | source
+
+# elvish
+command -v multorum &>/dev/null && source <(multorum util completion elvish)
+
+# powershell
+multorum util completion powershell | Out-String | Invoke-Expression
+```
+</details>
+
+## What's next?
+
+Multorum is designed to be usable by both humans and LLMs, but LLMs have the unfair advantage of generating way more detailed instructions and contexts than mortals (like me). To that end, you can jump directly to [setting up an MCP server](#using-multorum-with-mcp).
+
+### Using Multorum with CLI (mainly as a human)
+
+Multorum has pretty good CLI ergonomics for human users.
+- Press tab to see available options.
+- Check out `--help` at all levels of commands and you should be knowledgeable enough to run the orchestrator and workers manually.
+- Search for any concept in doubt in [DESIGN.md](DESIGN.md) and you should find a detailed explanation.
+- To understand the core idea, run `multorum methodology <role>` to see short markdown documents on these subjects.
+
+I'd say most human users can understand most concepts within 10 minutes of poking around.
+
+### Using Multorum with MCP
 
 If your orchestrator is an MCP-capable agent, you can run the whole Multorum loop through tool calls instead of ad-hoc shell choreography.
 
@@ -85,7 +123,7 @@ Multorum ships the high-level orchestrator and worker guidance inside the binary
 <details>
 <summary><strong>MCP installation guide</strong></summary>
 
-### 1) Add the orchestrator MCP server
+#### 1) Add the orchestrator MCP server
 
 Add this to your MCP host config. Optionally, pass the canonical workspace root explicitly so the server cannot bind itself from an accidental host `cwd`.
 
@@ -100,7 +138,7 @@ Add this to your MCP host config. Optionally, pass the canonical workspace root 
 }
 ```
 
-### 2) Add a worker MCP server
+#### 2) Add a worker MCP server
 
 Repeat for each worker worktree. Optionally, pass that specific worktree explicitly so the worker server cannot accidentally bind to the canonical root or another repo.
 
@@ -115,52 +153,24 @@ Repeat for each worker worktree. Optionally, pass that specific worktree explici
 }
 ```
 
-### 3) Reload and verify
+#### 3) Reload and verify
 
-Reload your MCP host. If it reports an unmanaged repository or root mismatch, the explicit root passed in `args` is wrong for that server role.
+Reload your MCP host and see if the servers are up.
 </details>
 
 <details>
-<summary><strong>Methodology bootstrap guide</strong></summary>
+<summary><strong>Optional skill bootstrap guide</strong></summary>
 
-Use the shipped methodology before the first runtime operation. The CLI and MCP surfaces expose the same role guidance.
-
-### CLI
-
-Print the role methodology directly from the binary:
-
-```bash
-multorum methodology orchestrator
-multorum methodology worker
-```
-These commands are self-contained. They do not require a managed repository and are suitable for bootstrap prompts or host-side agent setup.
-
-### MCP
-
-Each server exposes the same methodology as a Markdown resource:
-
-- `multorum://orchestrator/methodology`
-- `multorum://worker/methodology`
-
-Read the methodology resource that matches the server role before invoking tools. The orchestrator methodology belongs to the canonical workspace server. The worker methodology belongs to the worker-worktree server.
-
-### Minimal host prompts
-
-If your agent runtime needs a tiny role prompt, keep it thin and defer the real guidance to Multorum itself:
-
-- Orchestrator: "Read `multorum methodology orchestrator` or `multorum://orchestrator/methodology`, then operate only through the orchestrator CLI or MCP surface."
-- Worker: "Read `multorum methodology worker` or `multorum://worker/methodology`, then operate only through the worker-local CLI or MCP surface."
-
-This keeps the role guidance versioned with the shipped binary instead of duplicating it in external prompt files.
-
-### Optional thin skills
-
-The repository may also ship minimal skills for hosts that auto-discover prompt files. They should stay thin:
+This repository also ships minimal skills for hosts that auto-discover prompt files. They should stay thin:
 
 - Orchestrator skill: "You are the orchestrator. Read `multorum://orchestrator/methodology` before acting."
 - Worker skill: "You are the worker. Read `multorum://worker/methodology` before acting."
 
-Those files are convenience wrappers, not an independent source of truth.
+You can install them with
+
+```bash
+npx skills add LighghtEeloo/multorum
+```
 
 </details>
 

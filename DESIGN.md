@@ -695,15 +695,21 @@ After running the command, source the output in your shell profile to enable tab
 
 ```bash
 # bash
-source <(multorum util completion bash)
+command -v multorum &>/dev/null && source <(multorum util completion bash)
 
 # zsh
 autoload -U compinit
 compinit
-source <(multorum util completion zsh)
+command -v multorum &>/dev/null && source <(multorum util completion zsh)
 
 # fish
-multorum util completion fish | source
+command -v multorum &>/dev/null && multorum util completion fish | source
+
+# elvish
+command -v multorum &>/dev/null && source <(multorum util completion elvish)
+
+# powershell
+multorum util completion powershell | Out-String | Invoke-Expression
 ```
 
 ### MCP Server
