@@ -19,6 +19,8 @@
 - write-set：写文件集合
 - MCP：模型上下文协议
 - invariant：不变条件
+- parallel：并行
+- concurrent：并发
 - ACTIVE：工作中
 - BLOCKED：停滞
 - COMMITTED：已提交
