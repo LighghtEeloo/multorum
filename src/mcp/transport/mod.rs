@@ -244,7 +244,7 @@ fn mcp_to_resource_error(mcp: &McpToolError) -> rmcp::ErrorData {
         | McpErrorCode::WorkerExists
         | McpErrorCode::InvalidState
         | McpErrorCode::AlreadyAcknowledged
-        | McpErrorCode::BiddingGroupConflict
+        | McpErrorCode::CandidateGroupConflict
         | McpErrorCode::CheckFailed
         | McpErrorCode::WriteSetViolation
         | McpErrorCode::MailboxConflict

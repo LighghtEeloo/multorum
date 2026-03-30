@@ -17,8 +17,8 @@ pub enum McpErrorCode {
     MessageNotFound,
     /// Message bundle already acknowledged.
     AlreadyAcknowledged,
-    /// Perspective boundary conflicts with an active bidding group.
-    BiddingGroupConflict,
+    /// Perspective boundary conflicts with an active candidate group.
+    CandidateGroupConflict,
     /// Requested check failed.
     CheckFailed,
     /// Worker touched files outside its write set.
@@ -43,7 +43,7 @@ impl McpErrorCode {
             | Self::InvalidState => "invalid_state",
             | Self::MessageNotFound => "message_not_found",
             | Self::AlreadyAcknowledged => "already_acknowledged",
-            | Self::BiddingGroupConflict => "bidding_group_conflict",
+            | Self::CandidateGroupConflict => "candidate_group_conflict",
             | Self::CheckFailed => "check_failed",
             | Self::WriteSetViolation => "write_set_violation",
             | Self::MailboxConflict => "mailbox_conflict",
@@ -77,9 +77,11 @@ impl From<RuntimeError> for McpToolError {
             | RuntimeError::InvalidState { .. } => McpErrorCode::InvalidState,
             | RuntimeError::MessageNotFound => McpErrorCode::MessageNotFound,
             | RuntimeError::AlreadyAcknowledged => McpErrorCode::AlreadyAcknowledged,
-            | RuntimeError::ConflictWithActiveBiddingGroup { .. }
-            | RuntimeError::BiddingGroupBoundaryMismatch { .. }
-            | RuntimeError::BiddingGroupBaseMismatch { .. } => McpErrorCode::BiddingGroupConflict,
+            | RuntimeError::ConflictWithActiveCandidateGroup { .. }
+            | RuntimeError::CandidateGroupBoundaryMismatch { .. }
+            | RuntimeError::CandidateGroupBaseMismatch { .. } => {
+                McpErrorCode::CandidateGroupConflict
+            }
             | RuntimeError::ManualPerspectiveForwardRequired { .. } => McpErrorCode::InvalidState,
             | RuntimeError::PerspectiveForwardRequiresNonActive { .. }
             | RuntimeError::PerspectiveForwardMissingGroup { .. }

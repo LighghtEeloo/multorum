@@ -136,7 +136,7 @@ impl OrchestratorPaths {
         &self.root
     }
 
-    /// Root directory for bidding-group state files.
+    /// Root directory for candidate-group state files.
     ///
     /// Each file is named `<Perspective>.toml` and stores the
     /// perspective's pinned base commit plus its compiled boundary.
@@ -144,7 +144,7 @@ impl OrchestratorPaths {
         self.root.join("group")
     }
 
-    /// Path to one persisted bidding-group state file.
+    /// Path to one persisted candidate-group state file.
     ///
     /// Note: Perspective names are validated ASCII alphanumeric
     /// identifiers, so Multorum can map them directly to stable file

@@ -17,12 +17,12 @@ const VALIDATE_PERSPECTIVES_INPUTS: &[ToolInputDescriptor] = &[
         "perspectives",
         "Perspective names to validate for conflict-freedom.",
     ),
-    optional_boolean_input("no_live", "Skip checking against active bidding groups."),
+    optional_boolean_input("no_live", "Skip checking against active candidate groups."),
 ];
 
 const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[required_string_input(
     "perspective",
-    "Perspective whose non-active bidding group should move to HEAD.",
+    "Perspective whose non-active candidate group should move to HEAD.",
 )];
 
 const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] =
@@ -48,12 +48,12 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "validate_perspectives",
-            description: "Validate a set of perspectives for conflict-freedom against each other and active bidding groups.",
+            description: "Validate a set of perspectives for conflict-freedom against each other and active candidate groups.",
             inputs: VALIDATE_PERSPECTIVES_INPUTS,
         },
         ToolDescriptor {
             name: "forward_perspective",
-            description: "Move one non-active bidding group to HEAD.",
+            description: "Move one non-active candidate group to HEAD.",
             inputs: FORWARD_PERSPECTIVE_INPUTS,
         },
         ToolDescriptor {

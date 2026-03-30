@@ -95,12 +95,12 @@ pub enum RuntimeError {
     #[error("message already acknowledged")]
     AlreadyAcknowledged,
 
-    /// A candidate bidding group conflicts with active runtime state.
+    /// A candidate candidate group conflicts with active runtime state.
     #[error(
         "cannot create worker for perspective `{perspective}` because active perspective `{blocking_perspective}` has a {relation}: {files}",
         files = format_paths(files)
     )]
-    ConflictWithActiveBiddingGroup {
+    ConflictWithActiveCandidateGroup {
         /// Perspective being created.
         perspective: PerspectiveName,
         /// Active perspective that blocks the candidate boundary.
@@ -111,12 +111,12 @@ pub enum RuntimeError {
         files: Vec<PathBuf>,
     },
 
-    /// A worker attempted to join an existing bidding group with a
+    /// A worker attempted to join an existing candidate group with a
     /// different compiled boundary.
     #[error(
-        "compiled boundary for perspective `{perspective}` no longer matches its active bidding group"
+        "compiled boundary for perspective `{perspective}` no longer matches its active candidate group"
     )]
-    BiddingGroupBoundaryMismatch {
+    CandidateGroupBoundaryMismatch {
         /// Perspective whose compiled boundary drifted from runtime.
         perspective: PerspectiveName,
     },
@@ -124,17 +124,17 @@ pub enum RuntimeError {
     /// Live workers for one perspective no longer agree on the pinned
     /// base commit.
     #[error("live workers for perspective `{perspective}` no longer share one pinned base commit")]
-    BiddingGroupBaseMismatch {
+    CandidateGroupBaseMismatch {
         /// Perspective whose live workers diverged in pinned base.
         perspective: PerspectiveName,
     },
 
     /// The caller must run `perspective forward` manually before retrying.
     #[error(
-        "{operation} requires the live bidding group for `{perspective}` to move first: {reason}; run `multorum perspective forward {perspective}` and retry"
+        "{operation} requires the live candidate group for `{perspective}` to move first: {reason}; run `multorum perspective forward {perspective}` and retry"
     )]
     ManualPerspectiveForwardRequired {
-        /// Operation that could not continue on the stale bidding group.
+        /// Operation that could not continue on the stale candidate group.
         operation: &'static str,
         /// Perspective whose live group must be forwarded.
         perspective: PerspectiveName,
@@ -142,7 +142,7 @@ pub enum RuntimeError {
         reason: String,
     },
 
-    /// Forwarding requires every live worker in the bidding group to be non-active.
+    /// Forwarding requires every live worker in the candidate group to be non-active.
     #[error(
         "cannot forward perspective `{perspective}` because some live workers are still ACTIVE: {workers}",
         workers = format_worker_states(workers)
@@ -154,10 +154,10 @@ pub enum RuntimeError {
         workers: Vec<(WorkerId, WorkerState)>,
     },
 
-    /// The target perspective has no live bidding group to forward.
+    /// The target perspective has no live candidate group to forward.
     #[error("cannot forward perspective `{perspective}` because it has no live workers")]
     PerspectiveForwardMissingGroup {
-        /// Perspective without a live bidding group.
+        /// Perspective without a live candidate group.
         perspective: PerspectiveName,
     },
 

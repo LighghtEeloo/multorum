@@ -20,7 +20,7 @@ use super::{
     },
     project::CurrentProject,
     state::{MailboxMessageView, WorkerContractView, WorkerStatus},
-    storage::{BiddingGroupRecord, RuntimeFs, StateFile, WorkerEntry},
+    storage::{CandidateGroupRecord, RuntimeFs, StateFile, WorkerEntry},
 };
 
 /// Typed operations available to a worker frontend.
@@ -109,13 +109,13 @@ impl FsWorkerService {
         self.fs.load_worker_contract(&self.worktree_root)
     }
 
-    /// Locate one worker and its bidding group from persisted state.
+    /// Locate one worker and its candidate group from persisted state.
     ///
     /// Note: Runtime state is authoritative; the helper fails fast if
     /// the worker is missing rather than guessing a replacement.
     fn worker_record<'a>(
         state: &'a StateFile, worker_id: &crate::runtime::WorkerId,
-    ) -> Result<(&'a BiddingGroupRecord, &'a WorkerEntry)> {
+    ) -> Result<(&'a CandidateGroupRecord, &'a WorkerEntry)> {
         state
             .find_worker(worker_id)
             .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))

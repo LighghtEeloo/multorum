@@ -1,7 +1,7 @@
 //! Scenario-driven MCP integration tests.
 //!
 //! These tests exercise multi-step, stateful workflows that reflect
-//! real-world MCP usage: bidding group lifecycles, blocker resolution
+//! real-world MCP usage: candidate group lifecycles, blocker resolution
 //! cycles, invalid state transitions, write-set enforcement, and
 //! check pipeline execution.
 
@@ -19,13 +19,13 @@ use crate::support::result::{
 use crate::support::wire::{orchestrator_duplex, worker_duplex};
 
 // ===========================================================================
-// Bidding group lifecycle
+// Candidate group lifecycle
 // ===========================================================================
 
-/// Two workers from the same perspective form a bidding group. When one
+/// Two workers from the same perspective form a candidate group. When one
 /// is merged the sibling is automatically discarded.
 #[tokio::test]
-async fn bidding_group_sibling_discarded_on_merge() {
+async fn candidate_group_sibling_discarded_on_merge() {
     let (dir, orch) = orchestrator_duplex().await;
 
     // Create two workers for the same perspective.
@@ -52,7 +52,7 @@ async fn bidding_group_sibling_discarded_on_merge() {
     let wt_a = Path::new(&worktree_a);
     fs::write(wt_a.join("src/owned.rs"), "pub fn owned() -> i32 { 99 }\n").unwrap();
     git(wt_a, &["add", "src/owned.rs"]);
-    git(wt_a, &["commit", "-m", "incr: bidding group winner"]);
+    git(wt_a, &["commit", "-m", "incr: candidate group winner"]);
     let head_a = git(wt_a, &["rev-parse", "HEAD"]);
 
     let worker_a = worker_duplex(wt_a).await;

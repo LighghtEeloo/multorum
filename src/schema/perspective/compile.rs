@@ -24,7 +24,7 @@ impl CompiledPerspective {
     /// Construct one compiled perspective from materialized sets.
     ///
     /// Note: Runtime code uses this when it reconstructs active
-    /// bidding-group boundaries from worker-local read/write-set files.
+    /// candidate-group boundaries from worker-local read/write-set files.
     pub fn from_materialized_sets(read: BTreeSet<PathBuf>, write: BTreeSet<PathBuf>) -> Self {
         Self { read, write }
     }

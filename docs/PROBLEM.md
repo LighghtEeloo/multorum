@@ -19,15 +19,15 @@ A worker reports: "I found the real bug, but the fix is in `src/runtime/orchestr
 
 What should the orchestrator tell the worker, and what should happen next?
 
-## 3. Active Bidding Group Is Still On An Older Base
+## 3. Active Candidate Group Is Still On An Older Base
 
 **Scenario**
 
-The orchestrator installed a newer rulebook commit and now wants to create another worker from the same perspective. Multorum rejects the command because the live bidding group for that perspective is still pinned to the older base commit.
+The orchestrator installed a newer rulebook commit and now wants to create another worker from the same perspective. Multorum rejects the command because the live candidate group for that perspective is still pinned to the older base commit.
 
 What should the orchestrator do?
 
-## 4. One Worker In A Bidding Group Is Merged
+## 4. One Worker In A Candidate Group Is Merged
 
 **Scenario**
 

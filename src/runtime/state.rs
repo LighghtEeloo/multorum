@@ -64,7 +64,7 @@ impl WorkerState {
 
     /// Whether the worker still participates in runtime conflict checks.
     ///
-    /// Live workers hold a bidding-group slot and contribute to the
+    /// Live workers hold a candidate-group slot and contribute to the
     /// orchestrator exclusion set. Finalized workers (`MERGED` or
     /// `DISCARDED`) do not.
     pub fn is_live(self) -> bool {
@@ -84,7 +84,7 @@ impl WorkerState {
     /// durable checkpoint: either a blocker report (`BLOCKED`) or a
     /// submitted commit (`COMMITTED`). `ACTIVE` workers may still be
     /// mutating their worktrees, and finalized workers no longer belong
-    /// to the live bidding group.
+    /// to the live candidate group.
     pub fn can_forward_perspective(self) -> bool {
         matches!(self, Self::Blocked | Self::Committed)
     }
@@ -231,19 +231,19 @@ pub struct CreateResult {
     pub notices: Vec<AutoForwardNotice>,
 }
 
-/// Result of forwarding one live bidding group to HEAD.
+/// Result of forwarding one live candidate group to HEAD.
 ///
 /// Note: This is a group-scoped operation. Every live worker for the
 /// perspective moves together or the command fails without persisting
 /// the new base snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PerspectiveForwardResult {
-    /// Perspective whose live bidding group moved forward.
+    /// Perspective whose live candidate group moved forward.
     pub perspective: PerspectiveName,
     /// Live workers forwarded together.
     #[serde(rename = "workers")]
     pub worker_ids: Vec<WorkerId>,
-    /// Base commit previously pinned by the live bidding group.
+    /// Base commit previously pinned by the live candidate group.
     pub previous_base_commit: CanonicalCommitHash,
     /// New base commit (HEAD at the time of forwarding).
     pub new_base_commit: CanonicalCommitHash,
@@ -327,7 +327,7 @@ pub struct AuditEntry {
 /// Projected orchestrator view of all active workers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OrchestratorStatus {
-    /// Current active perspective summaries (bidding groups with live workers).
+    /// Current active perspective summaries (candidate groups with live workers).
     pub active_perspectives: Vec<ActivePerspectiveSummary>,
     /// Current worker summaries.
     pub workers: Vec<WorkerSummary>,
@@ -380,7 +380,7 @@ pub struct WorkerStatus {
 /// `base_commit` pins the worker's code snapshot. The referenced
 /// read/write-set files are the authoritative materialized boundary.
 /// Both change only when the orchestrator explicitly forwards the
-/// whole bidding group to HEAD.
+/// whole candidate group to HEAD.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkerContractView {
     /// Worker identity.

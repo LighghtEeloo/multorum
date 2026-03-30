@@ -34,7 +34,7 @@ use super::{
         PerspectiveSummary, PerspectiveValidation, RulebookInit, WorkerDetail, WorkerState,
         WorkerSummary,
     },
-    storage::{BiddingGroupRecord, RuntimeFs, StateFile, WorkerEntry, validate_skip_request},
+    storage::{CandidateGroupRecord, RuntimeFs, StateFile, WorkerEntry, validate_skip_request},
     worker_id::WorkerId,
 };
 
@@ -121,7 +121,7 @@ pub trait OrchestratorService {
     /// Validate a set of perspectives for conflict-freedom.
     ///
     /// Checks the named perspectives against each other and against
-    /// active bidding groups. With `no_live = true`, active groups
+    /// active candidate groups. With `no_live = true`, active groups
     /// are ignored.
     fn validate_perspectives(
         &self, perspectives: Vec<PerspectiveName>, no_live: bool,
@@ -149,7 +149,7 @@ pub trait OrchestratorService {
     /// Create a worker workspace and create its initial task bundle.
     fn create_worker(&self, request: CreateWorker) -> Result<CreateResult>;
 
-    /// Move one non-active bidding group to HEAD.
+    /// Move one non-active candidate group to HEAD.
     fn forward_perspective(&self, perspective: PerspectiveName)
     -> Result<PerspectiveForwardResult>;
 
@@ -244,9 +244,9 @@ struct ProvenPerspectiveForward {
 /// Forward proof outcome for one perspective.
 #[derive(Debug, Clone)]
 enum ForwardProofDecision {
-    /// The live bidding group already matches current HEAD and rulebook.
+    /// The live candidate group already matches current HEAD and rulebook.
     NotNeeded,
-    /// The whole live bidding group can move together safely.
+    /// The whole live candidate group can move together safely.
     Ready(ProvenPerspectiveForward),
 }
 
@@ -338,13 +338,13 @@ impl FsOrchestratorService {
         Ok(())
     }
 
-    /// Locate one worker and its bidding group from persisted state.
+    /// Locate one worker and its candidate group from persisted state.
     ///
     /// Note: Runtime state is authoritative; the helper fails fast if
     /// the worker is missing rather than trying to infer a fallback.
     fn worker_record<'a>(
         state: &'a StateFile, worker_id: &WorkerId,
-    ) -> Result<(&'a BiddingGroupRecord, &'a WorkerEntry)> {
+    ) -> Result<(&'a CandidateGroupRecord, &'a WorkerEntry)> {
         state
             .find_worker(worker_id)
             .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))
@@ -402,7 +402,7 @@ impl FsOrchestratorService {
     /// Note: Auto-forward now reasons directly about the two drift
     /// dimensions instead of carrying a separate intent enum.
     fn forward_changes_for_group(
-        &self, group: &BiddingGroupRecord, target: &CompiledPerspective,
+        &self, group: &CandidateGroupRecord, target: &CompiledPerspective,
         new_base_commit: &CanonicalCommitHash,
     ) -> Option<(bool, bool)> {
         let base_changed = group.base_commit != *new_base_commit;
@@ -490,7 +490,7 @@ impl FsOrchestratorService {
         if !target.write().is_superset(&group.write_set)
             || !target.read().is_superset(&group.read_set)
         {
-            return Err(RuntimeError::BiddingGroupBoundaryMismatch {
+            return Err(RuntimeError::CandidateGroupBoundaryMismatch {
                 perspective: perspective.clone(),
             });
         }
@@ -631,7 +631,7 @@ impl FsOrchestratorService {
             new_base_commit = %new_base_commit,
             base_changed = proof.base_changed,
             boundary_changed = proof.boundary_changed,
-            "forwarded proven bidding group"
+            "forwarded proven candidate group"
         );
 
         Ok(PerspectiveForwardResult {
@@ -714,7 +714,7 @@ impl FsOrchestratorService {
                 boundary_changed,
                 worker_ids,
                 format!(
-                    "auto-forward was skipped before resolve because the whole bidding group was not yet proven movable: {error}. manual perspective forward remains available once those blockers are cleared"
+                    "auto-forward was skipped before resolve because the whole candidate group was not yet proven movable: {error}. manual perspective forward remains available once those blockers are cleared"
                 ),
             )]),
         }
@@ -764,7 +764,7 @@ impl OrchestratorService for FsOrchestratorService {
             }
         }
 
-        // Check against active bidding groups unless --no-live.
+        // Check against active candidate groups unless --no-live.
         if !no_live {
             let state = self.fs.load_state()?;
             for (name, perspective) in &named {
@@ -858,7 +858,7 @@ impl OrchestratorService for FsOrchestratorService {
             .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?
             .clone();
 
-        // Check if there's an existing live bidding group for this perspective.
+        // Check if there's an existing live candidate group for this perspective.
         let existing_group = state.find_live_group(&perspective).cloned();
 
         if let Some(group) = &existing_group {
@@ -884,7 +884,7 @@ impl OrchestratorService for FsOrchestratorService {
                                 operation: "create worker",
                                 perspective: perspective.clone(),
                                 reason: format!(
-                                    "current HEAD or rulebook no longer matches the live bidding group: {error}"
+                                    "current HEAD or rulebook no longer matches the live candidate group: {error}"
                                 ),
                             });
                         }
@@ -949,7 +949,7 @@ impl OrchestratorService for FsOrchestratorService {
             state.groups[idx].workers.push(new_worker.clone());
             idx
         } else {
-            let group = BiddingGroupRecord {
+            let group = CandidateGroupRecord {
                 perspective: perspective.clone(),
                 base_commit: base_commit.clone(),
                 read_set: read_set.clone(),
@@ -1330,7 +1330,7 @@ fn boundary_conflict(
     active_name: &PerspectiveName, active: &CompiledPerspective,
 ) -> Option<RuntimeError> {
     BoundaryOverlap::detect(candidate, active).map(|overlap| {
-        RuntimeError::ConflictWithActiveBiddingGroup {
+        RuntimeError::ConflictWithActiveCandidateGroup {
             perspective: candidate_name.clone(),
             blocking_perspective: active_name.clone(),
             relation: overlap.relation.runtime_relation(),
@@ -1362,7 +1362,7 @@ fn inbox_publish_operation(kind: MessageKind) -> &'static str {
     }
 }
 
-/// One concrete overlap that violates the bidding-group invariant.
+/// One concrete overlap that violates the candidate-group invariant.
 ///
 /// Note: Worker creation and perspective validation both stop at the
 /// first detected overlap because any single overlap is already enough
@@ -1849,7 +1849,7 @@ mod tests {
     }
 
     #[test]
-    fn create_worker_joins_existing_bidding_group() {
+    fn create_worker_joins_existing_candidate_group() {
         let (_dir, orchestrator) = setup_repo();
         let first = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap();
         let second = orchestrator

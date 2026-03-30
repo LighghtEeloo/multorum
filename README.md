@@ -39,13 +39,13 @@ The *rulebook* (`.multorum/rulebook.toml`) defines named perspectives. A perspec
 
 A *worker* is a live instance of a perspective. Multorum gives it an isolated *git worktree*, a pinned base snapshot, and materialized boundary files. The contract becomes a real workspace with real limits. Before a worker's changes land, Multorum enforces write-scope compliance and runs project checks (build, lint, test) through *git hooks* declared in the rulebook.
 
-Multiple workers created from the same perspective form a *bidding group*. They share the same boundaries, start from the same snapshot, and race independently. At most one merges. The others are discarded.
+Multiple workers created from the same perspective form a *candidate group*. They share the same boundaries, start from the same snapshot, and race independently. At most one merges. The others are discarded.
 
 ## The Guarantee
 
 Multorum is built around one invariant:
 
-> A file may be written by exactly one active bidding group, or read by any number of active bidding groups, but never both.
+> A file may be written by exactly one active candidate group, or read by any number of active candidate groups, but never both.
 
 That is it. The soul of this product. The rest is just plumbing.
 

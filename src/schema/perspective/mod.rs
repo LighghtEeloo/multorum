@@ -4,7 +4,7 @@
 //! set and a read set, both expressed as file set algebra expressions.
 //! Perspectives are compiled against a pre-compiled file set table to
 //! produce concrete file lists. Runtime services later use those
-//! compiled lists when they validate bidding-group conflict freedom
+//! compiled lists when they validate candidate-group conflict freedom
 //! against the active workers that already exist.
 
 pub mod compile;

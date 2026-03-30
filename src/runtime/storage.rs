@@ -7,7 +7,7 @@
 //! to create worktrees, delete finalized workspaces, and integrate
 //! submitted commits.
 //!
-//! The orchestrator persists runtime state as one file per bidding
+//! The orchestrator persists runtime state as one file per candidate
 //! group under `.multorum/orchestrator/group/` and one file per worker
 //! under `.multorum/orchestrator/worker/`.
 
@@ -40,7 +40,7 @@ use crate::vcs::{CanonicalCommitHash, GitVcs, VersionControl};
 // Records
 // ---------------------------------------------------------------------------
 
-/// One persisted bidding-group record stored under
+/// One persisted candidate-group record stored under
 /// `.multorum/orchestrator/group/<Perspective>.toml`.
 ///
 /// A group forms when the first worker for a perspective is created.
@@ -86,17 +86,17 @@ pub(crate) struct WorkerStateRecord {
 /// worker records.
 ///
 /// Note: The runtime still operates on a joined in-memory aggregate so
-/// service code can reason in terms of bidding groups. Persistence is
+/// service code can reason in terms of candidate groups. Persistence is
 /// split only at the filesystem boundary.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct StateFile {
-    /// Bidding groups, each containing its member workers.
-    pub groups: Vec<BiddingGroupRecord>,
+    /// Candidate groups, each containing its member workers.
+    pub groups: Vec<CandidateGroupRecord>,
 }
 
-/// One bidding group with its compiled boundary and member workers.
+/// One candidate group with its compiled boundary and member workers.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BiddingGroupRecord {
+pub(crate) struct CandidateGroupRecord {
     /// Perspective governing this group.
     pub perspective: crate::schema::perspective::PerspectiveName,
     /// Base commit pinning the group's code snapshot.
@@ -109,7 +109,7 @@ pub(crate) struct BiddingGroupRecord {
     pub workers: Vec<WorkerEntry>,
 }
 
-impl BiddingGroupRecord {
+impl CandidateGroupRecord {
     /// Whether the group has at least one live (non-finalized) worker.
     pub fn has_live_workers(&self) -> bool {
         self.workers.iter().any(|w| w.state.is_live())
@@ -134,7 +134,7 @@ impl BiddingGroupRecord {
     }
 }
 
-/// One worker within a bidding group.
+/// One worker within a candidate group.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WorkerEntry {
     /// Unique worker identity.
@@ -158,12 +158,12 @@ impl StateFile {
         groups: Vec<GroupStateRecord>, workers: Vec<WorkerStateRecord>,
     ) -> Result<Self, RuntimeError> {
         let mut grouped =
-            BTreeMap::<crate::schema::perspective::PerspectiveName, BiddingGroupRecord>::new();
+            BTreeMap::<crate::schema::perspective::PerspectiveName, CandidateGroupRecord>::new();
         let mut seen_workers = BTreeSet::<WorkerId>::new();
         for group in groups {
             let previous = grouped.insert(
                 group.perspective.clone(),
-                BiddingGroupRecord {
+                CandidateGroupRecord {
                     perspective: group.perspective,
                     base_commit: group.base_commit,
                     read_set: group.read_set,
@@ -233,24 +233,26 @@ impl StateFile {
         (group_records, worker_records)
     }
 
-    /// Find the live bidding group for a perspective.
+    /// Find the live candidate group for a perspective.
     ///
     /// A "live" group is one with at least one non-finalized worker.
     pub fn find_live_group(
         &self, perspective: &crate::schema::perspective::PerspectiveName,
-    ) -> Option<&BiddingGroupRecord> {
+    ) -> Option<&CandidateGroupRecord> {
         self.groups.iter().find(|g| g.perspective == *perspective && g.has_live_workers())
     }
 
-    /// Find a mutable reference to the live bidding group for a perspective.
+    /// Find a mutable reference to the live candidate group for a perspective.
     pub fn find_live_group_mut(
         &mut self, perspective: &crate::schema::perspective::PerspectiveName,
-    ) -> Option<&mut BiddingGroupRecord> {
+    ) -> Option<&mut CandidateGroupRecord> {
         self.groups.iter_mut().find(|g| g.perspective == *perspective && g.has_live_workers())
     }
 
     /// Find the group and worker entry for a given worker id.
-    pub fn find_worker(&self, worker_id: &WorkerId) -> Option<(&BiddingGroupRecord, &WorkerEntry)> {
+    pub fn find_worker(
+        &self, worker_id: &WorkerId,
+    ) -> Option<(&CandidateGroupRecord, &WorkerEntry)> {
         for group in &self.groups {
             if let Some(worker) = group.find_worker(worker_id) {
                 return Some((group, worker));
@@ -263,7 +265,7 @@ impl StateFile {
     /// given worker id.
     pub fn find_worker_group_mut(
         &mut self, worker_id: &WorkerId,
-    ) -> Option<&mut BiddingGroupRecord> {
+    ) -> Option<&mut CandidateGroupRecord> {
         self.groups.iter_mut().find(|g| g.find_worker(worker_id).is_some())
     }
 
@@ -284,7 +286,7 @@ impl StateFile {
     }
 
     /// All groups that still have at least one live worker.
-    pub fn live_groups(&self) -> impl Iterator<Item = &BiddingGroupRecord> {
+    pub fn live_groups(&self) -> impl Iterator<Item = &CandidateGroupRecord> {
         self.groups.iter().filter(|g| g.has_live_workers())
     }
 
@@ -730,7 +732,7 @@ impl RuntimeFs {
     /// Load and compile a rulebook at one pinned commit.
     ///
     /// Used at merge time to recover the check pipeline from the
-    /// rulebook that was current when the bidding group formed.
+    /// rulebook that was current when the candidate group formed.
     pub(crate) fn load_compiled_rulebook(
         &self, commit: &CanonicalCommitHash,
     ) -> Result<CompiledRulebook, RuntimeError> {
@@ -761,7 +763,7 @@ impl RuntimeFs {
 
     /// Prepare the worker-local runtime surface.
     pub(crate) fn prepare_worker_runtime(
-        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
+        &self, worker: &WorkerEntry, group: &CandidateGroupRecord,
     ) -> Result<(), RuntimeError> {
         let worker_paths = WorkerPaths::new(worker.worktree_path.clone());
 
@@ -779,20 +781,20 @@ impl RuntimeFs {
 
     /// Refresh the materialized boundary for one worker from its group.
     pub(crate) fn refresh_worker_boundary(
-        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
+        &self, worker: &WorkerEntry, group: &CandidateGroupRecord,
     ) -> Result<(), RuntimeError> {
         self.materialize_worker_boundary(worker, group)
     }
 
     /// Refresh the worker contract after a base-forwarding operation.
     pub(crate) fn refresh_worker_contract(
-        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
+        &self, worker: &WorkerEntry, group: &CandidateGroupRecord,
     ) -> Result<(), RuntimeError> {
         self.write_worker_contract(worker, group)
     }
 
     fn write_worker_contract(
-        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
+        &self, worker: &WorkerEntry, group: &CandidateGroupRecord,
     ) -> Result<(), RuntimeError> {
         let worker_paths = WorkerPaths::new(worker.worktree_path.clone());
         let contract = WorkerContractView {
@@ -806,7 +808,7 @@ impl RuntimeFs {
     }
 
     fn materialize_worker_boundary(
-        &self, worker: &WorkerEntry, group: &BiddingGroupRecord,
+        &self, worker: &WorkerEntry, group: &CandidateGroupRecord,
     ) -> Result<(), RuntimeError> {
         let worker_paths = WorkerPaths::new(worker.worktree_path.clone());
         Self::write_path_list(&worker_paths.read_set(), &group.read_set)?;
@@ -837,7 +839,7 @@ impl RuntimeFs {
     /// Recompute and persist the orchestrator exclusion set from group
     /// and worker state.
     ///
-    /// The exclusion set is the union of every live bidding group's
+    /// The exclusion set is the union of every live candidate group's
     /// read and write sets. It must be rewritten after every persisted
     /// state update so the projection always matches runtime state.
     pub(crate) fn rewrite_exclusion_set(&self, state: &StateFile) -> Result<(), RuntimeError> {
@@ -864,7 +866,7 @@ impl RuntimeFs {
     /// temp directory so transient artifacts do not pollute
     /// `.multorum/orchestrator/`.
     pub(crate) fn prepare_merge_artifacts(
-        &self, updated_state: &StateFile, worker: &WorkerEntry, group: &BiddingGroupRecord,
+        &self, updated_state: &StateFile, worker: &WorkerEntry, group: &CandidateGroupRecord,
         verification: &MergeVerification, payload: BundlePayload,
     ) -> Result<StagedMergeArtifacts, RuntimeError> {
         let MergeVerification { head_commit, changed_files, ran_checks, skipped_checks } =

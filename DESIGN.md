@@ -65,56 +65,56 @@ A perspective is a named role in the rulebook. It declares:
 
 Either set may be empty (omitted or set to `""`), meaning the perspective claims no files for that role. A perspective with an empty write set cannot modify any files. A perspective with an empty read set places no stability constraints on the rest of the repository.
 
-The write set is a closed list of existing files. Workers may not write to or create files outside it. When a blocked worker discovers that the task really needs a new file, the orchestrator must update the canonical workspace and the rulebook, then forward the blocked bidding group to HEAD before resolving the blocker. The read set declares which files must remain untouched by other concurrent work and tells the worker what the orchestrator considers stable context. Workers may read any file in the repository regardless of the read set.
+The write set is a closed list of existing files. Workers may not write to or create files outside it. When a blocked worker discovers that the task really needs a new file, the orchestrator must update the canonical workspace and the rulebook, then forward the blocked candidate group to HEAD before resolving the blocker. The read set declares which files must remain untouched by other concurrent work and tells the worker what the orchestrator considers stable context. Workers may read any file in the repository regardless of the read set.
 
 A worker is a runtime instantiation of a perspective. Perspectives are static policy. Workers are ephemeral executions with state.
 
-### Bidding Groups
+### Candidate Groups
 
-A bidding group forms when the orchestrator creates the first worker for a perspective. The group's base commit is HEAD at the moment of creation, and its compiled boundary is the perspective evaluated against that snapshot. Subsequent workers created for the same perspective join the existing group and share its base commit and boundary.
+A candidate group forms when the orchestrator creates the first worker for a perspective. The group's base commit is HEAD at the moment of creation, and its compiled boundary is the perspective evaluated against that snapshot. Subsequent workers created for the same perspective join the existing group and share its base commit and boundary.
 
-If the orchestrator wants a fresh base for a perspective that already has an active bidding group, the existing group must be fully merged or discarded first, or forwarded to HEAD via `perspective forward`.
+If the orchestrator wants a fresh base for a perspective that already has an active candidate group, the existing group must be fully merged or discarded first, or forwarded to HEAD via `perspective forward`.
 
-Only one worker from a bidding group may be merged. Once one member is merged, the remaining members are discarded.
+Only one worker from a candidate group may be merged. Once one member is merged, the remaining members are discarded.
 
 ### Conflict-Free Invariant
 
 The central correctness invariant is:
 
-> **A file may either be written by exactly one active bidding group, or read by any number of active bidding groups, but never both.**
+> **A file may either be written by exactly one active candidate group, or read by any number of active candidate groups, but never both.**
 
-For any two distinct active bidding groups `G` and `H`:
+For any two distinct active candidate groups `G` and `H`:
 
 - `write(G) ∩ write(H) = ∅`
 - `write(G) ∩ read(H) = ∅`
 - `read(G) ∩ write(H) = ∅`
 
-Inside one bidding group, every worker has the same boundary. Conflict detection belongs at the bidding-group level, not at the level of perspective names: perspectives describe policy, bidding groups are the concurrent runtime entities that must not interfere.
+Inside one candidate group, every worker has the same boundary. Conflict detection belongs at the candidate-group level, not at the level of perspective names: perspectives describe policy, candidate groups are the concurrent runtime entities that must not interfere.
 
-The invariant extends to the canonical branch. While any bidding group is active, the union of every active group's read and write sets forms the *orchestrator exclusion set* — files the orchestrator must not commit to until the owning workers are merged or discarded. The orchestrator may commit freely only to files outside the exclusion set.
+The invariant extends to the canonical branch. While any candidate group is active, the union of every active group's read and write sets forms the *orchestrator exclusion set* — files the orchestrator must not commit to until the owning workers are merged or discarded. The orchestrator may commit freely only to files outside the exclusion set.
 
-Multorum enforces the conflict-free invariant at worker creation time. The invariant is a runtime property of active bidding groups, not a static property of the rulebook — the same set of perspectives may or may not conflict depending on which files their globs match in a given repository state.
+Multorum enforces the conflict-free invariant at worker creation time. The invariant is a runtime property of active candidate groups, not a static property of the rulebook — the same set of perspectives may or may not conflict depending on which files their globs match in a given repository state.
 
 ### Perspective Validation
 
-The orchestrator can check whether a set of perspectives satisfies the conflict-free invariant before creating workers. `perspective validate` compiles the named perspectives from the current rulebook, checks them against each other, and checks them against active bidding groups. With `--no-live`, the check covers only the named perspectives and ignores active groups.
+The orchestrator can check whether a set of perspectives satisfies the conflict-free invariant before creating workers. `perspective validate` compiles the named perspectives from the current rulebook, checks them against each other, and checks them against active candidate groups. With `--no-live`, the check covers only the named perspectives and ignores active groups.
 
 ### Perspective Forward
 
-`perspective forward` moves a live bidding group from its current base commit to HEAD, recompiling the perspective boundary from the current rulebook.
+`perspective forward` moves a live candidate group from its current base commit to HEAD, recompiling the perspective boundary from the current rulebook.
 
 The recompiled boundary must be a superset of the group's current materialized boundary, both read and write sets independently. Boundary expansion is permitted. Boundary reduction is rejected, because it would break the contract that live workers were created under.
 
-Before moving any worktree, Multorum validates the whole live bidding group: every live worker must be non-`ACTIVE`, must have a durable replay checkpoint, and must still be clean at that checkpoint. Worktrees are then forwarded one by one. If a later worker fails to forward, Multorum rolls back every worker it already moved and does not persist the new group base or boundary. The atomicity boundary is therefore the persisted runtime state, not each individual Git operation.
+Before moving any worktree, Multorum validates the whole live candidate group: every live worker must be non-`ACTIVE`, must have a durable replay checkpoint, and must still be clean at that checkpoint. Worktrees are then forwarded one by one. If a later worker fails to forward, Multorum rolls back every worker it already moved and does not persist the new group base or boundary. The atomicity boundary is therefore the persisted runtime state, not each individual Git operation.
 
-Auto-forward applies this same operation from orchestrator actions that already mean "continue this perspective under current HEAD". Multorum may auto-forward only after proving that the whole live bidding group can be forwarded successfully by the normal `perspective forward` rules.
+Auto-forward applies this same operation from orchestrator actions that already mean "continue this perspective under current HEAD". Multorum may auto-forward only after proving that the whole live candidate group can be forwarded successfully by the normal `perspective forward` rules.
 
 Auto-forward is valid only when it is observationally equivalent to the orchestrator running `perspective forward <perspective>` first and then retrying the original command. When that proof is unavailable, Multorum leaves the group unchanged and tells the user to run `multorum perspective forward <perspective>` explicitly if they still want to move the group.
 
 The rules are:
 
-- it addresses the whole live bidding group for one perspective, never one worker in isolation
-- it is rejected unless every live worker in that bidding group is non-`ACTIVE`
+- it addresses the whole live candidate group for one perspective, never one worker in isolation
+- it is rejected unless every live worker in that candidate group is non-`ACTIVE`
 - it preserves progress only from a durable checkpoint already recorded for each worker: the latest blocking `report` for `BLOCKED` workers, or the submitted head commit for `COMMITTED` workers
 - it rejects dirty or drifted worktrees rather than trying to invent recovery
 - it leaves every forwarded worker in its current non-`ACTIVE` state; blocked workers still need `resolve`, and committed workers still need `revise`, `merge`, or `discard`
@@ -252,7 +252,7 @@ Each perspective declares two things:
 - **write**: the closed set of existing files this role may modify. Workers cannot create files outside it. If a task genuinely needs a new file, the orchestrator must create the file and update the rulebook before the worker can proceed. May be omitted or empty for read-only perspectives.
 - **read**: the files that must remain stable while this role is active. The read set tells Multorum which files concurrent work must not disturb, and tells the worker what the orchestrator considers stable context. Workers can still read the entire repository regardless. May be omitted or empty when no stability guarantee is needed.
 
-The conflict-free invariant operates at the bidding-group level: for any two distinct active groups, their write sets must be disjoint, and neither may write into the other's read set. Design perspectives so that the ones you intend to run concurrently satisfy this naturally. Two perspectives whose write sets overlap are not actually parallel work, so they must run sequentially.
+The conflict-free invariant operates at the candidate-group level: for any two distinct active groups, their write sets must be disjoint, and neither may write into the other's read set. Design perspectives so that the ones you intend to run concurrently satisfy this naturally. Two perspectives whose write sets overlap are not actually parallel work, so they must run sequentially.
 
 Keep read sets narrow. Listing every file in the repository as a read dependency blocks all concurrent writes, which defeats the purpose. Include only the files that the worker genuinely depends on as stable context: specs, interfaces, shared types, configuration. The project's own rulebook demonstrates this — perspectives read `ProjectSurfaceFiles` (manifests, docs, entrypoints) rather than the entire tree.
 
@@ -291,9 +291,9 @@ The rulebook is committed to version control and versioned alongside the code it
 
 When the repository's shape changes — new modules appear, subsystems are reorganized, ownership boundaries shift — update the rulebook to match. Add new file sets for new regions. Adjust perspective boundaries when responsibilities move. Remove file sets and perspectives that no longer correspond to real work.
 
-Multorum has no separate rulebook activation step. Operations that compile policy (`perspective list`, `perspective validate`, `worker create`, and `perspective forward`) read `.multorum/rulebook.toml` from the current working tree when they run. Rulebook edits on disk therefore affect subsequent operations immediately, even before commit. For reproducible orchestration decisions, commit rulebook edits before creating workers. Active workers still run under their pinned snapshots, and their materialized boundaries change only when the orchestrator forwards the bidding group to HEAD.
+Multorum has no separate rulebook activation step. Operations that compile policy (`perspective list`, `perspective validate`, `worker create`, and `perspective forward`) read `.multorum/rulebook.toml` from the current working tree when they run. Rulebook edits on disk therefore affect subsequent operations immediately, even before commit. For reproducible orchestration decisions, commit rulebook edits before creating workers. Active workers still run under their pinned snapshots, and their materialized boundaries change only when the orchestrator forwards the candidate group to HEAD.
 
-When expanding a perspective's boundary for a live bidding group, the recompiled boundary must be a superset of the current one. Reduction is rejected because it would break the contract that live workers were created under. If a perspective needs to shrink, finalize its active workers first.
+When expanding a perspective's boundary for a live candidate group, the recompiled boundary must be a superset of the current one. Reduction is rejected because it would break the contract that live workers were created under. If a perspective needs to shrink, finalize its active workers first.
 
 ---
 
@@ -350,7 +350,7 @@ The orchestrator's control plane lives under `.multorum/orchestrator/`, created 
 ```text
 .multorum/orchestrator/
   group/
-    <Perspective>.toml   # one bidding-group record per perspective
+    <Perspective>.toml   # one candidate-group record per perspective
   worker/
     <worker>.toml        # one worker record per worker id
   exclusion-set.txt      # materialized orchestrator exclusion set
@@ -397,13 +397,13 @@ Each entry is written atomically when `merge` succeeds and contains the worker, 
 
 ### Git Worktrees
 
-Each worker workspace is a git worktree created from the bidding group's base commit:
+Each worker workspace is a git worktree created from the candidate group's base commit:
 
 ```text
 git worktree add .multorum/tr/<worker> <base-commit>
 ```
 
-Workers in the same bidding group share the same base commit, set when the first worker in the group is created. Workers in different bidding groups may have different base commits.
+Workers in the same candidate group share the same base commit, set when the first worker in the group is created. Workers in different candidate groups may have different base commits.
 
 After a worker reaches `MERGED` or `DISCARDED`, its identity may be reused for a new worker. Reuse is always "create a new worker here", not "reopen old state". When reusing an explicit worker id (`--worker <worker>`) and the finalized workspace still exists, `worker create` requires `--overwriting-worktree` to replace that preserved worktree. If the finalized workspace was already deleted, reuse does not require the overwrite flag.
 
@@ -459,15 +459,15 @@ All non-terminal state transitions belong to the worker: it writes `BLOCKED` whe
 
 The orchestrator may also issue `hint` while a worker is `ACTIVE`. A hint is advisory rather than transitional: it carries new information or asks the worker to take a follow-up action such as reporting a blocker, but publishing or acknowledging the hint does not change lifecycle state on its own.
 
-`worker create` and `worker resolve` may auto-forward the bidding group before their own execution, but only when the full bidding-group proof described above succeeds. Auto-forward leaves worker lifecycle state unchanged. If the proof fails, Multorum leaves the group untouched and directs the user toward manual `perspective forward`.
+`worker create` and `worker resolve` may auto-forward the candidate group before their own execution, but only when the full candidate-group proof described above succeeds. Auto-forward leaves worker lifecycle state unchanged. If the proof fails, Multorum leaves the group untouched and directs the user toward manual `perspective forward`.
 
 For analysis-only tasks that intentionally produce no code diff, workers should still submit through the normal commit/merge path: create an empty commit (for example `git commit --allow-empty`), then publish it with `local commit` and attach evidence in `body.md` and optional artifacts. The orchestrator can merge that submission normally, preserving a reviewable audit trail and an explicit lifecycle completion.
 
-Once one worker in a bidding group reaches `MERGED`, every sibling in that group becomes `DISCARDED`.
+Once one worker in a candidate group reaches `MERGED`, every sibling in that group becomes `DISCARDED`.
 
 `delete` is not a lifecycle transition. It removes the worktree and the worker's state file. If that worker was the last member of its perspective, it also removes the group's state file.
 
-`perspective forward` is also not a lifecycle transition. It repins a bidding group whose live workers are all non-`ACTIVE` to HEAD while leaving worker states unchanged.
+`perspective forward` is also not a lifecycle transition. It repins a candidate group whose live workers are all non-`ACTIVE` to HEAD while leaving worker states unchanged.
 
 ### Transitions
 
@@ -651,25 +651,25 @@ This section lists the instructions that the orchestrator and workers may issue,
 ### Perspective
 
 - `multorum perspective list` — List perspectives from the current rulebook.
-- `multorum perspective validate <perspectives>...` — Compile the named perspectives from the current rulebook, check conflict-freedom between them, and check them against active bidding groups. With `--no-live`, check only the named perspectives against each other.
-- `multorum perspective forward <perspective>` — Move the whole live bidding group for `perspective` to HEAD. Recompile the perspective boundary from the current rulebook. Rejected unless every live worker in that bidding group is non-`ACTIVE` and the recompiled boundary is a superset of the current materialized boundary. Progress is preserved only from durable checkpoints already recorded for each worker: the latest blocking `report` for `BLOCKED` workers, or the submitted head commit for `COMMITTED` workers. No lifecycle transition.
+- `multorum perspective validate <perspectives>...` — Compile the named perspectives from the current rulebook, check conflict-freedom between them, and check them against active candidate groups. With `--no-live`, check only the named perspectives against each other.
+- `multorum perspective forward <perspective>` — Move the whole live candidate group for `perspective` to HEAD. Recompile the perspective boundary from the current rulebook. Rejected unless every live worker in that candidate group is non-`ACTIVE` and the recompiled boundary is a superset of the current materialized boundary. Progress is preserved only from durable checkpoints already recorded for each worker: the latest blocking `report` for `BLOCKED` workers, or the submitted head commit for `COMMITTED` workers. No lifecycle transition.
 
 ### Orchestrator Worker Commands
 
 Every bundle-publishing instruction requires exactly one body source: `--body-text` or `--body-path`. Artifacts remain optional.
 
-- `multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--no-auto-forward] (--body-text <text> | --body-path <file>) [--artifact <file>]...` — Compile the perspective boundary from the current rulebook against the working tree. If a bidding group for this perspective already exists, join it. Otherwise, form a new group with base commit set to HEAD and check conflict-freedom against all active bidding groups. Before creating the worker, Multorum may auto-forward the existing live bidding group for the same perspective when the full forward proof succeeds; `--no-auto-forward` disables that convenience and leaves the forward manual. Create the worker worktree and materialize the runtime surface, always creating the initial `task` inbox bundle; the required body populates that bundle's primary content and optional artifacts add supporting files. `--worker` sets an explicit worker identity; when omitted, Multorum derives one from the perspective name. Reusing an explicit worker id is allowed only after that worker is finalized; if its finalized worktree still exists, pass `--overwriting-worktree` to replace it. Transition: new worker enters `ACTIVE`.
+- `multorum worker create <perspective> [--worker <worker>] [--overwriting-worktree] [--no-auto-forward] (--body-text <text> | --body-path <file>) [--artifact <file>]...` — Compile the perspective boundary from the current rulebook against the working tree. If a candidate group for this perspective already exists, join it. Otherwise, form a new group with base commit set to HEAD and check conflict-freedom against all active candidate groups. Before creating the worker, Multorum may auto-forward the existing live candidate group for the same perspective when the full forward proof succeeds; `--no-auto-forward` disables that convenience and leaves the forward manual. Create the worker worktree and materialize the runtime surface, always creating the initial `task` inbox bundle; the required body populates that bundle's primary content and optional artifacts add supporting files. `--worker` sets an explicit worker identity; when omitted, Multorum derives one from the perspective name. Reusing an explicit worker id is allowed only after that worker is finalized; if its finalized worktree still exists, pass `--overwriting-worktree` to replace it. Transition: new worker enters `ACTIVE`.
 - `multorum worker list` — List active workers.
 - `multorum worker show <worker>` — Return one worker in detail.
 - `multorum worker outbox <worker> [--from <sequence>] [--to <sequence>] [--exact <sequence>]` — List messages sent by a worker to the orchestrator. `--from`/`--to` define an inclusive range; `--exact` selects one message by sequence number (mutually exclusive with range). No lifecycle transition.
 - `multorum worker inbox <worker> [--from <sequence>] [--to <sequence>] [--exact <sequence>]` — List messages sent by the orchestrator to a worker. Same filtering semantics as `outbox`. No lifecycle transition.
 - `multorum worker ack <worker> <sequence>` — Record orchestrator receipt for one worker outbox bundle. No lifecycle transition.
 - `multorum worker hint <worker> [--reply-to <sequence>] (--body-text <text> | --body-path <file>) [--artifact <file>]...` — Publish a `hint` bundle to an active worker inbox. `--reply-to` correlates the hint with an earlier outbox sequence number. The required body carries new project information or asks the worker to stop gracefully by issuing `report`. No lifecycle transition.
-- `multorum worker resolve <worker> [--no-auto-forward] [--reply-to <sequence>] (--body-text <text> | --body-path <file>) [--artifact <file>]...` — Publish a `resolve` bundle to a blocked worker inbox. `--reply-to` correlates the resolve with an earlier outbox sequence number. Before publishing the bundle, Multorum may auto-forward the worker's live bidding group when the full forward proof succeeds; `--no-auto-forward` disables that convenience and leaves the forward manual. The required body carries resolution context for the worker. The worker returns to `ACTIVE` when it acknowledges that inbox message.
+- `multorum worker resolve <worker> [--no-auto-forward] [--reply-to <sequence>] (--body-text <text> | --body-path <file>) [--artifact <file>]...` — Publish a `resolve` bundle to a blocked worker inbox. `--reply-to` correlates the resolve with an earlier outbox sequence number. Before publishing the bundle, Multorum may auto-forward the worker's live candidate group when the full forward proof succeeds; `--no-auto-forward` disables that convenience and leaves the forward manual. The required body carries resolution context for the worker. The worker returns to `ACTIVE` when it acknowledges that inbox message.
 - `multorum worker revise <worker> [--reply-to <sequence>] (--body-text <text> | --body-path <file>) [--artifact <file>]...` — Publish a `revise` bundle to a committed worker inbox. `--reply-to` correlates the revision with an earlier outbox sequence number. The required body carries revision context for the worker. The worker returns to `ACTIVE` when it acknowledges that inbox message.
 - `multorum worker merge <worker> [--skip-check <check>]... (--body-text <text> | --body-path <file>) [--artifact <file>]...` — Verify the submitted head commit, enforce the write set, run the merge pipeline, and integrate the worker if checks pass. The required body attaches an audit rationale; this rationale should contain self-contained findings instead of references to worker outbox paths. Transition: `COMMITTED` to `MERGED`.
 - `multorum worker discard <worker>` — Finalize a worker without integration. Allowed from `ACTIVE`, `BLOCKED`, or `COMMITTED`. Transition: worker enters `DISCARDED`. The workspace remains until deleted.
-- `multorum worker delete <worker>` — Delete the worktree and remove `worker/<worker>.toml`. If the worker is the last member of its bidding group, also remove `group/<Perspective>.toml`. Allowed only from `MERGED` or `DISCARDED`.
+- `multorum worker delete <worker>` — Delete the worktree and remove `worker/<worker>.toml`. If the worker is the last member of its candidate group, also remove `group/<Perspective>.toml`. Allowed only from `MERGED` or `DISCARDED`.
 
 ### Worker-Local Commands
 
@@ -683,7 +683,7 @@ Every bundle-publishing instruction requires exactly one body source: `--body-te
 
 ### Query
 
-- `multorum status` — Return the full orchestrator status snapshot, including active workers and bidding-group membership.
+- `multorum status` — Return the full orchestrator status snapshot, including active workers and candidate-group membership.
 
 ### Utility
 

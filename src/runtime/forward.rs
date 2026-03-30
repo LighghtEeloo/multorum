@@ -1,7 +1,7 @@
 //! Typed auto-forward metadata shared across runtime surfaces.
 //!
 //! These types describe what the orchestrator proved before moving a
-//! bidding group and how caller-visible operations report executed or
+//! candidate group and how caller-visible operations report executed or
 //! skipped auto-forward decisions.
 
 use serde::{Deserialize, Serialize};
@@ -19,10 +19,10 @@ pub(crate) const fn forward_change_description(
     base_changed: bool, boundary_changed: bool,
 ) -> &'static str {
     match (base_changed, boundary_changed) {
-        | (true, false) => "current HEAD moved ahead of the live bidding group",
-        | (false, true) => "current rulebook expanded the live bidding group boundary",
-        | (true, true) => "current HEAD and rulebook both moved ahead of the live bidding group",
-        | (false, false) => "the live bidding group already matches current HEAD and rulebook",
+        | (true, false) => "current HEAD moved ahead of the live candidate group",
+        | (false, true) => "current rulebook expanded the live candidate group boundary",
+        | (true, true) => "current HEAD and rulebook both moved ahead of the live candidate group",
+        | (false, false) => "the live candidate group already matches current HEAD and rulebook",
     }
 }
 
@@ -52,7 +52,7 @@ impl std::fmt::Display for AutoForwardTrigger {
     }
 }
 
-/// Proven forward plan for one live bidding group.
+/// Proven forward plan for one live candidate group.
 ///
 /// This proof is constructed before any worktree moves. The runtime may
 /// execute the matching forward only after this proof has established
@@ -60,18 +60,18 @@ impl std::fmt::Display for AutoForwardTrigger {
 /// `perspective forward` rules.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PerspectiveForwardProof {
-    /// Perspective whose live bidding group was proven movable.
+    /// Perspective whose live candidate group was proven movable.
     pub perspective: PerspectiveName,
     /// Live workers that would move together.
     #[serde(rename = "workers")]
     pub worker_ids: Vec<WorkerId>,
-    /// Base commit pinned by the live bidding group before replay.
+    /// Base commit pinned by the live candidate group before replay.
     pub previous_base_commit: CanonicalCommitHash,
     /// Target base commit (HEAD at proof time).
     pub new_base_commit: CanonicalCommitHash,
-    /// Whether current HEAD moved ahead of the live bidding group's pinned base.
+    /// Whether current HEAD moved ahead of the live candidate group's pinned base.
     pub base_changed: bool,
-    /// Whether the working-tree rulebook expanded the live bidding group's boundary.
+    /// Whether the working-tree rulebook expanded the live candidate group's boundary.
     pub boundary_changed: bool,
 }
 
@@ -92,13 +92,13 @@ pub struct AutoForwardNotice {
     pub kind: AutoForwardNoticeKind,
     /// Caller action that triggered the decision.
     pub trigger: AutoForwardTrigger,
-    /// Perspective whose live bidding group was considered.
+    /// Perspective whose live candidate group was considered.
     pub perspective: PerspectiveName,
-    /// Whether current HEAD moved ahead of the live bidding group's pinned base.
+    /// Whether current HEAD moved ahead of the live candidate group's pinned base.
     pub base_changed: bool,
-    /// Whether the working-tree rulebook expanded the live bidding group's boundary.
+    /// Whether the working-tree rulebook expanded the live candidate group's boundary.
     pub boundary_changed: bool,
-    /// Live workers in the considered bidding group.
+    /// Live workers in the considered candidate group.
     #[serde(rename = "workers")]
     pub worker_ids: Vec<WorkerId>,
     /// Proven forward plan when Multorum executed the move.
@@ -124,7 +124,7 @@ impl AutoForwardNotice {
             boundary_changed: proof.boundary_changed,
             worker_ids,
             message: format!(
-                "auto-forwarded perspective `{}` before `{}` after proving the whole bidding group could move because {}",
+                "auto-forwarded perspective `{}` before `{}` after proving the whole candidate group could move because {}",
                 proof.perspective,
                 trigger,
                 forward_change_description(proof.base_changed, proof.boundary_changed)

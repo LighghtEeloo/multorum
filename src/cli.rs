@@ -346,20 +346,20 @@ pub enum PerspectiveCommand {
     /// Validate a set of perspectives for conflict-freedom.
     ///
     /// Checks the named perspectives against each other and against
-    /// active bidding groups. With `--no-live`, active groups are
+    /// active candidate groups. With `--no-live`, active groups are
     /// ignored.
     Validate {
         /// Perspectives to check.
         perspectives: Vec<PerspectiveName>,
 
-        /// Skip checking against active bidding groups.
+        /// Skip checking against active candidate groups.
         #[arg(long)]
         no_live: bool,
     },
 
-    /// Forward one non-active bidding group to HEAD.
+    /// Forward one non-active candidate group to HEAD.
     Forward {
-        /// Perspective whose live bidding group should move forward.
+        /// Perspective whose live candidate group should move forward.
         perspective: PerspectiveName,
     },
 }

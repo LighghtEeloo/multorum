@@ -22,7 +22,7 @@ What should the orchestrator do?
 - Workers may not create new files on their own because the write set is a closed list of existing paths.
 - The orchestrator must update the canonical workspace and rulebook so the new file exists and belongs to the perspective.
 - Those canonical changes should be committed for reproducibility, though on-disk edits take effect immediately for subsequent operations.
-- The orchestrator must run `multorum perspective forward <perspective>` for the whole blocked bidding group, not just one worker.
+- The orchestrator must run `multorum perspective forward <perspective>` for the whole blocked candidate group, not just one worker.
 - The orchestrator must then send `multorum worker resolve <worker>`.
 - The answer should not suggest direct ad hoc file creation inside the blocked worker worktree.
 
@@ -41,23 +41,23 @@ What should the orchestrator tell the worker, and what should happen next?
 - If the boundary needs to expand for the same perspective, the answer should mention rulebook update, commit, forward, and resolve.
 - The answer should not suggest bypassing Multorum's boundary model.
 
-## 3. Active Bidding Group Is Still On An Older Base
+## 3. Active Candidate Group Is Still On An Older Base
 
 **Scenario**
 
-The orchestrator installed a newer rulebook commit and now wants to create another worker from the same perspective. Multorum rejects the command because the live bidding group for that perspective is still pinned to the older base commit.
+The orchestrator installed a newer rulebook commit and now wants to create another worker from the same perspective. Multorum rejects the command because the live candidate group for that perspective is still pinned to the older base commit.
 
 What should the orchestrator do?
 
 **A correct answer should include**
 
 - Multorum does not automatically move live workers to the new rulebook snapshot.
-- The orchestrator must forward the existing live bidding group for that perspective before creating more same-perspective workers from the newer rulebook.
-- `multorum perspective forward <perspective>` applies to the whole bidding group.
-- Forwarding requires every live worker in that bidding group to be non-`ACTIVE` (i.e. `BLOCKED` or `COMMITTED`).
+- The orchestrator must forward the existing live candidate group for that perspective before creating more same-perspective workers from the newer rulebook.
+- `multorum perspective forward <perspective>` applies to the whole candidate group.
+- Forwarding requires every live worker in that candidate group to be non-`ACTIVE` (i.e. `BLOCKED` or `COMMITTED`).
 - The answer should not say that committing the rulebook alone updates the workers' pinned code snapshot.
 
-## 4. One Worker In A Bidding Group Is Merged
+## 4. One Worker In A Candidate Group Is Merged
 
 **Scenario**
 
@@ -67,8 +67,8 @@ What should happen to the other worker?
 
 **A correct answer should include**
 
-- Only one worker from a bidding group may be merged.
-- The remaining worker or workers in that bidding group should be discarded.
+- Only one worker from a candidate group may be merged.
+- The remaining worker or workers in that candidate group should be discarded.
 - If cleanup is desired later, finalized workspaces may then be deleted explicitly.
 - The answer should not suggest merging both alternatives.
 
@@ -190,7 +190,7 @@ Is that correct? What about existing workers?
 - Editing the rulebook on disk does take effect immediately for subsequent operations that compile policy (`perspective list`, `perspective validate`, `worker create`, `perspective forward`). There is no separate activation step.
 - For reproducible orchestration decisions, the changed rulebook should be committed before creating workers.
 - Active workers continue to follow their pinned snapshot until an explicit forward happens.
-- The answer should distinguish on-disk policy (affects new operations immediately) from worker snapshots (change only when the orchestrator forwards the bidding group to HEAD).
+- The answer should distinguish on-disk policy (affects new operations immediately) from worker snapshots (change only when the orchestrator forwards the candidate group to HEAD).
 
 ## 13. Finalized Workspace Reuse With An Explicit Worker Id
 
