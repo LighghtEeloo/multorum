@@ -91,9 +91,8 @@ Add this to your MCP host config. Optionally, pass the canonical workspace root 
 {
   "mcpServers": {
     "multorum-orchestrator": {
-      "command": "/absolute/path/to/multorum",
+      "command": "multorum",
       "args": ["serve", "orchestrator"],
-      "cwd": "/absolute/path/to/your/repo"
     }
   }
 }
@@ -107,9 +106,8 @@ Repeat for each worker worktree. Optionally, pass that specific worktree explici
 {
   "mcpServers": {
     "multorum-worker": {
-      "command": "/absolute/path/to/multorum",
+      "command": "multorum",
       "args": ["serve", "worker"],
-      "cwd": "/absolute/path/to/worker-worktree"
     }
   }
 }
