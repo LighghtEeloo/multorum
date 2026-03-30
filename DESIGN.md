@@ -573,7 +573,7 @@ Audit rationale should be self-contained. Record actual findings in the audit bu
 
 Multorum exposes the runtime model over the Model Context Protocol as a transport projection, not as a separate source of truth. The filesystem-backed runtime remains canonical.
 
-High-level role guidance is shipped with the binary itself. The CLI prints that guidance through `multorum methodology <role>`, and each MCP server exposes the same Markdown through a role-specific `methodology` resource. Repository-local skill files may exist as thin wrappers, but they are not a second documentation source.
+High-level role guidance is shipped with the binary itself. The CLI prints that guidance through `multorum util methodology <role>`, and each MCP server exposes the same Markdown through a role-specific `methodology` resource. Repository-local skill files may exist as thin wrappers, but they are not a second documentation source.
 
 ### Server Modes
 
@@ -687,8 +687,8 @@ Every bundle-publishing instruction requires exactly one body source: `--body-te
 
 ### Utility
 
-- `multorum methodology orchestrator` — Print the high-level orchestrator methodology as Markdown. This command is self-contained and does not require a managed repository.
-- `multorum methodology worker` — Print the high-level worker methodology as Markdown. This command is self-contained and does not require a managed repository.
+- `multorum util methodology orchestrator` — Print the high-level orchestrator methodology as Markdown. This command is self-contained and does not require a managed repository.
+- `multorum util methodology worker` — Print the high-level worker methodology as Markdown. This command is self-contained and does not require a managed repository.
 - `multorum util completion <shell>` — Emit shell completions to stdout. Supported shells: `bash`, `zsh`, `fish`, `elvish`, `powershell`.
 
 After running the command, source the output in your shell profile to enable tab completion.

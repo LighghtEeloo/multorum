@@ -6,7 +6,7 @@
 //! contracts remain the executable source of truth for commands,
 //! arguments, and runtime state transitions.
 //!
-//! `multorum methodology <role>` prints the same Markdown that the MCP
+//! `multorum util methodology <role>` prints the same Markdown that the MCP
 //! servers expose through role-specific `multorum://.../methodology`
 //! resources.
 

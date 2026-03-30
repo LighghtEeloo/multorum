@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use multorum::cli::{Cli, Command, MethodologyRoleArg, RuntimeCommand, WorkerCommand};
+use multorum::cli::{Cli, Command, MethodologyRoleArg, RuntimeCommand, UtilCommand, WorkerCommand};
 use multorum::mcp::McpServer;
 
 #[test]
@@ -41,11 +41,11 @@ fn cli_create_accepts_optional_worker_id() {
 }
 
 #[test]
-fn cli_methodology_parses_top_level_role_selector() {
-    let cli = Cli::try_parse_from(["multorum", "methodology", "worker"]).unwrap();
+fn cli_methodology_parses_under_util() {
+    let cli = Cli::try_parse_from(["multorum", "util", "methodology", "worker"]).unwrap();
 
     match cli.command {
-        | Command::Methodology { role } => {
+        | Command::Util { command: UtilCommand::Methodology { role } } => {
             assert_eq!(role, MethodologyRoleArg::Worker);
         }
         | command => panic!("unexpected command: {command:?}"),

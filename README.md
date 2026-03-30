@@ -110,7 +110,7 @@ Multorum has pretty good CLI ergonomics for human users.
 - Press tab to see available options.
 - Check out `--help` at all levels of commands and you should be knowledgeable enough to run the orchestrator and workers manually.
 - Search for any concept in doubt in [DESIGN.md](DESIGN.md) and you should find a detailed explanation.
-- To understand the core idea, run `multorum methodology <role>` to see short markdown documents on these subjects.
+- To understand the core idea, run `multorum util methodology <role>` to see short markdown documents on these subjects.
 
 I'd say most human users can understand most concepts within 10 minutes of poking around.
 

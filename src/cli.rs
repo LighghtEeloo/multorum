@@ -11,9 +11,9 @@
 //! - `worker` addresses orchestrator-side operations on concrete workers.
 //! - `local` addresses worker-local operations from inside a worker
 //!   worktree.
-//! - `methodology` prints the high-level role guidance shipped with the
-//!   binary so agents can bootstrap themselves without repository-local
-//!   skill files.
+//! - `util methodology` prints the high-level role guidance shipped with
+//!   the binary so agents can bootstrap themselves without
+//!   repository-local skill files.
 
 use std::path::PathBuf;
 
@@ -46,9 +46,6 @@ impl Cli {
     pub fn run() {
         let cli = Self::parse();
         match cli.command {
-            | Command::Methodology { role } => {
-                println!("{}", MethodologyDocument::new(role.into()).markdown());
-            }
             | Command::Util { command } => command.execute(),
             | Command::Serve { command } => command.execute(),
             | Command::Runtime(RuntimeCommand::Init) => {
@@ -228,16 +225,6 @@ impl ReplyReferenceArgs {
 /// Utility commands are self-contained and never need runtime services.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Print high-level methodology for one runtime role.
-    ///
-    /// This command is self-contained and does not require a managed
-    /// repository. It is intended for agents that need bootstrap
-    /// guidance before they begin calling the runtime surface.
-    Methodology {
-        /// Role whose methodology should be printed.
-        role: MethodologyRoleArg,
-    },
-
     /// Runtime commands that operate on a Multorum repository.
     #[command(flatten)]
     Runtime(RuntimeCommand),
@@ -337,6 +324,16 @@ pub enum UtilCommand {
     Completion {
         /// Target shell.
         shell: Shell,
+    },
+
+    /// Print high-level methodology for one runtime role.
+    ///
+    /// This command is self-contained and does not require a managed
+    /// repository. It is intended for agents that need bootstrap
+    /// guidance before they begin calling the runtime surface.
+    Methodology {
+        /// Role whose methodology should be printed.
+        role: MethodologyRoleArg,
     },
 }
 
@@ -628,6 +625,9 @@ impl UtilCommand {
             | Self::Completion { shell } => {
                 let mut cmd = Cli::command();
                 clap_complete::generate(shell, &mut cmd, "multorum", &mut std::io::stdout());
+            }
+            | Self::Methodology { role } => {
+                println!("{}", MethodologyDocument::new(role.into()).markdown());
             }
         }
     }
