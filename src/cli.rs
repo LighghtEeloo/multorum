@@ -23,8 +23,8 @@ use clap_complete::Shell;
 use crate::{
     methodology::{MethodologyDocument, MethodologyRole},
     runtime::{
-        self, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService, WorkerId,
-        WorkerService,
+        self, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService,
+        RuntimeError, WorkerId, WorkerService,
     },
     schema::perspective::PerspectiveName,
 };
@@ -352,7 +352,11 @@ pub enum PerspectiveCommand {
     /// ignored.
     Validate {
         /// Perspectives to check.
-        perspectives: Vec<PerspectiveName>,
+        ///
+        /// Note: Parsed as raw strings first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        perspectives: Vec<String>,
 
         /// Skip checking against active candidate groups.
         #[arg(long)]
@@ -362,7 +366,11 @@ pub enum PerspectiveCommand {
     /// Forward one non-active candidate group to HEAD.
     Forward {
         /// Perspective whose live candidate group should move forward.
-        perspective: PerspectiveName,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        perspective: String,
     },
 }
 
@@ -372,14 +380,18 @@ pub enum WorkerCommand {
     /// Create a new worker workspace from one perspective.
     Create {
         /// Perspective to instantiate.
-        perspective: PerspectiveName,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        perspective: String,
 
         /// Optional runtime worker identity chosen by the orchestrator.
         ///
         /// When omitted, Multorum allocates a default perspective-based
         /// identity automatically.
         #[arg(long = "worker", value_name = "WORKER")]
-        worker_id: Option<WorkerId>,
+        worker_id: Option<String>,
 
         /// Replace an existing finalized workspace for the same
         /// explicit worker.
@@ -401,13 +413,21 @@ pub enum WorkerCommand {
     /// Show one worker in detail.
     Show {
         /// Worker identity to inspect.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
     },
 
     /// List messages sent by a worker to the orchestrator.
     Outbox {
         /// Worker identity whose outbox should be read.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
 
         #[command(flatten)]
         filter: SequenceFilterArgs,
@@ -420,7 +440,11 @@ pub enum WorkerCommand {
     /// List messages sent by the orchestrator to a worker.
     Inbox {
         /// Worker identity whose inbox should be read.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
 
         #[command(flatten)]
         filter: SequenceFilterArgs,
@@ -433,7 +457,11 @@ pub enum WorkerCommand {
     /// Acknowledge one worker outbox message.
     Ack {
         /// Worker identity whose outbox owns the message.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
 
         /// Sequence number to acknowledge.
         sequence: u64,
@@ -442,7 +470,11 @@ pub enum WorkerCommand {
     /// Publish a `resolve` bundle to a blocked worker inbox.
     Resolve {
         /// Worker identity to resolve.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
 
         /// Disable auto-forward before publishing the resolve bundle.
         #[arg(long = "no-auto-forward")]
@@ -463,7 +495,11 @@ pub enum WorkerCommand {
     /// gracefully block itself by sending a report.
     Hint {
         /// Worker identity to notify.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
 
         /// Payload for the `hint` bundle.
         #[command(flatten)]
@@ -477,7 +513,11 @@ pub enum WorkerCommand {
     /// Publish a `revise` bundle to a committed worker inbox.
     Revise {
         /// Worker identity to revise.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
 
         /// Payload for the `revise` bundle.
         #[command(flatten)]
@@ -491,19 +531,31 @@ pub enum WorkerCommand {
     /// Finalize a worker without integration.
     Discard {
         /// Worker identity to discard.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
     },
 
     /// Delete one finalized worker workspace.
     Delete {
         /// Worker identity whose workspace should be deleted.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
     },
 
     /// Run the pre-merge pipeline and merge one worker.
     Merge {
         /// Worker identity to merge.
-        worker_id: WorkerId,
+        ///
+        /// Note: Parsed as a raw string first so invalid naming
+        /// convention can surface as a runtime check failure instead of
+        /// a Clap parsing abort.
+        worker_id: String,
 
         /// Checks to skip based on trusted worker evidence.
         #[arg(long = "skip-check", value_name = "CHECK")]
@@ -671,6 +723,38 @@ impl RuntimeCommand {
     }
 }
 
+/// Parse one CLI perspective argument into a validated name.
+///
+/// Note: CLI command parsing keeps raw strings so invalid identifiers
+/// can be reported as runtime check failures with a consistent envelope
+/// across CLI and MCP surfaces.
+fn parse_cli_perspective(name: &str) -> runtime::Result<PerspectiveName> {
+    name.parse().map_err(|error| {
+        tracing::warn!(
+            perspective = %name,
+            error = %error,
+            "invalid perspective naming convention in cli request"
+        );
+        RuntimeError::CheckFailed(format!("invalid perspective name: {error}"))
+    })
+}
+
+/// Parse one CLI worker argument into a validated runtime id.
+///
+/// Note: CLI command parsing keeps raw strings so invalid identifiers
+/// can be reported as runtime check failures with a consistent envelope
+/// across CLI and MCP surfaces.
+fn parse_cli_worker_id(worker: &str) -> runtime::Result<WorkerId> {
+    worker.parse().map_err(|error| {
+        tracing::warn!(
+            worker = %worker,
+            error = %error,
+            "invalid worker naming convention in cli request"
+        );
+        RuntimeError::CheckFailed(format!("invalid worker: {error}"))
+    })
+}
+
 impl PerspectiveCommand {
     /// Execute one perspective inspection command.
     pub fn execute(self, services: &CliServices) -> runtime::Result<()> {
@@ -680,12 +764,17 @@ impl PerspectiveCommand {
                 println!("{result:#?}");
             }
             | Self::Validate { perspectives, no_live } => {
-                let result =
-                    services.orchestrator()?.validate_perspectives(perspectives, no_live)?;
+                let mut parsed = Vec::with_capacity(perspectives.len());
+                for perspective in perspectives {
+                    parsed.push(parse_cli_perspective(&perspective)?);
+                }
+                let result = services.orchestrator()?.validate_perspectives(parsed, no_live)?;
                 println!("{result:#?}");
             }
             | Self::Forward { perspective } => {
-                let result = services.orchestrator()?.forward_perspective(perspective)?;
+                let result = services
+                    .orchestrator()?
+                    .forward_perspective(parse_cli_perspective(&perspective)?)?;
                 println!("{result:#?}");
             }
         }
@@ -704,9 +793,9 @@ impl WorkerCommand {
                 no_auto_forward,
                 payload,
             } => {
-                let mut request = CreateWorker::new(perspective);
+                let mut request = CreateWorker::new(parse_cli_perspective(&perspective)?);
                 if let Some(worker_id) = worker_id {
-                    request = request.with_worker_id(worker_id);
+                    request = request.with_worker_id(parse_cli_worker_id(&worker_id)?);
                 }
                 if overwriting_worktree {
                     request = request.with_overwriting_worktree();
@@ -723,27 +812,35 @@ impl WorkerCommand {
                 println!("{result:#?}");
             }
             | Self::Show { worker_id } => {
-                let result = services.orchestrator()?.get_worker(worker_id)?;
+                let result =
+                    services.orchestrator()?.get_worker(parse_cli_worker_id(&worker_id)?)?;
                 println!("{result:#?}");
             }
             | Self::Outbox { worker_id, filter, body } => {
-                let result =
-                    services.orchestrator()?.read_outbox(worker_id, filter.into_runtime(), body)?;
+                let result = services.orchestrator()?.read_outbox(
+                    parse_cli_worker_id(&worker_id)?,
+                    filter.into_runtime(),
+                    body,
+                )?;
                 println!("{result:#?}");
             }
             | Self::Inbox { worker_id, filter, body } => {
-                let result =
-                    services.orchestrator()?.read_inbox(worker_id, filter.into_runtime(), body)?;
+                let result = services.orchestrator()?.read_inbox(
+                    parse_cli_worker_id(&worker_id)?,
+                    filter.into_runtime(),
+                    body,
+                )?;
                 println!("{result:#?}");
             }
             | Self::Ack { worker_id, sequence } => {
-                let result =
-                    services.orchestrator()?.ack_outbox(worker_id, runtime::Sequence(sequence))?;
+                let result = services
+                    .orchestrator()?
+                    .ack_outbox(parse_cli_worker_id(&worker_id)?, runtime::Sequence(sequence))?;
                 println!("{result:#?}");
             }
             | Self::Resolve { worker_id, no_auto_forward, payload, reply } => {
                 let result = services.orchestrator()?.resolve_worker(
-                    worker_id,
+                    parse_cli_worker_id(&worker_id)?,
                     reply.into_runtime(),
                     payload.into_runtime(),
                     !no_auto_forward,
@@ -752,7 +849,7 @@ impl WorkerCommand {
             }
             | Self::Hint { worker_id, payload, reply } => {
                 let result = services.orchestrator()?.hint_worker(
-                    worker_id,
+                    parse_cli_worker_id(&worker_id)?,
                     reply.into_runtime(),
                     payload.into_runtime(),
                 )?;
@@ -760,23 +857,25 @@ impl WorkerCommand {
             }
             | Self::Revise { worker_id, payload, reply } => {
                 let result = services.orchestrator()?.revise_worker(
-                    worker_id,
+                    parse_cli_worker_id(&worker_id)?,
                     reply.into_runtime(),
                     payload.into_runtime(),
                 )?;
                 println!("{result:#?}");
             }
             | Self::Discard { worker_id } => {
-                let result = services.orchestrator()?.discard_worker(worker_id)?;
+                let result =
+                    services.orchestrator()?.discard_worker(parse_cli_worker_id(&worker_id)?)?;
                 println!("{result:#?}");
             }
             | Self::Delete { worker_id } => {
-                let result = services.orchestrator()?.delete_worker(worker_id)?;
+                let result =
+                    services.orchestrator()?.delete_worker(parse_cli_worker_id(&worker_id)?)?;
                 println!("{result:#?}");
             }
             | Self::Merge { worker_id, skip_checks, payload } => {
                 let result = services.orchestrator()?.merge_worker(
-                    worker_id,
+                    parse_cli_worker_id(&worker_id)?,
                     skip_checks,
                     payload.into_runtime(),
                 )?;

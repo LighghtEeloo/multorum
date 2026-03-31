@@ -32,9 +32,45 @@ fn cli_create_accepts_optional_worker_id() {
         | Command::Runtime(RuntimeCommand::Worker {
             command: WorkerCommand::Create { perspective, worker_id, overwriting_worktree, .. },
         }) => {
-            assert_eq!(perspective.as_str(), "AuthImplementor");
-            assert_eq!(worker_id.unwrap().as_str(), "custom-worker-7");
+            assert_eq!(perspective, "AuthImplementor");
+            assert_eq!(worker_id.unwrap(), "custom-worker-7");
             assert!(overwriting_worktree);
+        }
+        | command => panic!("unexpected command: {command:?}"),
+    }
+}
+
+#[test]
+fn cli_create_accepts_invalid_perspective_for_runtime_validation() {
+    let cli = Cli::try_parse_from([
+        "multorum",
+        "worker",
+        "create",
+        "lowercase_bad",
+        "--body-text",
+        "Start with the auth rulebook.",
+    ])
+    .unwrap();
+
+    match cli.command {
+        | Command::Runtime(RuntimeCommand::Worker {
+            command: WorkerCommand::Create { perspective, .. },
+        }) => {
+            assert_eq!(perspective, "lowercase_bad");
+        }
+        | command => panic!("unexpected command: {command:?}"),
+    }
+}
+
+#[test]
+fn cli_show_accepts_invalid_worker_for_runtime_validation() {
+    let cli = Cli::try_parse_from(["multorum", "worker", "show", "!!!invalid"]).unwrap();
+
+    match cli.command {
+        | Command::Runtime(RuntimeCommand::Worker {
+            command: WorkerCommand::Show { worker_id },
+        }) => {
+            assert_eq!(worker_id, "!!!invalid");
         }
         | command => panic!("unexpected command: {command:?}"),
     }
@@ -124,7 +160,7 @@ fn cli_merge_accepts_worker_id_and_skip_checks() {
         | Command::Runtime(RuntimeCommand::Worker {
             command: WorkerCommand::Merge { worker_id, skip_checks, .. },
         }) => {
-            assert_eq!(worker_id.as_str(), "custom-worker-7");
+            assert_eq!(worker_id, "custom-worker-7");
             assert_eq!(skip_checks, vec!["unit"]);
         }
         | command => panic!("unexpected command: {command:?}"),
