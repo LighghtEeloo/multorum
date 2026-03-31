@@ -6,9 +6,14 @@ McpResourceDescriptors.path = "src/mcp/resource/*.rs"
 McpDescriptorTests.path = "tests/mcp/schema_snapshot.rs"
 McpTransportHandlers.path = "src/mcp/transport/*.rs"
 McpTransportTests.path = "tests/mcp/transport.rs"
+CliSurface.path = "src/cli.rs"
+CliInterfaceTests.path = "tests/interface_integration.rs"
 RuntimeOrchestrator.path = "src/runtime/orchestrator.rs"
 RuntimeWorker.path = "src/runtime/worker.rs"
+RuntimeWorkerIdentity.path = "src/runtime/worker_id.rs"
 RuntimeMailboxTests.path = "tests/runtime_integration.rs"
+SchemaFileset.path = "src/schema/fileset/*.rs"
+SchemaPerspective.path = "src/schema/perspective/*.rs"
 Nothing = "McpToolDescriptors - McpToolDescriptors"
 
 # Add one table per perspective under `[perspective.<Name>]`.
@@ -26,6 +31,10 @@ write = "McpTransportHandlers | McpTransportTests"
 [perspective.RuntimeMailboxRefactor]
 read = "Nothing"
 write = "RuntimeOrchestrator | RuntimeWorker | RuntimeMailboxTests"
+
+[perspective.NameValidationWarningRefactor]
+read = "Nothing"
+write = "SchemaFileset | SchemaPerspective | RuntimeWorkerIdentity | McpTransportHandlers | McpTransportTests | CliSurface | CliInterfaceTests | RuntimeMailboxTests"
 
 # Add pre-merge gates in execution order.
 # Add commands under `[check.command]` and optional skip policies under `[check.policy]`.
