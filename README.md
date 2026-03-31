@@ -2,7 +2,7 @@
 
 Multorum is the infrastructure for orchestrated parallel development on a single repository with isolated workspaces, explicit file ownership, and conflict freedom enforced by construction. It doesn't care about the specific workflow, agentic tooling, or development process you use. It is a general-purpose tool for making parallel work safe and efficient, regardless of how you choose to organize it.
 
-> Belua multorum es capitums!
+> Belua multorum es capitum(s)!
 > 
 > <p align="center">
 >   <img src="assets/multorum-20260327.png" alt="Multorum logo" width="40%">
