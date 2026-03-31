@@ -18,7 +18,7 @@
 - read-set：读文件集合
 - write-set：写文件集合
 - MCP：模型上下文协议
-- invariant：不变条件
+- invariant：不变命题
 - parallel：并行
 - concurrent：并发
 - ACTIVE：工作中
