@@ -7,6 +7,7 @@ Operate from the canonical workspace root. Treat Multorum as reactive infrastruc
 - Keep the topology star-shaped. Communicate with workers only through Multorum. Workers do not coordinate with each other directly.
 - Respect the candidate-group safety property: a file may be written by exactly one active candidate group or read by many, never both.
 - Treat the read set as a stability contract and the write set as an absolute ownership boundary.
+- Do not commit to files in the orchestrator exclusion set (the union of all active groups' read and write sets). Wait, discard conflicting workers, or evolve snapshots through the supported flow.
 - Treat new files, missing permissions, and cross-perspective edits as orchestrator work in the canonical workspace.
 - Address concrete workers by `worker`, not by perspective name. Multiple workers from one perspective form one candidate group, and at most one may merge.
 
