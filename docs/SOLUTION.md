@@ -68,9 +68,9 @@ What should happen to the other worker?
 **A correct answer should include**
 
 - Only one worker from a candidate group may be merged.
-- The remaining worker or workers in that candidate group should be discarded.
+- `worker merge` automatically marks every sibling in the candidate group as `DISCARDED`. The orchestrator does not need to discard them individually.
 - If cleanup is desired later, finalized workspaces may then be deleted explicitly.
-- The answer should not suggest merging both alternatives.
+- The answer should not suggest merging both alternatives or manually discarding the siblings.
 
 ## 5. Discard Versus Delete
 
@@ -113,7 +113,7 @@ What should the orchestrator do?
 **A correct answer should include**
 
 - Perspective forwarding preserves progress from a durable checkpoint already recorded for each worker: the latest blocking `report` for `BLOCKED` workers, or the submitted head commit for `COMMITTED` workers.
-- Without a durable checkpoint (e.g. a report lacking `head_commit`), Multorum should reject the forward.
+- The forward also requires the worktree to be "clean at that checkpoint". Without `head_commit` on the report, there is no commit to verify cleanliness against, so Multorum rejects the forward rather than inventing recovery.
 - The orchestrator should unblock the worker with a `resolve` message that asks for a new blocker report with the relevant `head_commit` if forwarding is still needed.
 - The answer should not invent a manual replay or guess the commit.
 
@@ -203,7 +203,7 @@ What should the skill know about that reuse?
 **A correct answer should include**
 
 - Reuse is only valid for a finalized worker.
-- The orchestrator should use `multorum worker create <perspective> --worker <worker> --overwriting-worktree` when intentionally replacing the old finalized workspace.
+- If the finalized workspace still exists on disk, the orchestrator must use `multorum worker create <perspective> --worker <worker> --overwriting-worktree` to replace it. If the finalized workspace was already deleted, the overwrite flag is unnecessary.
 - The answer should not treat old finalized state as if it automatically stays attached to the new worker.
 
 ## 14. Minimal Command-Sequence Challenge
