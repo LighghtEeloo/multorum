@@ -1,0 +1,10 @@
+worker = "name-validation-warning-1"
+perspective = "NameValidationWarningRefactor"
+base_commit = "62c8262f9e666aa81c724a558406148b1c053719"
+head_commit = "3803fa065df8ba19012c2faa843bfc6830e409c8"
+changed_files = ["src/cli.rs", "src/mcp/transport/orchestrator.rs", "src/schema/fileset/expr.rs", "src/schema/perspective/decl.rs", "tests/interface_integration.rs", "tests/mcp/transport.rs"]
+ran_checks = []
+skipped_checks = []
+merged_at = "2026-03-31T20:02:46.690126000Z"
+rationale_body = "/Users/Artemis/Arc/miorin-project/multorum/.multorum/audit/name-validation-warning-1-3803fa/body.md"
+rationale_artifacts = []
