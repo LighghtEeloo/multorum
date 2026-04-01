@@ -144,7 +144,7 @@ multorum util completion powershell | Out-String | Invoke-Expression
 
 ## 然后呢？
 
-墨缇斯被设计为人类和 LLM 均可使用，但 LLM 拥有不公平的优势——它们生成的指令和上下文远比凡人（比如我）详细得多。因此，你可以直接跳到[配置 MCP 服务器](#将-multorum-与-mcp-结合使用)。
+墨缇斯被设计为人类和 LLM 均可使用，但 LLM 拥有不公平的优势——它们生成的指令和上下文远比凡人（比如我）详细得多。因此，你可以直接跳到[配置 MCP 服务器](#将墨缇斯与-mcp-结合使用)。
 
 ### 通过 CLI 使用墨缇斯（主要面向人类）
 

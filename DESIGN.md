@@ -471,18 +471,18 @@ Once one worker in a candidate group reaches `MERGED`, every sibling in that gro
 
 ### Transitions
 
-| From | To | Trigger |
-|---|---|---|
-| *(create)* | ACTIVE | worktree and runtime surface materialized |
-| ACTIVE | BLOCKED | worker issues `report` |
-| ACTIVE | COMMITTED | worker issues `commit` |
-| ACTIVE | DISCARDED | orchestrator issues `discard` |
-| ACTIVE | ACTIVE | orchestrator publishes `hint` |
-| BLOCKED | ACTIVE | worker acknowledges `resolve` |
-| BLOCKED | DISCARDED | orchestrator issues `discard` |
-| COMMITTED | ACTIVE | worker acknowledges `revise` |
-| COMMITTED | MERGED | orchestrator issues `merge` and checks pass |
-| COMMITTED | DISCARDED | orchestrator issues `discard` |
+| From       | To        | Trigger                                     |
+| ---------- | --------- | ------------------------------------------- |
+| *(create)* | ACTIVE    | worktree and runtime surface materialized   |
+| ACTIVE     | BLOCKED   | worker issues `report`                      |
+| ACTIVE     | COMMITTED | worker issues `commit`                      |
+| ACTIVE     | DISCARDED | orchestrator issues `discard`               |
+| ACTIVE     | ACTIVE    | orchestrator publishes `hint`               |
+| BLOCKED    | ACTIVE    | worker acknowledges `resolve`               |
+| BLOCKED    | DISCARDED | orchestrator issues `discard`               |
+| COMMITTED  | ACTIVE    | worker acknowledges `revise`                |
+| COMMITTED  | MERGED    | orchestrator issues `merge` and checks pass |
+| COMMITTED  | DISCARDED | orchestrator issues `discard`               |
 
 ---
 
@@ -607,30 +607,30 @@ Most resources return JSON snapshots. The role methodology resources return Mark
 
 Concrete:
 
-| URI | Description |
-|---|---|
-| `multorum://orchestrator/methodology` | High-level orchestrator operating methodology shipped with Multorum. |
-| `multorum://orchestrator/status` | Full orchestrator snapshot: active perspectives and workers. |
-| `multorum://orchestrator/perspectives` | Compiled perspective summaries from the current rulebook. |
-| `multorum://orchestrator/workers` | Worker summary listing for the current runtime. |
+| URI                                    | Description                                                          |
+| -------------------------------------- | -------------------------------------------------------------------- |
+| `multorum://orchestrator/methodology`  | High-level orchestrator operating methodology shipped with Multorum. |
+| `multorum://orchestrator/status`       | Full orchestrator snapshot: active perspectives and workers.         |
+| `multorum://orchestrator/perspectives` | Compiled perspective summaries from the current rulebook.            |
+| `multorum://orchestrator/workers`      | Worker summary listing for the current runtime.                      |
 
 Templates:
 
-| URI template | Description |
-|---|---|
-| `multorum://orchestrator/workers/{worker}` | Detailed orchestrator-side view of one worker. |
-| `multorum://orchestrator/workers/{worker}/outbox` | Outbox mailbox listing for one worker. |
+| URI template                                      | Description                                    |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `multorum://orchestrator/workers/{worker}`        | Detailed orchestrator-side view of one worker. |
+| `multorum://orchestrator/workers/{worker}/outbox` | Outbox mailbox listing for one worker.         |
 
 #### Worker-mode resources
 
 Concrete:
 
-| URI | Description |
-|---|---|
+| URI                             | Description                                                    |
+| ------------------------------- | -------------------------------------------------------------- |
 | `multorum://worker/methodology` | High-level worker operating methodology shipped with Multorum. |
-| `multorum://worker/contract` | Immutable worker contract for the active perspective. |
-| `multorum://worker/inbox` | Inbox mailbox listing for the active worker. |
-| `multorum://worker/status` | Projected worker lifecycle status. |
+| `multorum://worker/contract`    | Immutable worker contract for the active perspective.          |
+| `multorum://worker/inbox`       | Inbox mailbox listing for the active worker.                   |
+| `multorum://worker/status`      | Projected worker lifecycle status.                             |
 
 Worker-mode resources carry no worker identity parameter because the server is bound to a single worker worktree via `set_working_directory` — the identity is implicit.
 
