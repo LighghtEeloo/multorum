@@ -51,11 +51,11 @@ pub enum RuntimeError {
     /// The requested perspective does not exist in the current rulebook
     /// or runtime state.
     #[error("unknown perspective: {0}")]
-    UnknownPerspective(String),
+    UnknownPerspective(PerspectiveName),
 
     /// The requested worker does not exist in runtime state.
     #[error("unknown worker: {0}")]
-    UnknownWorker(String),
+    UnknownWorker(WorkerId),
 
     /// The requested worker is already held by a live worker.
     #[error("worker already belongs to a live worker: {0}")]
@@ -250,9 +250,10 @@ pub enum RuntimeError {
     #[error("mailbox conflict")]
     MailboxConflict,
 
-    /// The runtime surface for the requested perspective was not found.
-    #[error("worker runtime is missing for perspective: {0}")]
-    MissingWorkerRuntime(String),
+    /// The runtime surface for the requested worker worktree was not
+    /// found at the expected managed path.
+    #[error("worker runtime is missing at: {}", .0.display())]
+    MissingWorkerRuntime(PathBuf),
 
     /// A worker submission expected a recorded head commit, but the
     /// worker record did not contain one.

@@ -757,7 +757,7 @@ impl RuntimeFs {
     ) -> Result<WorkerContractView, RuntimeError> {
         let path = WorkerPaths::new(worktree_root.to_path_buf()).contract();
         if !path.exists() {
-            return Err(RuntimeError::MissingWorkerRuntime(worktree_root.display().to_string()));
+            return Err(RuntimeError::MissingWorkerRuntime(worktree_root.to_path_buf()));
         }
         Self::read_toml(&path)
     }
@@ -1195,19 +1195,17 @@ impl RuntimeFs {
 /// Checks omitted from the optional `[check.policy]` table default to
 /// `always`, so skip requests for them are rejected here.
 pub(super) fn validate_skip_request(
-    rulebook: &CompiledRulebook, skip_checks: &[String],
+    rulebook: &CompiledRulebook, skip_checks: &[CheckName],
 ) -> Result<BTreeSet<CheckName>, RuntimeError> {
     let mut accepted = BTreeSet::new();
-    for requested in skip_checks {
-        let name = CheckName::new(requested)
-            .map_err(|_| RuntimeError::CheckFailed(format!("unknown check `{requested}`")))?;
-        let Some(decl) = rulebook.check().get(&name) else {
-            return Err(RuntimeError::CheckFailed(format!("unknown check `{requested}`")));
+    for name in skip_checks {
+        let Some(decl) = rulebook.check().get(name) else {
+            return Err(RuntimeError::CheckFailed(format!("unknown check `{name}`")));
         };
         if decl.policy() != CheckPolicy::Skippable {
-            return Err(RuntimeError::CheckFailed(format!("check `{requested}` is not skippable")));
+            return Err(RuntimeError::CheckFailed(format!("check `{name}` is not skippable")));
         }
-        accepted.insert(name);
+        accepted.insert(name.clone());
     }
     Ok(accepted)
 }

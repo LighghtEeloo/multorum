@@ -201,22 +201,21 @@ impl WorkerPaths {
     /// Derive the canonical workspace root from a managed worker
     /// worktree path.
     pub(crate) fn workspace_root(&self) -> Result<PathBuf, RuntimeError> {
-        let worktree_root = self.worktree_root.parent().ok_or_else(|| {
-            RuntimeError::MissingWorkerRuntime(self.worktree_root.display().to_string())
-        })?;
-        let multorum_root = worktree_root.parent().ok_or_else(|| {
-            RuntimeError::MissingWorkerRuntime(self.worktree_root.display().to_string())
-        })?;
-        let workspace_root = multorum_root.parent().ok_or_else(|| {
-            RuntimeError::MissingWorkerRuntime(self.worktree_root.display().to_string())
-        })?;
+        let worktree_root = self
+            .worktree_root
+            .parent()
+            .ok_or_else(|| RuntimeError::MissingWorkerRuntime(self.worktree_root.clone()))?;
+        let multorum_root = worktree_root
+            .parent()
+            .ok_or_else(|| RuntimeError::MissingWorkerRuntime(self.worktree_root.clone()))?;
+        let workspace_root = multorum_root
+            .parent()
+            .ok_or_else(|| RuntimeError::MissingWorkerRuntime(self.worktree_root.clone()))?;
 
         if worktree_root.file_name() != Some(OsStr::new(WORKTREE_DIRECTORY_NAME))
             || multorum_root.file_name() != Some(OsStr::new(".multorum"))
         {
-            return Err(RuntimeError::MissingWorkerRuntime(
-                self.worktree_root.display().to_string(),
-            ));
+            return Err(RuntimeError::MissingWorkerRuntime(self.worktree_root.clone()));
         }
 
         Ok(workspace_root.to_path_buf())

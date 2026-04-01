@@ -14,7 +14,10 @@ use std::sync::Arc;
 
 use crate::{
     bundle::BundlePayload,
-    schema::perspective::{CompiledPerspective, PerspectiveName},
+    schema::{
+        perspective::{CompiledPerspective, PerspectiveName},
+        rulebook::CheckName,
+    },
     vcs::{CanonicalCommitHash, VersionControl},
 };
 
@@ -181,7 +184,7 @@ pub trait OrchestratorService {
 
     /// Run the pre-merge pipeline and merge the worker submission.
     fn merge_worker(
-        &self, worker_id: WorkerId, skip_checks: Vec<String>, audit_payload: BundlePayload,
+        &self, worker_id: WorkerId, skip_checks: Vec<CheckName>, audit_payload: BundlePayload,
     ) -> Result<MergeResult>;
 
     /// Return the current orchestrator status projection.
@@ -345,9 +348,7 @@ impl FsOrchestratorService {
     fn worker_record<'a>(
         state: &'a StateFile, worker_id: &WorkerId,
     ) -> Result<(&'a CandidateGroupRecord, &'a WorkerEntry)> {
-        state
-            .find_worker(worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))
+        state.find_worker(worker_id).ok_or_else(|| RuntimeError::UnknownWorker(worker_id.clone()))
     }
 
     /// Read one worker mailbox with a shared direction-aware helper.
@@ -478,7 +479,7 @@ impl FsOrchestratorService {
         let target = compiled
             .perspectives()
             .get(perspective)
-            .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?
+            .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.clone()))?
             .clone();
         let new_base_commit = self.fs.vcs().head_commit(self.fs.workspace_root())?;
         let Some((base_changed, boundary_changed)) =
@@ -673,7 +674,7 @@ impl FsOrchestratorService {
         let target = compiled
             .perspectives()
             .get(&group.perspective)
-            .ok_or_else(|| RuntimeError::UnknownPerspective(group.perspective.to_string()))?
+            .ok_or_else(|| RuntimeError::UnknownPerspective(group.perspective.clone()))?
             .clone();
         let current_head = self.fs.vcs().head_commit(self.fs.workspace_root())?;
         let Some((base_changed, boundary_changed)) =
@@ -742,7 +743,7 @@ impl OrchestratorService for FsOrchestratorService {
             let perspective = compiled
                 .perspectives()
                 .get(name)
-                .ok_or_else(|| RuntimeError::UnknownPerspective(name.to_string()))?;
+                .ok_or_else(|| RuntimeError::UnknownPerspective(name.clone()))?;
             summaries.push(PerspectiveSummary {
                 name: name.clone(),
                 read_count: perspective.read().len(),
@@ -855,7 +856,7 @@ impl OrchestratorService for FsOrchestratorService {
         let compiled_perspective = compiled
             .perspectives()
             .get(&perspective)
-            .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.to_string()))?
+            .ok_or_else(|| RuntimeError::UnknownPerspective(perspective.clone()))?
             .clone();
 
         // Check if there's an existing live candidate group for this perspective.
@@ -1056,12 +1057,12 @@ impl OrchestratorService for FsOrchestratorService {
         let mut state = self.fs.load_state()?;
         let group = state
             .find_worker_group_mut(&worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.clone()))?;
         let perspective = group.perspective.clone();
         {
             let worker = group
                 .find_worker_mut(&worker_id)
-                .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+                .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.clone()))?;
 
             if !matches!(
                 worker.state,
@@ -1093,7 +1094,7 @@ impl OrchestratorService for FsOrchestratorService {
         let mut state = self.fs.load_state()?;
         let (group, worker) = state
             .find_worker(&worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.clone()))?;
 
         if !matches!(worker.state, WorkerState::Merged | WorkerState::Discarded) {
             return Err(RuntimeError::InvalidState {
@@ -1135,14 +1136,14 @@ impl OrchestratorService for FsOrchestratorService {
     }
 
     fn merge_worker(
-        &self, worker_id: WorkerId, skip_checks: Vec<String>, audit_payload: BundlePayload,
+        &self, worker_id: WorkerId, skip_checks: Vec<CheckName>, audit_payload: BundlePayload,
     ) -> Result<MergeResult> {
         tracing::trace!(worker_id = %worker_id, "starting worker merge");
         let state = self.fs.load_state()?;
 
         let (group, worker) = state
             .find_worker(&worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.clone()))?;
 
         if worker.state != WorkerState::Committed {
             return Err(RuntimeError::InvalidState {

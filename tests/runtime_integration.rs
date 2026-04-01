@@ -12,7 +12,7 @@ use multorum::runtime::{
     WorkerState,
 };
 use multorum::schema::perspective::PerspectiveName;
-use multorum::schema::rulebook::Rulebook;
+use multorum::schema::rulebook::{CheckName, Rulebook};
 use multorum::vcs::VcsError;
 
 fn perspective() -> PerspectiveName {
@@ -454,7 +454,7 @@ fn create_worker_rejects_missing_perspective_even_with_live_group() {
     .unwrap();
 
     let error = orchestrator.create_worker(CreateWorker::new(perspective())).unwrap_err();
-    assert!(matches!(error, RuntimeError::UnknownPerspective(name) if name == "AuthImplementor"));
+    assert!(matches!(error, RuntimeError::UnknownPerspective(name) if name == perspective()));
 }
 
 #[test]
@@ -826,7 +826,7 @@ fn merge_rejects_skip_request_for_check_without_policy_override() {
     let error = orchestrator
         .merge_worker(
             provision.worker_id.clone(),
-            vec!["test".to_owned()],
+            vec![CheckName::new("test").unwrap()],
             BundlePayload::default(),
         )
         .unwrap_err();
@@ -871,7 +871,7 @@ fn merge_accepts_skip_request_for_explicit_skippable_check() {
     let merge = orchestrator
         .merge_worker(
             provision.worker_id.clone(),
-            vec!["test".to_owned()],
+            vec![CheckName::new("test").unwrap()],
             BundlePayload::default(),
         )
         .unwrap();

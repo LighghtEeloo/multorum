@@ -116,9 +116,7 @@ impl FsWorkerService {
     fn worker_record<'a>(
         state: &'a StateFile, worker_id: &crate::runtime::WorkerId,
     ) -> Result<(&'a CandidateGroupRecord, &'a WorkerEntry)> {
-        state
-            .find_worker(worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))
+        state.find_worker(worker_id).ok_or_else(|| RuntimeError::UnknownWorker(worker_id.clone()))
     }
 
     /// Locate one mutable worker entry inside persisted orchestrator state.
@@ -131,10 +129,10 @@ impl FsWorkerService {
     ) -> Result<&'a mut WorkerEntry> {
         let group = state
             .find_worker_group_mut(worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))?;
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.clone()))?;
         group
             .find_worker_mut(worker_id)
-            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.to_string()))
+            .ok_or_else(|| RuntimeError::UnknownWorker(worker_id.clone()))
     }
 
     /// Read one worker mailbox with a shared direction-aware helper.
@@ -163,9 +161,7 @@ impl FsWorkerService {
             let mut state_file = self.fs.load_state()?;
             let entry = Self::worker_entry_mut(&mut state_file, &message.message.worker_id)?;
             if entry.worktree_path != self.worktree_root {
-                return Err(RuntimeError::MissingWorkerRuntime(
-                    self.worktree_root.display().to_string(),
-                ));
+                return Err(RuntimeError::MissingWorkerRuntime(self.worktree_root.clone()));
             }
             entry.state = next_state;
             self.fs.store_state(&state_file)?;

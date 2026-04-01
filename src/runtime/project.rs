@@ -174,9 +174,7 @@ impl CurrentProject {
             | (Some(workspace_root), true, _) => {
                 Ok(Self { repo_root, workspace_root, role: RuntimeRole::Worker })
             }
-            | (Some(_), false, _) => {
-                Err(RuntimeError::MissingWorkerRuntime(repo_root.display().to_string()))
-            }
+            | (Some(_), false, _) => Err(RuntimeError::MissingWorkerRuntime(repo_root.clone())),
             | (None, false, true) => Ok(Self {
                 repo_root: repo_root.clone(),
                 workspace_root: repo_root,

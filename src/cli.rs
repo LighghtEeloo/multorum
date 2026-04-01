@@ -26,7 +26,7 @@ use crate::{
         self, CreateWorker, FsOrchestratorService, FsWorkerService, OrchestratorService,
         RuntimeError, WorkerId, WorkerService,
     },
-    schema::perspective::PerspectiveName,
+    schema::{perspective::PerspectiveName, rulebook::CheckName},
 };
 
 /// Multorum — multi-perspective conflict-free codebase orchestration.
@@ -739,6 +739,22 @@ fn parse_cli_perspective(name: &str) -> runtime::Result<PerspectiveName> {
     })
 }
 
+/// Parse one CLI check name argument into a validated check identifier.
+///
+/// Note: CLI command parsing keeps raw strings so invalid identifiers
+/// can be reported as runtime check failures with a consistent envelope
+/// across CLI and MCP surfaces.
+fn parse_cli_check_name(name: &str) -> runtime::Result<CheckName> {
+    name.parse().map_err(|error| {
+        tracing::warn!(
+            check = %name,
+            error = %error,
+            "invalid check naming convention in cli request"
+        );
+        RuntimeError::CheckFailed(format!("invalid check name: {error}"))
+    })
+}
+
 /// Parse one CLI worker argument into a validated runtime id.
 ///
 /// Note: CLI command parsing keeps raw strings so invalid identifiers
@@ -874,6 +890,10 @@ impl WorkerCommand {
                 println!("{result:#?}");
             }
             | Self::Merge { worker_id, skip_checks, payload } => {
+                let skip_checks = skip_checks
+                    .iter()
+                    .map(|s| parse_cli_check_name(s))
+                    .collect::<runtime::Result<Vec<_>>>()?;
                 let result = services.orchestrator()?.merge_worker(
                     parse_cli_worker_id(&worker_id)?,
                     skip_checks,

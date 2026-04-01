@@ -180,7 +180,7 @@ impl OrchestratorHandler {
             }
             | "merge_worker" => {
                 let worker_id = parse_worker_id(required_str(&args, "worker")?)?;
-                let skip_checks = optional_string_list(&args, "skip_checks");
+                let skip_checks = parse_check_names(optional_string_list(&args, "skip_checks"))?;
                 let audit_payload = extract_required_payload(&args)?;
                 dispatch_tool(service.merge_worker(worker_id, skip_checks, audit_payload))
             }
@@ -309,4 +309,15 @@ fn parse_worker_id(s: &str) -> Result<WorkerId, ErrorData> {
 
 fn parse_perspective(s: &str) -> Result<crate::schema::perspective::PerspectiveName, ErrorData> {
     s.parse().map_err(|e| ErrorData::invalid_params(format!("invalid perspective name: {e}"), None))
+}
+
+fn parse_check_names(
+    raw: Vec<String>,
+) -> Result<Vec<crate::schema::rulebook::CheckName>, ErrorData> {
+    raw.iter()
+        .map(|s| {
+            s.parse()
+                .map_err(|e| ErrorData::invalid_params(format!("invalid check name: {e}"), None))
+        })
+        .collect()
 }
