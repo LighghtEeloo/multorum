@@ -22,7 +22,7 @@ const VALIDATE_PERSPECTIVES_INPUTS: &[ToolInputDescriptor] = &[
 
 const FORWARD_PERSPECTIVE_INPUTS: &[ToolInputDescriptor] = &[required_string_input(
     "perspective",
-    "Perspective whose non-active candidate group should move to HEAD.",
+    "Perspective whose live candidate group should be forwarded to HEAD.",
 )];
 
 const FINALIZED_WORKER_INPUTS: &[ToolInputDescriptor] =
@@ -53,7 +53,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "forward_perspective",
-            description: "Move one non-active candidate group to HEAD.",
+            description: "Move a live candidate group to HEAD. Requires every live worker to be non-ACTIVE with a durable checkpoint. Recompiled boundary must be a superset of the current one.",
             inputs: FORWARD_PERSPECTIVE_INPUTS,
         },
         ToolDescriptor {
@@ -83,7 +83,7 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "create_worker",
-            description: "Create a worker workspace and send it an initial task bundle; path-backed payload files are moved into .multorum storage.",
+            description: "Create a worker workspace and send it an initial task bundle. The write set is a closed list of existing files; workers cannot create or write outside it. Joins an existing candidate group or forms a new one at HEAD after conflict-freedom check.",
             inputs: ToolInputSets::ORCHESTRATOR_TASK_BUNDLE,
         },
         ToolDescriptor {
@@ -108,17 +108,17 @@ pub fn descriptors() -> Vec<ToolDescriptor> {
         },
         ToolDescriptor {
             name: "delete_worker",
-            description: "Delete one finalized worker workspace.",
+            description: "Delete a finalized (MERGED or DISCARDED) worker's workspace and state. Also removes group state if this was the last member.",
             inputs: FINALIZED_WORKER_INPUTS,
         },
         ToolDescriptor {
             name: "merge_worker",
-            description: "Run the pre-merge pipeline and merge a worker submission. Audit rationale should be self-contained because worker runtime state may be deleted after merge confirmation.",
+            description: "Run the pre-merge pipeline and merge a committed worker. The write-set scope check always runs first and is never skippable. On success, siblings in the same candidate group are automatically DISCARDED. Audit rationale should be self-contained.",
             inputs: ToolInputSets::ORCHESTRATOR_MERGE,
         },
         ToolDescriptor {
             name: "get_status",
-            description: "Return the full orchestrator runtime snapshot.",
+            description: "Return the full orchestrator runtime snapshot including the exclusion set. The orchestrator must not commit to files in the exclusion set while any candidate group is active.",
             inputs: &[],
         },
     ]

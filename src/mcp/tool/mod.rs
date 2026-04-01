@@ -125,7 +125,7 @@ impl ToolInputSets {
         ),
         optional_boolean_input(
             "no_auto_forward",
-            "Optional flag to disable auto-forward before creating the worker.",
+            "Disable auto-forward. When false (default), Multorum may forward the candidate group to HEAD before creation if all live workers are non-ACTIVE.",
         ),
         optional_string_input(
             "body_text",
@@ -167,7 +167,7 @@ impl ToolInputSets {
         required_string_input("worker", "Runtime worker identity that owns the inbox."),
         optional_boolean_input(
             "no_auto_forward",
-            "Optional flag to disable auto-forward before publishing the resolve bundle.",
+            "Disable auto-forward. When false (default), Multorum may forward the candidate group to HEAD before resolving if all live workers are non-ACTIVE.",
         ),
         optional_integer_input(
             "reply_to",
@@ -191,7 +191,7 @@ impl ToolInputSets {
     pub(crate) const WORKER_REPORT: &'static [ToolInputDescriptor] = &[
         optional_string_input(
             "head_commit",
-            "Optional git commit hash relevant to the blocker report.",
+            "Git commit hash of the worker's current progress. Without this, perspective forward cannot verify the worktree and will reject the forward.",
         ),
         optional_integer_input(
             "reply_to",
@@ -233,7 +233,7 @@ impl ToolInputSets {
         required_string_input("worker", "Runtime worker identity to merge."),
         optional_string_list_input(
             "skip_checks",
-            "Optional project-defined checks to skip based on trusted worker evidence.",
+            "Project-defined checks to skip. Only checks marked 'skippable' in the rulebook are allowed; the write-set scope check is never skippable.",
         ),
         optional_string_input(
             "body_text",
