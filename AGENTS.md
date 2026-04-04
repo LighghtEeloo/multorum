@@ -32,6 +32,17 @@ Prefer direct definitions over defensive framing.
 - Avoid prose that reads like a rebuttal, disclaimer, or argument with an imaginary reviewer.
 - When documenting a constraint, state the positive rule first, then the consequence if needed.
 
+When writing DESIGN.md, follow these style guidelines:
+- Declarative, dry, precise.
+- Each paragraph does one thing: introduces a concept, states its properties, and stops.
+- No motivational framing, no rhetoric, no "this is important because."
+- Terms are introduced once and then trusted to carry themselves.
+- The voice is impersonal but not bureaucratic so that it reads closer to
+  a concise mathematical text than to a software README.
+- Sentences are structurally simple, favoring short main clauses over nested subordination.
+- Analogies appear sparingly and only to established PL concepts (well-typedness, nominal binding),
+  never to everyday metaphors.
+
 ### Canonical Documentation Location
 
 - Prefer inline Rust documentation in `src/**/*.rs`.
@@ -40,14 +51,8 @@ Prefer direct definitions over defensive framing.
 
 ## Rust Code Style Guideline
 
-Fail fast. If some edge case is not specified by design,
-just log the error and stop the current operation.
-Never attempt to recover from error path if it's not absolutely correct.
-
-When a delete operation removes a resource, delete all of its associated artifacts and state
-files. Partial cleanup leaves stale entries that confuse subsequent operations and corrupt
-runtime invariants (e.g., `multorum worker delete` removes both the Git worktree and the
-worker state TOML file).
+Panic fast. If some edge case is not specified by design, log and panic.
+Never attempt to recover from an error path if it's not absolutely correct.
 
 Prefer declaration instead of manual implementation. For example,
 - Utilize `thiserror` crate for error messages instead of manual implementations.
@@ -58,21 +63,21 @@ Prefer declaration instead of manual implementation. For example,
 - Prefer derive-style `clap` for command-line argument parsing.
 
 Always prefer typed data structures over strings + parsers, and
-Never be afraid of defining too many types.
+Prefer introducing a named type over reusing a generic one (e.g., `String`, `HashMap`)
+when the type carries domain meaning.
 For examples,
 - Include specific types of errors when creating an error type, not just strings.
 - User input should be parsed to be structured data as soon as possible.
 - Never use strings to represent states in the software's state machine.
 - Never pass strings between internal components when the message could be typed.
-- Whenever a hashmap of strings is created, think twice.
-  Is it really relying on string deduplication?
-  Or it's actually a "dynamic object", that might be concluded by a few traits?
+- Whenever a hashmap of strings is created, consider whether the keys represent
+  a closed set of fields -- if so, replace it with a struct or a trait object.
 
 Prefer to use structs to pack a group of useful functions; prefer methods over functions.
 Rust structs have better namespace-ish features than Rust modules.
-Never write plain functions that are not wrapped in a struct with your best effort
-unless there's no way around otherwise.
-When wrapping the functions, abide by the following rules:
+Prefer methods on a struct over free functions. Free functions are acceptable only for
+trait implementations, entry points (`main`), or cases where no meaningful receiver exists.
+When defining methods, abide by the following rules:
 - Mention `self` in the signature if the methods are built around the struct type.
   - Take ownership (`self`) if being the elimination form of the struct type,
     namely consuming the struct.
@@ -95,6 +100,10 @@ Add concise yet critical documentation for structs, fields, and methods.
 Ensure that documentation is clear, concise, and accurate. No emojis unless strictly necessary.
 
 When adding new features, record and observe details with the `tracing` crate.
+Use `trace` level at the beginning and end of major interface calls to record arguments.
+Use `debug` for task-specific debug output, and remove them when the problem is solved.
+
+Run `cargo clippy` and `cargo fmt` before committing.
 
 Avoid using nested `super::` imports. Use absolute paths in that case.
 
