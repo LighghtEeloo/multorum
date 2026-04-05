@@ -1,0 +1,10 @@
+worker = "opaque-directory-impl-1"
+perspective = "OpaqueDirectoryImpl"
+base_commit = "228f518746362b6d53cd0fc8ed765c2935f8427e"
+head_commit = "6a50c34a8fdedc2564488bca63a15d78f6787ad2"
+changed_files = ["src/schema/fileset/compile.rs", "src/schema/fileset/error.rs", "src/schema/fileset/expr.rs", "src/schema/fileset/mod.rs", "src/schema/fileset/validate.rs", "tests/fileset_integration.rs"]
+ran_checks = []
+skipped_checks = []
+merged_at = "2026-04-05T05:12:48.971966000Z"
+rationale_body = "/Users/bqin/Documents/multorum/.multorum/audit/opaque-directory-impl-1-6a50c3/body.md"
+rationale_artifacts = []
