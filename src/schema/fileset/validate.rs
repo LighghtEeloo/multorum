@@ -281,6 +281,30 @@ mod tests {
     }
 
     #[test]
+    fn equivalent_opaques_rejected_after_normalization() {
+        let defs =
+            BTreeMap::from([(n("VendorA"), opaque("vendor")), (n("VendorB"), opaque("vendor/"))]);
+        let err = Validator::new(&defs).validate().unwrap_err();
+        assert!(matches!(err, ValidationError::OverlappingOpaques { .. }));
+    }
+
+    #[test]
+    fn undefined_reference_reports_referenced_by_name() {
+        let defs = BTreeMap::from([
+            (n("Known"), prim("src/**")),
+            (n("UsesMissing"), compound("Known | Missing")),
+        ]);
+        let err = Validator::new(&defs).validate().unwrap_err();
+        match err {
+            | ValidationError::Undefined { name, referenced_by } => {
+                assert_eq!(name.as_str(), "Missing");
+                assert_eq!(referenced_by.as_str(), "UsesMissing");
+            }
+            | other => panic!("expected Undefined, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn design_doc_example() {
         let defs = BTreeMap::from([
             (n("SpecFiles"), prim("**/*.spec.md")),

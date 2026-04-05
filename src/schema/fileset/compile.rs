@@ -282,6 +282,47 @@ mod tests {
     }
 
     #[test]
+    fn opaque_prefix_boundary_does_not_capture_similar_names() {
+        let files = paths(&["vendor/a.rs", "vendorized/b.rs", "vendor-lib/c.rs", "src/main.rs"]);
+        let defs =
+            BTreeMap::from([(n("Vendor"), opaque("vendor")), (n("AllRust"), prim("**/*.rs"))]);
+        let order = Validator::new(&defs).validate().unwrap();
+        let result = Compiler::new(&files).compile(&defs, &order).unwrap();
+
+        assert_eq!(result[&n("Vendor")], path_set(&["vendor/a.rs"]));
+        assert_eq!(
+            result[&n("AllRust")],
+            path_set(&["src/main.rs", "vendor-lib/c.rs", "vendorized/b.rs"])
+        );
+    }
+
+    #[test]
+    fn opaque_glob_intersection_is_empty_by_construction() {
+        let files = paths(&["vendor/a.rs", "vendor/b.rs", "src/main.rs"]);
+        let defs = BTreeMap::from([
+            (n("Vendor"), opaque("vendor/")),
+            (n("Rust"), prim("**/*.rs")),
+            (n("VendorRust"), compound("Vendor & Rust")),
+        ]);
+        let order = Validator::new(&defs).validate().unwrap();
+        let result = Compiler::new(&files).compile(&defs, &order).unwrap();
+
+        assert!(result[&n("VendorRust")].is_empty());
+    }
+
+    #[test]
+    fn unmatched_opaque_keeps_glob_results_intact() {
+        let files = paths(&["vendor/a.rs", "src/main.rs"]);
+        let defs =
+            BTreeMap::from([(n("Missing"), opaque("third_party/")), (n("Rust"), prim("**/*.rs"))]);
+        let order = Validator::new(&defs).validate().unwrap();
+        let result = Compiler::new(&files).compile(&defs, &order).unwrap();
+
+        assert!(result[&n("Missing")].is_empty());
+        assert_eq!(result[&n("Rust")], path_set(&["src/main.rs", "vendor/a.rs"]));
+    }
+
+    #[test]
     fn design_doc_example() {
         let files = paths(&[
             "auth/login.rs",
