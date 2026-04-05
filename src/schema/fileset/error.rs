@@ -26,6 +26,22 @@ pub enum GlobPatternError {
     Invalid { pattern: String, reason: String },
 }
 
+/// Errors produced when constructing a [`DirectoryPath`](super::DirectoryPath).
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum DirectoryPathError {
+    /// The path string was empty.
+    #[error("opaque directory path is empty")]
+    Empty,
+
+    /// The path is root-only (`"/"`).
+    #[error("opaque directory path must not be root-only")]
+    RootOnly,
+
+    /// The path contains glob metacharacters (`*`, `?`, `[`, `{`).
+    #[error("opaque directory path `{path}` contains glob metacharacter `{ch}`")]
+    ContainsMetacharacter { path: String, ch: char },
+}
+
 /// Errors produced when parsing a file set expression string.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ParseError {
@@ -60,6 +76,10 @@ pub enum ValidationError {
     /// A cycle was detected in the dependency graph.
     #[error("cycle detected in file set definitions: {cycle}")]
     Cycle { cycle: String },
+
+    /// Two opaque directory definitions have overlapping prefixes.
+    #[error("overlapping opaque directories: `{a}` and `{b}`")]
+    OverlappingOpaques { a: super::Name, b: super::Name },
 }
 
 /// Errors produced during compilation of file set definitions.

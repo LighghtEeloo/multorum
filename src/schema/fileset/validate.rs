@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::error::ValidationError;
-use super::expr::{Definition, Expr};
+use super::expr::{Definition, DirectoryPath, Expr};
 use super::name::Name;
 
 /// Validates a set of file set definitions for structural correctness.
@@ -34,6 +34,7 @@ impl<'a> Validator<'a> {
     /// Validate and return the topological ordering.
     pub fn validate(self) -> Result<Vec<Name>, ValidationError> {
         self.check_undefined()?;
+        self.check_overlapping_opaques()?;
         self.topological_sort()
     }
 
@@ -50,6 +51,35 @@ impl<'a> Validator<'a> {
                             referenced_by: name.clone(),
                         });
                     }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Verify that no two opaque directory prefixes overlap (neither is
+    /// a prefix of the other).
+    fn check_overlapping_opaques(&self) -> Result<(), ValidationError> {
+        let opaques: Vec<(&Name, &DirectoryPath)> = self
+            .definitions
+            .iter()
+            .filter_map(|(name, def)| match def {
+                | Definition::Opaque(dir) => Some((name, dir)),
+                | _ => None,
+            })
+            .collect();
+
+        for i in 0..opaques.len() {
+            for j in (i + 1)..opaques.len() {
+                let (name_a, dir_a) = opaques[i];
+                let (name_b, dir_b) = opaques[j];
+                if dir_a.as_str().starts_with(dir_b.as_str())
+                    || dir_b.as_str().starts_with(dir_a.as_str())
+                {
+                    return Err(ValidationError::OverlappingOpaques {
+                        a: name_a.clone(),
+                        b: name_b.clone(),
+                    });
                 }
             }
         }
@@ -156,6 +186,10 @@ mod tests {
         Definition::Primitive(GlobPattern::new(pattern).unwrap())
     }
 
+    fn opaque(path: &str) -> Definition {
+        Definition::Opaque(DirectoryPath::new(path).unwrap())
+    }
+
     fn compound(expr: &str) -> Definition {
         Definition::Compound(ExprParser::new(expr).parse().unwrap())
     }
@@ -214,6 +248,36 @@ mod tests {
             }
             | _ => panic!("expected Cycle error"),
         }
+    }
+
+    #[test]
+    fn opaques_are_treated_as_primitives() {
+        let defs = BTreeMap::from([
+            (n("Vendor"), opaque("vendor/")),
+            (n("AuthFiles"), prim("auth/**")),
+            (n("Combined"), compound("AuthFiles | Vendor")),
+        ]);
+        let order = Validator::new(&defs).validate().unwrap();
+        let pos = |name: &str| order.iter().position(|n| n.as_str() == name).unwrap();
+        assert!(pos("Vendor") < pos("Combined"));
+        assert!(pos("AuthFiles") < pos("Combined"));
+    }
+
+    #[test]
+    fn disjoint_opaques_are_valid() {
+        let defs = BTreeMap::from([
+            (n("VendorA"), opaque("vendor/a/")),
+            (n("VendorB"), opaque("vendor/b/")),
+        ]);
+        assert!(Validator::new(&defs).validate().is_ok());
+    }
+
+    #[test]
+    fn overlapping_opaques_rejected() {
+        let defs =
+            BTreeMap::from([(n("Outer"), opaque("vendor/")), (n("Inner"), opaque("vendor/sub/"))]);
+        let err = Validator::new(&defs).validate().unwrap_err();
+        assert!(matches!(err, ValidationError::OverlappingOpaques { .. }));
     }
 
     #[test]
