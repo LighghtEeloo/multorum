@@ -728,8 +728,8 @@ async fn check_pipeline_failure_blocks_merge() {
         dir.path().join(".multorum/rulebook.toml"),
         r#"
             [fileset]
-            Owned.path = "src/owned.rs"
-            Other.path = "src/other.rs"
+            Owned.glob = "src/owned.rs"
+            Other.glob = "src/other.rs"
 
             [perspective.AuthImplementor]
             read = "Other"
@@ -795,8 +795,8 @@ async fn check_pipeline_skip_succeeds() {
         dir.path().join(".multorum/rulebook.toml"),
         r#"
             [fileset]
-            Owned.path = "src/owned.rs"
-            Other.path = "src/other.rs"
+            Owned.glob = "src/owned.rs"
+            Other.glob = "src/other.rs"
 
             [perspective.AuthImplementor]
             read = "Other"

@@ -1470,8 +1470,8 @@ mod tests {
     fn initial_rulebook() -> &'static str {
         r#"
             [fileset]
-            Owned.path = "src/owned.rs"
-            Other.path = "src/other.rs"
+            Owned.glob = "src/owned.rs"
+            Other.glob = "src/other.rs"
 
             [perspective.AuthImplementor]
             read = "Other"
@@ -1485,9 +1485,9 @@ mod tests {
     fn expanded_rulebook() -> &'static str {
         r#"
             [fileset]
-            Owned.path = "src/owned.rs"
-            NewOwned.path = "src/new.rs"
-            Other.path = "src/other.rs"
+            Owned.glob = "src/owned.rs"
+            NewOwned.glob = "src/new.rs"
+            Other.glob = "src/other.rs"
 
             [perspective.AuthImplementor]
             read = "Other"
@@ -1544,9 +1544,9 @@ mod tests {
             dir.path().join(".multorum/rulebook.toml"),
             r#"
                 [fileset]
-                Owned.path = "src/owned.rs"
-                Extra.path = "src/extra.rs"
-                Other.path = "src/other.rs"
+                Owned.glob = "src/owned.rs"
+                Extra.glob = "src/extra.rs"
+                Other.glob = "src/other.rs"
 
                 [perspective.AuthImplementor]
                 read = "Other"
@@ -1711,9 +1711,9 @@ mod tests {
             dir.path().join(".multorum/rulebook.toml"),
             r#"
                 [fileset]
-                Owned.path = "src/owned.rs"
-                Extra.path = "src/extra.rs"
-                Other.path = "src/other.rs"
+                Owned.glob = "src/owned.rs"
+                Extra.glob = "src/extra.rs"
+                Other.glob = "src/other.rs"
 
                 [perspective.AuthImplementor]
                 read = "Other"

@@ -175,7 +175,7 @@
 #### 语法
 
 ```text
-path  ::= <glob pattern>              例如 "src/auth/**", "**/*.spec.md"
+glob  ::= <glob pattern>              例如 "src/auth/**", "**/*.spec.md"
 name  ::= <identifier>                例如 AuthFiles, SpecFiles
 expr  ::= name                        引用
         | expr "|" expr               并集
@@ -183,7 +183,7 @@ expr  ::= name                        引用
         | expr "-" expr               差集
         | "(" expr ")"                分组
 
-definition ::= name ".path" "=" path  原语 - 将名称绑定到 glob
+definition ::= name ".glob" "=" glob  原语 - 将名称绑定到 glob
              | name "=" expr          复合 - 将名称绑定到表达式
 ```
 
@@ -193,14 +193,14 @@ definition ::= name ".path" "=" path  原语 - 将名称绑定到 glob
 
 #### 命名定义
 
-名称在 `[fileset]` 表中定义。名称可以通过 `.path` 绑定原语路径，也可以通过引用其他名称的复合表达式绑定。切入点在其 `read` 和 `write` 字段中引用这些名称。
+名称在 `[fileset]` 表中定义。名称可以通过 `.glob` 绑定原语 glob，也可以通过引用其他名称的复合表达式绑定。切入点在其 `read` 和 `write` 字段中引用这些名称。
 
 ```toml
 [fileset]
-SpecFiles.path = "**/*.spec.md"
-TestFiles.path = "**/test/**"
+SpecFiles.glob = "**/*.spec.md"
+TestFiles.glob = "**/test/**"
 
-AuthFiles.path = "auth/**"
+AuthFiles.glob = "auth/**"
 AuthSpecs = "AuthFiles & SpecFiles"
 AuthTests = "AuthFiles & TestFiles"
 
@@ -257,7 +257,7 @@ test = "skippable"
 
 ```toml
 # 首先定义共享的文件所有权词汇。
-# `Name.path` 绑定一个 glob；`Name = "Expr"` 用 |、& 和 - 组合名称。
+# `Name.glob` 绑定一个 glob；`Name = "Expr"` 用 |、& 和 - 组合名称。
 [fileset]
 
 # 在 `[perspective.<Name>]` 下为每个切入点添加一张表。

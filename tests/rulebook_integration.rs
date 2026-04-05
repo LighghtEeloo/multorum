@@ -165,7 +165,7 @@ fn compile_surfaces_perspective_undefined_fileset_errors() {
     let workspace = setup_workspace(
         r#"
             [fileset]
-            AuthFiles.path = "auth/**"
+            AuthFiles.glob = "auth/**"
 
             [perspective.AuthImplementor]
             read  = "MissingFiles"

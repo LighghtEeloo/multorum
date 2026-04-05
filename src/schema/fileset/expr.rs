@@ -70,7 +70,7 @@ pub enum Expr {
 /// compound expression.
 ///
 /// In the TOML rulebook:
-/// - Primitives use the `.path` key: `AuthFiles.path = "auth/**"`
+/// - Primitives use the `.glob` key: `AuthFiles.glob = "auth/**"`
 /// - Compounds are expression strings: `AuthSpecs = "AuthFiles & SpecFiles"`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Definition {
@@ -121,12 +121,12 @@ impl FileSetTable {
 /// Raw TOML value for a single file set entry.
 ///
 /// In the `[fileset]` table, each entry is either:
-/// - A sub-table with a `path` key: `SpecFiles.path = "**/*.spec.md"`
+/// - A sub-table with a `glob` key: `SpecFiles.glob = "**/*.spec.md"`
 /// - A plain string expression: `AuthSpecs = "AuthFiles & SpecFiles"`
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum RawDefinition {
-    Primitive { path: String },
+    Primitive { glob: String },
     Compound(String),
 }
 
@@ -141,8 +141,8 @@ impl<'de> de::Deserialize<'de> for FileSetTable {
         for (key, value) in raw {
             let name = Name::new(&key).map_err(de::Error::custom)?;
             let def = match value {
-                | RawDefinition::Primitive { path } => {
-                    let pattern = GlobPattern::new(&path).map_err(de::Error::custom)?;
+                | RawDefinition::Primitive { glob } => {
+                    let pattern = GlobPattern::new(&glob).map_err(de::Error::custom)?;
                     Definition::Primitive(pattern)
                 }
                 | RawDefinition::Compound(expr_str) => {
@@ -197,9 +197,9 @@ mod tests {
     #[test]
     fn deserialize_design_doc_example() {
         let toml_str = r#"
-            SpecFiles.path = "**/*.spec.md"
-            TestFiles.path = "**/test/**"
-            AuthFiles.path = "auth/**"
+            SpecFiles.glob = "**/*.spec.md"
+            TestFiles.glob = "**/test/**"
+            AuthFiles.glob = "auth/**"
             AuthSpecs = "AuthFiles & SpecFiles"
             AuthTests = "AuthFiles & TestFiles"
         "#;
@@ -231,14 +231,14 @@ mod tests {
 
     #[test]
     fn deserialize_rejects_invalid_name() {
-        let toml_str = r#"lowercaseName.path = "**/*.rs""#;
+        let toml_str = r#"lowercaseName.glob = "**/*.rs""#;
         let result: Result<FileSetTable, _> = toml::from_str(toml_str);
         assert!(result.is_err());
     }
 
     #[test]
     fn deserialize_rejects_invalid_glob() {
-        let toml_str = r#"Bad.path = "[unclosed""#;
+        let toml_str = r#"Bad.glob = "[unclosed""#;
         let result: Result<FileSetTable, _> = toml::from_str(toml_str);
         assert!(result.is_err());
     }

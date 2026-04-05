@@ -1,19 +1,19 @@
 # Define shared file ownership vocabulary first.
-# `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
+# `Name.glob` binds a glob; `Name = "Expr"` combines names with |, &, and -.
 [fileset]
-McpToolDescriptors.path = "src/mcp/tool/*.rs"
-McpResourceDescriptors.path = "src/mcp/resource/*.rs"
-McpDescriptorTests.path = "tests/mcp/schema_snapshot.rs"
-McpTransportHandlers.path = "src/mcp/transport/*.rs"
-McpTransportTests.path = "tests/mcp/transport.rs"
-CliSurface.path = "src/cli.rs"
-CliInterfaceTests.path = "tests/interface_integration.rs"
-RuntimeOrchestrator.path = "src/runtime/orchestrator.rs"
-RuntimeWorker.path = "src/runtime/worker.rs"
-RuntimeWorkerIdentity.path = "src/runtime/worker_id.rs"
-RuntimeMailboxTests.path = "tests/runtime_integration.rs"
-SchemaFileset.path = "src/schema/fileset/*.rs"
-SchemaPerspective.path = "src/schema/perspective/*.rs"
+McpToolDescriptors.glob = "src/mcp/tool/*.rs"
+McpResourceDescriptors.glob = "src/mcp/resource/*.rs"
+McpDescriptorTests.glob = "tests/mcp/schema_snapshot.rs"
+McpTransportHandlers.glob = "src/mcp/transport/*.rs"
+McpTransportTests.glob = "tests/mcp/transport.rs"
+CliSurface.glob = "src/cli.rs"
+CliInterfaceTests.glob = "tests/interface_integration.rs"
+RuntimeOrchestrator.glob = "src/runtime/orchestrator.rs"
+RuntimeWorker.glob = "src/runtime/worker.rs"
+RuntimeWorkerIdentity.glob = "src/runtime/worker_id.rs"
+RuntimeMailboxTests.glob = "tests/runtime_integration.rs"
+SchemaFileset.glob = "src/schema/fileset/*.rs"
+SchemaPerspective.glob = "src/schema/perspective/*.rs"
 Nothing = "McpToolDescriptors - McpToolDescriptors"
 
 # Add one table per perspective under `[perspective.<Name>]`.

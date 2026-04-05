@@ -95,9 +95,9 @@ mod tests {
         Rulebook::from_toml_str(
             r#"
             [fileset]
-            SpecFiles.path = "**/*.spec.md"
-            TestFiles.path = "**/test/**"
-            AuthFiles.path = "auth/**"
+            SpecFiles.glob = "**/*.spec.md"
+            TestFiles.glob = "**/test/**"
+            AuthFiles.glob = "auth/**"
             AuthSpecs = "AuthFiles & SpecFiles"
             AuthTests = "AuthFiles & TestFiles"
 
@@ -192,8 +192,8 @@ mod tests {
         let rulebook = Rulebook::from_toml_str(
             r#"
             [fileset]
-            SpecFiles.path = "**/*.spec.md"
-            AuthFiles.path = "auth/**"
+            SpecFiles.glob = "**/*.spec.md"
+            AuthFiles.glob = "auth/**"
 
             [perspective.P]
             read  = "SpecFiles"
