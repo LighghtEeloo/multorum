@@ -11,8 +11,8 @@ use multorum::runtime::{FsOrchestratorService, OrchestratorService};
 fn rulebook_toml() -> &'static str {
     r#"
         [fileset]
-        Owned.path = "src/owned.rs"
-        Other.path = "src/other.rs"
+        Owned.glob = "src/owned.rs"
+        Other.glob = "src/other.rs"
 
         [perspective.AuthImplementor]
         read = "Other"
@@ -37,10 +37,10 @@ fn rulebook_toml() -> &'static str {
 fn multi_perspective_rulebook_toml() -> &'static str {
     r#"
         [fileset]
-        AuthOwned.path = "src/auth.rs"
-        AuthRef.path = "src/auth_ref.rs"
-        DataOwned.path = "src/data.rs"
-        DataRef.path = "src/data_ref.rs"
+        AuthOwned.glob = "src/auth.rs"
+        AuthRef.glob = "src/auth_ref.rs"
+        DataOwned.glob = "src/data.rs"
+        DataRef.glob = "src/data_ref.rs"
 
         [perspective.AuthImplementor]
         read = "AuthRef"

@@ -168,9 +168,9 @@ mod tests {
         .collect();
 
         let toml_str = r#"
-            SpecFiles.path = "**/*.spec.md"
-            TestFiles.path = "**/test/**"
-            AuthFiles.path = "auth/**"
+            SpecFiles.glob = "**/*.spec.md"
+            TestFiles.glob = "**/test/**"
+            AuthFiles.glob = "auth/**"
             AuthSpecs = "AuthFiles & SpecFiles"
             AuthTests = "AuthFiles & TestFiles"
         "#;

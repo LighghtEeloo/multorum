@@ -49,9 +49,9 @@ fn full_pipeline_with_tempdir() {
     let (_dir, files) = setup_tempdir();
 
     let toml_str = r#"
-        SpecFiles.path = "**/*.spec.md"
-        TestFiles.path = "**/test/**"
-        AuthFiles.path = "auth/**"
+        SpecFiles.glob = "**/*.spec.md"
+        TestFiles.glob = "**/test/**"
+        AuthFiles.glob = "auth/**"
         AuthSpecs = "AuthFiles & SpecFiles"
         AuthTests = "AuthFiles & TestFiles"
     "#;
@@ -81,8 +81,8 @@ fn union_merges_disjoint_sets() {
     let (_dir, files) = setup_tempdir();
 
     let toml_str = r#"
-        AuthFiles.path = "auth/**"
-        ApiFiles.path  = "api/**"
+        AuthFiles.glob = "auth/**"
+        ApiFiles.glob  = "api/**"
         All = "AuthFiles | ApiFiles"
     "#;
     let table: FileSetTable = toml::from_str(toml_str).unwrap();
@@ -99,9 +99,9 @@ fn difference_subtracts_correctly() {
     let (_dir, files) = setup_tempdir();
 
     let toml_str = r#"
-        AuthFiles.path = "auth/**"
-        SpecFiles.path = "**/*.spec.md"
-        TestFiles.path = "**/test/**"
+        AuthFiles.glob = "auth/**"
+        SpecFiles.glob = "**/*.spec.md"
+        TestFiles.glob = "**/test/**"
         AuthImpl = "AuthFiles - SpecFiles - TestFiles"
     "#;
     let table: FileSetTable = toml::from_str(toml_str).unwrap();
@@ -116,8 +116,8 @@ fn intersection_narrows_correctly() {
     let (_dir, files) = setup_tempdir();
 
     let toml_str = r#"
-        ApiFiles.path  = "api/**"
-        TestFiles.path = "**/test/**"
+        ApiFiles.glob  = "api/**"
+        TestFiles.glob = "**/test/**"
         ApiTests = "ApiFiles & TestFiles"
     "#;
     let table: FileSetTable = toml::from_str(toml_str).unwrap();
@@ -132,16 +132,16 @@ fn parenthesized_grouping_changes_result() {
 
     // Without parens: (AuthFiles | ApiFiles) & SpecFiles
     let flat = r#"
-        AuthFiles.path = "auth/**"
-        ApiFiles.path  = "api/**"
-        SpecFiles.path = "**/*.spec.md"
+        AuthFiles.glob = "auth/**"
+        ApiFiles.glob  = "api/**"
+        SpecFiles.glob = "**/*.spec.md"
         Flat = "AuthFiles | ApiFiles & SpecFiles"
     "#;
     // With parens: AuthFiles | (ApiFiles & SpecFiles)
     let grouped = r#"
-        AuthFiles.path = "auth/**"
-        ApiFiles.path  = "api/**"
-        SpecFiles.path = "**/*.spec.md"
+        AuthFiles.glob = "auth/**"
+        ApiFiles.glob  = "api/**"
+        SpecFiles.glob = "**/*.spec.md"
         Grouped = "AuthFiles | (ApiFiles & SpecFiles)"
     "#;
 
@@ -171,7 +171,7 @@ fn glob_matching_no_files_produces_empty_set() {
     let (_dir, files) = setup_tempdir();
 
     let toml_str = r#"
-        Nothing.path = "nonexistent/**"
+        Nothing.glob = "nonexistent/**"
     "#;
     let table: FileSetTable = toml::from_str(toml_str).unwrap();
     let result = table.compile(&files).unwrap();
@@ -184,8 +184,8 @@ fn all_primitives_no_compounds() {
     let (_dir, files) = setup_tempdir();
 
     let toml_str = r#"
-        RustFiles.path = "**/*.rs"
-        MarkdownFiles.path = "**/*.md"
+        RustFiles.glob = "**/*.rs"
+        MarkdownFiles.glob = "**/*.md"
     "#;
     let table: FileSetTable = toml::from_str(toml_str).unwrap();
     let result = table.compile(&files).unwrap();
@@ -209,10 +209,10 @@ fn chained_compounds() {
 
     // A depends on B which depends on C — three levels deep.
     let toml_str = r#"
-        AllFiles.path   = "**/*"
-        SpecFiles.path  = "**/*.spec.md"
+        AllFiles.glob   = "**/*"
+        SpecFiles.glob  = "**/*.spec.md"
         NonSpec = "AllFiles - SpecFiles"
-        TestFiles.path  = "**/test/**"
+        TestFiles.glob  = "**/test/**"
         NonSpecNonTest = "NonSpec - TestFiles"
     "#;
     let table: FileSetTable = toml::from_str(toml_str).unwrap();

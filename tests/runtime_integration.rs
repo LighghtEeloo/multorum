@@ -22,8 +22,8 @@ fn perspective() -> PerspectiveName {
 fn rulebook_toml() -> &'static str {
     r#"
         [fileset]
-        Owned.path = "src/owned.rs"
-        Other.path = "src/other.rs"
+        Owned.glob = "src/owned.rs"
+        Other.glob = "src/other.rs"
 
         [perspective.AuthImplementor]
         read = "Other"
@@ -442,8 +442,8 @@ fn create_worker_rejects_missing_perspective_even_with_live_group() {
         repo.path().join(".multorum/rulebook.toml"),
         r#"
             [fileset]
-            Owned.path = "src/owned.rs"
-            Other.path = "src/other.rs"
+            Owned.glob = "src/owned.rs"
+            Other.glob = "src/other.rs"
 
             [perspective]
 
@@ -799,8 +799,8 @@ fn merge_rejects_skip_request_for_check_without_policy_override() {
     let (_repo, orchestrator, _) = setup_repo_with_rulebook(
         r#"
             [fileset]
-            Owned.path = "src/owned.rs"
-            Other.path = "src/other.rs"
+            Owned.glob = "src/owned.rs"
+            Other.glob = "src/other.rs"
 
             [perspective.AuthImplementor]
             read = "Other"
@@ -841,8 +841,8 @@ fn merge_accepts_skip_request_for_explicit_skippable_check() {
     let (_repo, orchestrator, _) = setup_repo_with_rulebook(
         r#"
             [fileset]
-            Owned.path = "src/owned.rs"
-            Other.path = "src/other.rs"
+            Owned.glob = "src/owned.rs"
+            Other.glob = "src/other.rs"
 
             [perspective.AuthImplementor]
             read = "Other"

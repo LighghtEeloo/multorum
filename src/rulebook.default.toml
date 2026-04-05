@@ -1,5 +1,5 @@
 # Define shared file ownership vocabulary first.
-# `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
+# `Name.glob` binds a glob; `Name = "Expr"` combines names with |, &, and -.
 [fileset]
 
 # Add one table per perspective under `[perspective.<Name>]`.

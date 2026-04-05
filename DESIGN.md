@@ -133,7 +133,7 @@ Multorum describes ownership boundaries through a small algebra of named file se
 #### Syntax
 
 ```text
-path  ::= <glob pattern>              e.g. "src/auth/**", "**/*.spec.md"
+glob  ::= <glob pattern>              e.g. "src/auth/**", "**/*.spec.md"
 name  ::= <identifier>                e.g. AuthFiles, SpecFiles
 expr  ::= name                        reference
         | expr "|" expr               union
@@ -141,7 +141,7 @@ expr  ::= name                        reference
         | expr "-" expr               difference
         | "(" expr ")"                grouping
 
-definition ::= name ".path" "=" path  primitive - binds a name to a glob
+definition ::= name ".glob" "=" glob  primitive - binds a name to a glob
              | name "=" expr          compound - binds a name to an expression
 ```
 
@@ -151,14 +151,14 @@ File-set names and perspective names use CamelCase. Worker ids use kebab-case.
 
 #### Named Definitions
 
-Names are defined in the `[fileset]` table. A name may bind a primitive path via `.path` or a compound expression referencing other names. Perspectives reference these names in their `read` and `write` fields.
+Names are defined in the `[fileset]` table. A name may bind a primitive glob via `.glob` or a compound expression referencing other names. Perspectives reference these names in their `read` and `write` fields.
 
 ```toml
 [fileset]
-SpecFiles.path = "**/*.spec.md"
-TestFiles.path = "**/test/**"
+SpecFiles.glob = "**/*.spec.md"
+TestFiles.glob = "**/test/**"
 
-AuthFiles.path = "auth/**"
+AuthFiles.glob = "auth/**"
 AuthSpecs = "AuthFiles & SpecFiles"
 AuthTests = "AuthFiles & TestFiles"
 
@@ -215,7 +215,7 @@ The write-set scope check is always mandatory and cannot be configured away.
 
 ```toml
 # Define shared file ownership vocabulary first.
-# `Name.path` binds a glob; `Name = "Expr"` combines names with |, &, and -.
+# `Name.glob` binds a glob; `Name = "Expr"` combines names with |, &, and -.
 [fileset]
 
 # Add one table per perspective under `[perspective.<Name>]`.

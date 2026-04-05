@@ -106,9 +106,9 @@ mod tests {
         let rulebook = Rulebook::from_toml_str(
             r#"
             [fileset]
-            SpecFiles.path = "**/*.spec.md"
-            TestFiles.path = "**/test/**"
-            AuthFiles.path = "auth/**"
+            SpecFiles.glob = "**/*.spec.md"
+            TestFiles.glob = "**/test/**"
+            AuthFiles.glob = "auth/**"
             AuthSpecs = "AuthFiles & SpecFiles"
             AuthTests = "AuthFiles & TestFiles"
 
@@ -178,7 +178,7 @@ mod tests {
         let error = Rulebook::from_toml_str(
             r#"
             [filesets]
-            Owned.path = "src/owned.rs"
+            Owned.glob = "src/owned.rs"
 
             [perspectives.AuthImplementor]
             read = "Owned"

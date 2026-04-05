@@ -254,8 +254,8 @@ mod tests {
     fn rulebook_toml() -> &'static str {
         r#"
             [fileset]
-            Owned.path = "src/owned.rs"
-            Other.path = "src/other.rs"
+            Owned.glob = "src/owned.rs"
+            Other.glob = "src/other.rs"
 
             [perspective.AuthImplementor]
             read = "Other"
