@@ -22,7 +22,7 @@ pub mod validate;
 
 pub use compile::{Compiler, enumerate_files};
 pub use error::*;
-pub use expr::{Definition, Expr, FileSetTable, GlobPattern};
+pub use expr::{Definition, DirectoryPath, Expr, FileSetTable, GlobPattern};
 pub use name::Name;
 pub use parse::ExprParser;
 pub use validate::Validator;

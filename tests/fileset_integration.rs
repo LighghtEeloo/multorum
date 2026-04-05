@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 
+use multorum::schema::fileset::DirectoryPath;
 use multorum::schema::fileset::{
     FileSetError, FileSetTable, Name, ValidationError, enumerate_files,
 };
@@ -263,4 +264,145 @@ fn enumerate_files_finds_all() {
 
     let files: BTreeSet<PathBuf> = enumerate_files(root).unwrap().into_iter().collect();
     assert_eq!(files, path_set(&["a.txt", "sub/b.txt", "sub/deep/c.txt"]));
+}
+
+// --- Opaque directory tests ---
+
+/// Create a file tree with a vendor directory alongside src.
+fn setup_tempdir_with_vendor() -> (tempfile::TempDir, Vec<PathBuf>) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    let file_paths = [
+        "src/main.rs",
+        "src/util.rs",
+        "src/test/main_test.rs",
+        "vendor/lib/a.rs",
+        "vendor/lib/b.rs",
+        "vendor/other/c.rs",
+        "docs/readme.md",
+    ];
+    for path in &file_paths {
+        let full = root.join(path);
+        fs::create_dir_all(full.parent().unwrap()).unwrap();
+        fs::write(&full, "").unwrap();
+    }
+
+    let files = enumerate_files(root).unwrap();
+    (dir, files)
+}
+
+#[test]
+fn basic_opaque_collects_files_under_prefix() {
+    let (_dir, files) = setup_tempdir_with_vendor();
+
+    let toml_str = r#"
+        Vendor.opaque = "vendor/"
+    "#;
+    let table: FileSetTable = toml::from_str(toml_str).unwrap();
+    let result = table.compile(&files).unwrap();
+
+    assert_eq!(
+        result[&n("Vendor")],
+        path_set(&["vendor/lib/a.rs", "vendor/lib/b.rs", "vendor/other/c.rs"])
+    );
+}
+
+#[test]
+fn opaque_excludes_files_from_glob() {
+    let (_dir, files) = setup_tempdir_with_vendor();
+
+    let toml_str = r#"
+        Vendor.opaque = "vendor/"
+        AllRust.glob  = "**/*.rs"
+    "#;
+    let table: FileSetTable = toml::from_str(toml_str).unwrap();
+    let result = table.compile(&files).unwrap();
+
+    // Glob should only see non-vendor files.
+    assert_eq!(
+        result[&n("AllRust")],
+        path_set(&["src/main.rs", "src/util.rs", "src/test/main_test.rs"])
+    );
+}
+
+#[test]
+fn opaque_plus_glob_plus_compound() {
+    let (_dir, files) = setup_tempdir_with_vendor();
+
+    let toml_str = r#"
+        Vendor.opaque = "vendor/"
+        Src.glob      = "src/**"
+        Everything = "Vendor | Src"
+    "#;
+    let table: FileSetTable = toml::from_str(toml_str).unwrap();
+    let result = table.compile(&files).unwrap();
+
+    assert_eq!(
+        result[&n("Everything")],
+        path_set(&[
+            "src/main.rs",
+            "src/util.rs",
+            "src/test/main_test.rs",
+            "vendor/lib/a.rs",
+            "vendor/lib/b.rs",
+            "vendor/other/c.rs",
+        ])
+    );
+}
+
+#[test]
+fn validation_rejects_overlapping_opaques() {
+    let (_dir, files) = setup_tempdir_with_vendor();
+
+    let toml_str = r#"
+        AllVendor.opaque = "vendor/"
+        VendorLib.opaque = "vendor/lib/"
+    "#;
+    let table: FileSetTable = toml::from_str(toml_str).unwrap();
+    let err = table.compile(&files).unwrap_err();
+    assert!(matches!(err, FileSetError::Validation(ValidationError::OverlappingOpaques { .. })));
+}
+
+#[test]
+fn validation_rejects_glob_metacharacters_in_opaque() {
+    let toml_str = r#"Bad.opaque = "vendor/*""#;
+    let result: Result<FileSetTable, _> = toml::from_str(toml_str);
+    assert!(result.is_err(), "metacharacter `*` should be rejected");
+}
+
+#[test]
+fn validation_rejects_empty_opaque_path() {
+    let toml_str = r#"Bad.opaque = """#;
+    let result: Result<FileSetTable, _> = toml::from_str(toml_str);
+    assert!(result.is_err(), "empty opaque path should be rejected");
+}
+
+#[test]
+fn deserialization_of_opaque_key() {
+    let toml_str = r#"
+        Vendor.opaque = "third_party/vendor"
+        AuthFiles.glob = "auth/**"
+        Combined = "Vendor | AuthFiles"
+    "#;
+    let table: FileSetTable = toml::from_str(toml_str).unwrap();
+    let defs = table.definitions();
+    assert_eq!(defs.len(), 3);
+
+    use multorum::schema::fileset::Definition;
+    assert!(matches!(defs.get(&n("Vendor")), Some(Definition::Opaque(_))));
+    assert!(matches!(defs.get(&n("AuthFiles")), Some(Definition::Primitive(_))));
+    assert!(matches!(defs.get(&n("Combined")), Some(Definition::Compound(_))));
+}
+
+#[test]
+fn directory_path_type_validates() {
+    assert!(DirectoryPath::new("vendor/lib").is_ok());
+    assert!(DirectoryPath::new("vendor/lib/").is_ok());
+    assert!(DirectoryPath::new("").is_err());
+    assert!(DirectoryPath::new("/").is_err());
+    assert!(DirectoryPath::new("vendor/*").is_err());
+    assert!(DirectoryPath::new("vendor/?").is_err());
+    assert!(DirectoryPath::new("vendor/[a]").is_err());
+    assert!(DirectoryPath::new("vendor/{a}").is_err());
 }

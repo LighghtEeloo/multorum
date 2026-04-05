@@ -11,7 +11,7 @@ use wax::Program as _;
 use wax::walk::{Entry as _, PathExt as _};
 
 use super::error::CompileError;
-use super::expr::{Definition, Expr, GlobPattern};
+use super::expr::{Definition, DirectoryPath, Expr, GlobPattern};
 use super::name::Name;
 
 /// Compiles file set definitions into concrete file lists.
@@ -39,6 +39,16 @@ impl<'a> Compiler<'a> {
 
     /// Compile all definitions into concrete file sets.
     ///
+    /// Uses a three-phase pipeline:
+    ///
+    /// 1. **Resolve opaques**: collect every file whose path starts with
+    ///    each opaque directory prefix.
+    /// 2. **Build reduced file list**: files not claimed by any opaque
+    ///    definition, for use by glob expansion.
+    /// 3. **Resolve globs and compounds**: expand globs against only the
+    ///    reduced file list; evaluate compound expressions against
+    ///    already-resolved sets.
+    ///
     /// `order` must be a valid topological ordering as produced by
     /// [`Validator::validate`](super::Validator::validate).
     pub fn compile(
@@ -46,10 +56,29 @@ impl<'a> Compiler<'a> {
     ) -> Result<BTreeMap<Name, BTreeSet<PathBuf>>, CompileError> {
         let mut resolved: BTreeMap<Name, BTreeSet<PathBuf>> = BTreeMap::new();
 
+        // Phase 1: resolve opaques.
+        let mut opaque_claimed: BTreeSet<PathBuf> = BTreeSet::new();
+        for name in order {
+            if let Some(Definition::Opaque(dir)) = definitions.get(name) {
+                let set = self.expand_opaque(dir);
+                opaque_claimed.extend(set.iter().cloned());
+                if set.is_empty() {
+                    tracing::warn!(name = %name, "opaque file set compiled to empty list");
+                }
+                resolved.insert(name.clone(), set);
+            }
+        }
+
+        // Phase 2: build the reduced file list (files not claimed by any opaque).
+        let reduced_files: Vec<PathBuf> =
+            self.files.iter().filter(|p| !opaque_claimed.contains(*p)).cloned().collect();
+
+        // Phase 3: resolve globs and compounds against reduced files.
         for name in order {
             let def = definitions.get(name).expect("topological order contains only defined names");
             let set = match def {
-                | Definition::Primitive(pattern) => self.expand_glob(pattern)?,
+                | Definition::Opaque(_) => continue,
+                | Definition::Primitive(pattern) => Self::expand_glob(&reduced_files, pattern)?,
                 | Definition::Compound(expr) => Self::evaluate(expr, &resolved),
             };
             if set.is_empty() {
@@ -61,14 +90,24 @@ impl<'a> Compiler<'a> {
         Ok(resolved)
     }
 
-    /// Expand a glob pattern against the file list.
-    fn expand_glob(&self, pattern: &GlobPattern) -> Result<BTreeSet<PathBuf>, CompileError> {
+    /// Collect every file whose path starts with the opaque directory prefix.
+    fn expand_opaque(&self, dir: &DirectoryPath) -> BTreeSet<PathBuf> {
+        self.files
+            .iter()
+            .filter(|path| path.to_str().is_some_and(|s| s.starts_with(dir.as_str())))
+            .cloned()
+            .collect()
+    }
+
+    /// Expand a glob pattern against a file list.
+    fn expand_glob(
+        files: &[PathBuf], pattern: &GlobPattern,
+    ) -> Result<BTreeSet<PathBuf>, CompileError> {
         let glob = wax::Glob::new(pattern.as_str()).map_err(|err| CompileError::Glob {
             pattern: pattern.as_str().to_owned(),
             reason: err.to_string(),
         })?;
-        let matched =
-            self.files.iter().filter(|path| glob.is_match(path.as_path())).cloned().collect();
+        let matched = files.iter().filter(|path| glob.is_match(path.as_path())).cloned().collect();
         Ok(matched)
     }
 
@@ -131,7 +170,7 @@ mod tests {
     use std::fs;
 
     use super::*;
-    use crate::schema::fileset::{ExprParser, Validator};
+    use crate::schema::fileset::{DirectoryPath, ExprParser, Validator};
 
     fn n(s: &str) -> Name {
         Name::new(s).unwrap()
@@ -139,6 +178,10 @@ mod tests {
 
     fn prim(pattern: &str) -> Definition {
         Definition::Primitive(GlobPattern::new(pattern).unwrap())
+    }
+
+    fn opaque(path: &str) -> Definition {
+        Definition::Opaque(DirectoryPath::new(path).unwrap())
     }
 
     fn compound(expr: &str) -> Definition {
@@ -203,6 +246,39 @@ mod tests {
         let result = Compiler::new(&files).compile(&defs, &order).unwrap();
 
         assert_eq!(result[&n("AuthImpl")], path_set(&["auth/login.rs"]));
+    }
+
+    #[test]
+    fn opaque_collects_prefix_files() {
+        let files = paths(&["vendor/lib/a.rs", "vendor/lib/b.rs", "src/main.rs"]);
+        let defs = BTreeMap::from([(n("Vendor"), opaque("vendor/lib"))]);
+        let order = Validator::new(&defs).validate().unwrap();
+        let result = Compiler::new(&files).compile(&defs, &order).unwrap();
+        assert_eq!(result[&n("Vendor")], path_set(&["vendor/lib/a.rs", "vendor/lib/b.rs"]));
+    }
+
+    #[test]
+    fn glob_excludes_opaque_files() {
+        let files = paths(&["vendor/lib/a.rs", "src/main.rs", "src/util.rs"]);
+        let defs =
+            BTreeMap::from([(n("Vendor"), opaque("vendor/")), (n("AllRust"), prim("**/*.rs"))]);
+        let order = Validator::new(&defs).validate().unwrap();
+        let result = Compiler::new(&files).compile(&defs, &order).unwrap();
+        assert_eq!(result[&n("Vendor")], path_set(&["vendor/lib/a.rs"]));
+        assert_eq!(result[&n("AllRust")], path_set(&["src/main.rs", "src/util.rs"]));
+    }
+
+    #[test]
+    fn opaque_in_compound_expression() {
+        let files = paths(&["vendor/a.rs", "src/main.rs"]);
+        let defs = BTreeMap::from([
+            (n("Vendor"), opaque("vendor/")),
+            (n("Src"), prim("src/**")),
+            (n("All"), compound("Vendor | Src")),
+        ]);
+        let order = Validator::new(&defs).validate().unwrap();
+        let result = Compiler::new(&files).compile(&defs, &order).unwrap();
+        assert_eq!(result[&n("All")], path_set(&["vendor/a.rs", "src/main.rs"]));
     }
 
     #[test]

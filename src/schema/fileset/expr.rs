@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::de;
 
 use super::Name;
-use super::error::GlobPatternError;
+use super::error::{DirectoryPathError, GlobPatternError};
 use super::parse::ExprParser;
 
 /// A validated glob pattern string (e.g. `auth/**`, `**/*.spec.md`).
@@ -31,6 +31,48 @@ impl GlobPattern {
     }
 
     /// The raw pattern string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A validated literal directory path for opaque directory definitions.
+///
+/// ## Invariants
+///
+/// - Contains no glob metacharacters (`*`, `?`, `[`, `{`).
+/// - Normalized to end with `/`.
+/// - Not empty or root-only (`""`, `"/"`).
+///
+/// Construct via [`DirectoryPath::new`], which validates and normalizes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectoryPath(String);
+
+impl DirectoryPath {
+    /// Glob metacharacters forbidden in directory paths.
+    const META_CHARS: &[char] = &['*', '?', '[', '{'];
+
+    /// Create a new `DirectoryPath`, validating invariants and normalizing
+    /// the trailing `/`.
+    pub fn new(path: &str) -> Result<Self, DirectoryPathError> {
+        if path.is_empty() {
+            return Err(DirectoryPathError::Empty);
+        }
+
+        let normalized = if path.ends_with('/') { path.to_owned() } else { format!("{path}/") };
+
+        if normalized == "/" {
+            return Err(DirectoryPathError::RootOnly);
+        }
+
+        if let Some(&ch) = Self::META_CHARS.iter().find(|&&ch| normalized.contains(ch)) {
+            return Err(DirectoryPathError::ContainsMetacharacter { path: path.to_owned(), ch });
+        }
+
+        Ok(Self(normalized))
+    }
+
+    /// The normalized directory path string (always ends with `/`).
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -66,16 +108,19 @@ pub enum Expr {
     Difference(Box<Expr>, Box<Expr>),
 }
 
-/// A file set definition: either a primitive glob binding or a
+/// A file set definition: a primitive glob, an opaque directory, or a
 /// compound expression.
 ///
 /// In the TOML rulebook:
 /// - Primitives use the `.glob` key: `AuthFiles.glob = "auth/**"`
+/// - Opaques use the `.opaque` key: `Vendor.opaque = "third_party/vendor"`
 /// - Compounds are expression strings: `AuthSpecs = "AuthFiles & SpecFiles"`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Definition {
     /// A primitive file set bound to a glob pattern.
     Primitive(GlobPattern),
+    /// An opaque directory: every file under the given prefix.
+    Opaque(DirectoryPath),
     /// A compound file set defined by a set expression.
     Compound(Expr),
 }
@@ -120,13 +165,19 @@ impl FileSetTable {
 
 /// Raw TOML value for a single file set entry.
 ///
-/// In the `[fileset]` table, each entry is either:
+/// In the `[fileset]` table, each entry is one of:
 /// - A sub-table with a `glob` key: `SpecFiles.glob = "**/*.spec.md"`
+/// - A sub-table with an `opaque` key: `Vendor.opaque = "third_party/vendor"`
 /// - A plain string expression: `AuthSpecs = "AuthFiles & SpecFiles"`
+///
+/// Note: `Primitive` and `Opaque` must precede `Compound` so that
+/// `#[serde(untagged)]` tries the structured variants before falling
+/// back to the plain string.
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum RawDefinition {
     Primitive { glob: String },
+    Opaque { opaque: String },
     Compound(String),
 }
 
@@ -144,6 +195,10 @@ impl<'de> de::Deserialize<'de> for FileSetTable {
                 | RawDefinition::Primitive { glob } => {
                     let pattern = GlobPattern::new(&glob).map_err(de::Error::custom)?;
                     Definition::Primitive(pattern)
+                }
+                | RawDefinition::Opaque { opaque } => {
+                    let dir = DirectoryPath::new(&opaque).map_err(de::Error::custom)?;
+                    Definition::Opaque(dir)
                 }
                 | RawDefinition::Compound(expr_str) => {
                     let expr = ExprParser::new(&expr_str).parse().map_err(de::Error::custom)?;
@@ -188,10 +243,47 @@ mod tests {
     }
 
     #[test]
+    fn directory_path_normalizes_trailing_slash() {
+        let dp = DirectoryPath::new("vendor/lib").unwrap();
+        assert_eq!(dp.as_str(), "vendor/lib/");
+    }
+
+    #[test]
+    fn directory_path_preserves_existing_slash() {
+        let dp = DirectoryPath::new("vendor/lib/").unwrap();
+        assert_eq!(dp.as_str(), "vendor/lib/");
+    }
+
+    #[test]
+    fn directory_path_rejects_empty() {
+        assert!(matches!(DirectoryPath::new(""), Err(DirectoryPathError::Empty)));
+    }
+
+    #[test]
+    fn directory_path_rejects_root_only() {
+        assert!(matches!(DirectoryPath::new("/"), Err(DirectoryPathError::RootOnly)));
+    }
+
+    #[test]
+    fn directory_path_rejects_metacharacters() {
+        for (input, ch) in
+            [("vendor/*", '*'), ("vendor/?", '?'), ("vendor/[a]", '['), ("vendor/{a}", '{')]
+        {
+            let err = DirectoryPath::new(input).unwrap_err();
+            assert!(
+                matches!(err, DirectoryPathError::ContainsMetacharacter { ch: c, .. } if c == ch)
+            );
+        }
+    }
+
+    #[test]
     fn definition_variants() {
         let prim = Definition::Primitive(GlobPattern::new("**/*.rs").unwrap());
+        let opaque = Definition::Opaque(DirectoryPath::new("vendor/").unwrap());
         let compound = Definition::Compound(Expr::Ref(Name::new("X").unwrap()));
         assert_ne!(prim, compound);
+        assert_ne!(prim, opaque);
+        assert_ne!(opaque, compound);
     }
 
     #[test]
@@ -227,6 +319,29 @@ mod tests {
             defs.get(&Name::new("AuthTests").unwrap()),
             Some(Definition::Compound(_))
         ));
+    }
+
+    #[test]
+    fn deserialize_opaque_key() {
+        let toml_str = r#"
+            Vendor.opaque = "third_party/vendor"
+            AuthFiles.glob = "auth/**"
+        "#;
+        let table: FileSetTable = toml::from_str(toml_str).unwrap();
+        let defs = table.definitions();
+        assert_eq!(defs.len(), 2);
+
+        match defs.get(&Name::new("Vendor").unwrap()) {
+            | Some(Definition::Opaque(dp)) => assert_eq!(dp.as_str(), "third_party/vendor/"),
+            | other => panic!("expected Opaque, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deserialize_rejects_invalid_opaque() {
+        let toml_str = r#"Bad.opaque = "vendor/*""#;
+        let result: Result<FileSetTable, _> = toml::from_str(toml_str);
+        assert!(result.is_err());
     }
 
     #[test]
