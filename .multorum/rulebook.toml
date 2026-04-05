@@ -1,5 +1,6 @@
 # Define shared file ownership vocabulary first.
-# `Name.glob` binds a glob; `Name = "Expr"` combines names with |, &, and -.
+# `Name.glob` binds a glob; `Name.opaque` claims a directory exclusively.
+# `Name = "Expr"` combines names with |, &, and -.
 [fileset]
 McpToolDescriptors.glob = "src/mcp/tool/*.rs"
 McpResourceDescriptors.glob = "src/mcp/resource/*.rs"
@@ -13,6 +14,7 @@ RuntimeWorker.glob = "src/runtime/worker.rs"
 RuntimeWorkerIdentity.glob = "src/runtime/worker_id.rs"
 RuntimeMailboxTests.glob = "tests/runtime_integration.rs"
 SchemaFileset.glob = "src/schema/fileset/*.rs"
+FilesetIntegrationTests.glob = "tests/fileset_integration.rs"
 SchemaPerspective.glob = "src/schema/perspective/*.rs"
 Nothing = "McpToolDescriptors - McpToolDescriptors"
 
@@ -20,6 +22,10 @@ Nothing = "McpToolDescriptors - McpToolDescriptors"
 # `write` names the files that perspective may modify.
 # `read` names stable context files that concurrent work must not write.
 [perspective]
+[perspective.OpaqueDirectoryImpl]
+read = "Nothing"
+write = "SchemaFileset | FilesetIntegrationTests"
+
 [perspective.McpDescriptorsRefactor]
 read = "Nothing"
 write = "McpToolDescriptors | McpResourceDescriptors | McpDescriptorTests"
