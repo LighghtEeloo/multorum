@@ -133,16 +133,18 @@ Multorum describes ownership boundaries through a small algebra of named file se
 #### Syntax
 
 ```text
-glob  ::= <glob pattern>              e.g. "src/auth/**", "**/*.spec.md"
-name  ::= <identifier>                e.g. AuthFiles, SpecFiles
-expr  ::= name                        reference
-        | expr "|" expr               union
-        | expr "&" expr               intersection
-        | expr "-" expr               difference
-        | "(" expr ")"                grouping
+glob       ::= <glob pattern>              e.g. "src/auth/**", "**/*.spec.md"
+directory  ::= <literal directory path>    e.g. "third_party/vendor/"
+name       ::= <identifier>                e.g. AuthFiles, SpecFiles
+expr       ::= name                        reference
+             | expr "|" expr               union
+             | expr "&" expr               intersection
+             | expr "-" expr               difference
+             | "(" expr ")"                grouping
 
-definition ::= name ".glob" "=" glob  primitive - binds a name to a glob
-             | name "=" expr          compound - binds a name to an expression
+definition ::= name ".glob"   "=" glob        primitive - binds a name to a glob
+             | name ".opaque" "=" directory   opaque   - binds a name to a directory prefix
+             | name "=" expr                  compound - binds a name to an expression
 ```
 
 `A | B` produces every file in either set. `A & B` keeps only files present in both. `A - B` keeps files in `A` that are not in `B`. Precedence is flat; use parentheses when grouping matters.
@@ -151,7 +153,7 @@ File-set names and perspective names use CamelCase. Worker ids use kebab-case.
 
 #### Named Definitions
 
-Names are defined in the `[fileset]` table. A name may bind a primitive glob via `.glob` or a compound expression referencing other names. Perspectives reference these names in their `read` and `write` fields.
+Names are defined in the `[fileset]` table. A name may bind a primitive glob via `.glob`, an opaque directory via `.opaque`, or a compound expression referencing other names. Perspectives reference these names in their `read` and `write` fields.
 
 ```toml
 [fileset]
@@ -173,14 +175,38 @@ write = "AuthTests"
 
 This example uses intersection to carve out cross-cutting subsets and difference to partition ownership. `AuthImplementor` writes production code, `AuthTester` writes tests, and their write sets are disjoint, so they may run concurrently.
 
+#### Opaque Directories
+
+An opaque definition declares exclusive ownership of a directory subtree. Files under an opaque prefix are invisible to every `.glob` expansion in the same `[fileset]` table — the opaque owner is the sole gateway to those files in the algebra.
+
+```toml
+[fileset]
+VendorLibs.opaque = "third_party/vendor/"
+AllRust.glob = "**/*.rs"
+SpecFiles.glob = "**/*.spec.md"
+```
+
+`AllRust` matches every `.rs` file outside `third_party/vendor/`. A file like `third_party/vendor/lib.rs` appears only in `VendorLibs`. To reference vendor Rust files in an expression, use `VendorLibs` directly.
+
+The directory path is a literal relative path with no glob metacharacters. The compiler normalizes it to end with `/`. Compound expressions operate on already-resolved sets and are unaffected by opacity: an opaque set can appear in union, intersection, or difference like any other name.
+
 #### Compilation and Validation
 
 File-set expressions are rulebook-level syntax only. When Multorum needs a concrete boundary — at worker creation, perspective validation, or perspective forward — it compiles expressions into concrete file lists by expanding globs against the working tree and evaluating the set operations.
+
+Compilation proceeds in three phases:
+
+1. Resolve opaque definitions: for each `.opaque`, collect every file whose path starts with its directory prefix.
+2. Build the reduced file list: the original file list minus all files claimed by opaque definitions.
+3. Resolve `.glob` primitives against the reduced file list, then resolve compound expressions from already-resolved sets in topological order.
 
 Compile-time validation checks:
 
 - no cycles in file-set definitions
 - no undefined references
+- `.opaque` paths must not contain glob metacharacters (`*`, `?`, `[`, `{`)
+- no two `.opaque` definitions may have overlapping prefixes (neither may be a prefix of the other)
+- empty `.opaque` path (`""` or `"/"`) is rejected
 - empty sets are allowed but produce a warning
 
 Compilation proves that the rulebook is structurally valid. It does not prove that a new worker can run concurrently with those already active — that check happens at worker creation time.
@@ -215,7 +241,8 @@ The write-set scope check is always mandatory and cannot be configured away.
 
 ```toml
 # Define shared file ownership vocabulary first.
-# `Name.glob` binds a glob; `Name = "Expr"` combines names with |, &, and -.
+# `Name.glob` binds a glob; `Name.opaque` claims a directory exclusively.
+# `Name = "Expr"` combines names with |, &, and -.
 [fileset]
 
 # Add one table per perspective under `[perspective.<Name>]`.
@@ -235,13 +262,15 @@ A rulebook succeeds when perspectives can run concurrently without the orchestra
 
 #### Build the File-Set Vocabulary First
 
-Start from primitives. Each primitive binds a glob to a name that describes a region of the repository in terms the team already uses: `AuthFiles`, `ApiHandlers`, `MigrationScripts`. Then use compound expressions to carve those regions into subsets that match how work is actually divided: specs versus implementation, tests versus production code.
+Start from primitives. Each primitive binds a glob or opaque directory to a name that describes a region of the repository in terms the team already uses: `AuthFiles`, `ApiHandlers`, `MigrationScripts`. Then use compound expressions to carve those regions into subsets that match how work is actually divided: specs versus implementation, tests versus production code.
 
 Good file-set names read like a domain vocabulary. They describe what lives in the region, not how it will be used. `AuthFiles` is better than `AuthWorkerScope` because the same region may appear in multiple perspectives with different roles.
 
+Use `.opaque` for directories that should be treated as indivisible units of ownership — vendored dependencies, generated code trees, or any subtree where a single perspective must have unchallenged authority over every file inside. Opaque directories prevent broad globs like `**/*.rs` from accidentally reaching into regions that belong to a dedicated owner. Use `.glob` for everything else: cross-cutting patterns, extension-based selections, and regions where set operations are expected to subdivide the matched files.
+
 Keep primitive globs specific enough that they do not silently swallow unrelated files as the repository grows. `src/auth/**` is better than `**/*auth*` because the latter will match `docs/auth-migration-plan.md` and anything else that happens to contain the substring.
 
-Order definitions so that primitives come first and compounds follow, grouped by subsystem. A reader should be able to scan the `[fileset]` table top-to-bottom and understand the repository's ownership map without jumping around.
+Order definitions so that opaques and primitives come first and compounds follow, grouped by subsystem. A reader should be able to scan the `[fileset]` table top-to-bottom and understand the repository's ownership map without jumping around.
 
 #### Design Perspectives Around Parallel Work
 

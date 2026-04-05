@@ -175,16 +175,18 @@
 #### 语法
 
 ```text
-glob  ::= <glob pattern>              例如 "src/auth/**", "**/*.spec.md"
-name  ::= <identifier>                例如 AuthFiles, SpecFiles
-expr  ::= name                        引用
-        | expr "|" expr               并集
-        | expr "&" expr               交集
-        | expr "-" expr               差集
-        | "(" expr ")"                分组
+glob       ::= <glob pattern>              例如 "src/auth/**", "**/*.spec.md"
+directory  ::= <literal directory path>    例如 "third_party/vendor/"
+name       ::= <identifier>                例如 AuthFiles, SpecFiles
+expr       ::= name                        引用
+             | expr "|" expr               并集
+             | expr "&" expr               交集
+             | expr "-" expr               差集
+             | "(" expr ")"                分组
 
-definition ::= name ".glob" "=" glob  原语 - 将名称绑定到 glob
-             | name "=" expr          复合 - 将名称绑定到表达式
+definition ::= name ".glob"   "=" glob       原语 - 将名称绑定到 glob
+             | name ".opaque" "=" directory   不透明 - 将名称绑定到目录前缀
+             | name "=" expr                  复合 - 将名称绑定到表达式
 ```
 
 `A | B` 产生任一集中的所有文件。`A & B` 仅保留两个集中都存在的文件。`A - B` 保留在 A 中但不在 B 中的文件。优先级是平坦的；分组重要时使用括号。
@@ -193,7 +195,7 @@ definition ::= name ".glob" "=" glob  原语 - 将名称绑定到 glob
 
 #### 命名定义
 
-名称在 `[fileset]` 表中定义。名称可以通过 `.glob` 绑定原语 glob，也可以通过引用其他名称的复合表达式绑定。切入点在其 `read` 和 `write` 字段中引用这些名称。
+名称在 `[fileset]` 表中定义。名称可以通过 `.glob` 绑定原语 glob，通过 `.opaque` 绑定不透明目录，也可以通过引用其他名称的复合表达式绑定。切入点在其 `read` 和 `write` 字段中引用这些名称。
 
 ```toml
 [fileset]
@@ -215,14 +217,38 @@ write = "AuthTests"
 
 此例使用交集来划出交叉子集，使用差集来划分所有权。`AuthImplementor` 写生产代码，`AuthTester` 写测试，它们的写文件集合互不相交，因此可以并发运行。
 
+#### 不透明目录
+
+不透明定义声明对一个目录子树的独占所有权。不透明前缀下的文件对同一 `[fileset]` 表中的所有 `.glob` 展开不可见——不透明拥有者是代数中访问这些文件的唯一入口。
+
+```toml
+[fileset]
+VendorLibs.opaque = "third_party/vendor/"
+AllRust.glob = "**/*.rs"
+SpecFiles.glob = "**/*.spec.md"
+```
+
+`AllRust` 匹配 `third_party/vendor/` 之外的所有 `.rs` 文件。如 `third_party/vendor/lib.rs` 这样的文件只出现在 `VendorLibs` 中。要在表达式中引用供应商 Rust 文件，直接使用 `VendorLibs`。
+
+目录路径是不含 glob 元字符的字面相对路径。编译器将其规范化为以 `/` 结尾。复合表达式在已解析的集合上操作，不受不透明性影响：不透明集合可以像其他名称一样出现在并集、交集或差集中。
+
 #### 编译与验证
 
 文件集表达式仅是指导意见层面的语法。当墨缇斯需要具体边界时——在工蜂创建、切入点验证或切入点前移时——它通过在工作树上展开 glob 并执行集合运算，将表达式编译为具体的文件列表。
+
+编译分三个阶段进行：
+
+1. 解析不透明定义：对每个 `.opaque`，收集路径以其目录前缀开头的所有文件。
+2. 构建缩减文件列表：原始文件列表减去所有被不透明定义认领的文件。
+3. 对缩减文件列表展开 `.glob` 原语，然后按拓扑序从已解析集合中解析复合表达式。
 
 编译时验证检查：
 
 - 文件集定义中没有循环
 - 没有未定义的引用
+- `.opaque` 路径不得包含 glob 元字符（`*`、`?`、`[`、`{`）
+- 两个 `.opaque` 定义不得具有重叠前缀（不可嵌套、不可完全相同）
+- 空 `.opaque` 路径（`""` 或 `"/"`）被拒绝
 - 空集是允许的，但会产生警告
 
 编译证明指导意见在结构上是有效的。它不证明新工蜂能与已活跃的工蜂并发运行——该检查在工蜂创建时发生。
@@ -257,7 +283,8 @@ test = "skippable"
 
 ```toml
 # 首先定义共享的文件所有权词汇。
-# `Name.glob` 绑定一个 glob；`Name = "Expr"` 用 |、& 和 - 组合名称。
+# `Name.glob` 绑定一个 glob；`Name.opaque` 独占一个目录。
+# `Name = "Expr"` 用 |、& 和 - 组合名称。
 [fileset]
 
 # 在 `[perspective.<Name>]` 下为每个切入点添加一张表。
@@ -277,13 +304,15 @@ pipeline = []
 
 #### 首先构建文件集词汇
 
-从原语开始。每条原语将一个 glob 绑定到一个名称，该名称以团队已在使用的术语描述仓库的某个区域：`AuthFiles`、`ApiHandlers`、`MigrationScripts`。然后用复合表达式将这些区域切分为与实际工作划分方式相匹配的子集：规范与实现、测试与生产代码。
+从原语开始。每条原语将一个 glob 或不透明目录绑定到一个名称，该名称以团队已在使用的术语描述仓库的某个区域：`AuthFiles`、`ApiHandlers`、`MigrationScripts`。然后用复合表达式将这些区域切分为与实际工作划分方式相匹配的子集：规范与实现、测试与生产代码。
 
 好的文件集名称读起来像领域词汇。它们描述区域中存放的内容，而非如何使用它。`AuthFiles` 优于 `AuthWorkerScope`，因为同一区域可能以不同角色出现在多个切入点中。
 
+对应当被视为不可分割所有权单元的目录使用 `.opaque`——供应商依赖、生成代码树，或单个切入点必须对其中每个文件拥有无异议权限的任何子树。不透明目录可防止 `**/*.rs` 等宽泛 glob 意外延伸到属于专用拥有者的区域。对其他所有情况使用 `.glob`：跨领域模式、基于扩展名的选择，以及预期集合运算将细分匹配文件的区域。
+
 保持原语 glob 足够具体，使其不会在仓库增长时悄然涵盖无关文件。`src/auth/**` 优于 `**/*auth*`，因为后者会匹配 `docs/auth-migration-plan.md` 和任何碰巧包含该子串的内容。
 
-按顺序定义：原语在前，复合在后，按子系统分组。读者应当能从上到下扫描 `[fileset]` 表，无需来回跳转即可理解仓库的所有权图。
+按顺序定义：不透明和原语在前，复合在后，按子系统分组。读者应当能从上到下扫描 `[fileset]` 表，无需来回跳转即可理解仓库的所有权图。
 
 #### 围绕并行工作设计切入点
 
