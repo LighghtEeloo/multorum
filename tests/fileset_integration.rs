@@ -406,3 +406,148 @@ fn directory_path_type_validates() {
     assert!(DirectoryPath::new("vendor/[a]").is_err());
     assert!(DirectoryPath::new("vendor/{a}").is_err());
 }
+
+#[test]
+fn opaque_prefix_does_not_match_similar_directory_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let file_paths = ["vendor/lib/a.rs", "vendorized/lib/b.rs", "vendor-lib/c.rs", "src/main.rs"];
+    for path in &file_paths {
+        let full = root.join(path);
+        fs::create_dir_all(full.parent().unwrap()).unwrap();
+        fs::write(&full, "").unwrap();
+    }
+
+    let files = enumerate_files(root).unwrap();
+    let toml_str = r#"
+        Vendor.opaque = "vendor"
+        AllRust.glob = "**/*.rs"
+    "#;
+    let table: FileSetTable = toml::from_str(toml_str).unwrap();
+    let result = table.compile(&files).unwrap();
+
+    assert_eq!(result[&n("Vendor")], path_set(&["vendor/lib/a.rs"]));
+    assert_eq!(
+        result[&n("AllRust")],
+        path_set(&["src/main.rs", "vendor-lib/c.rs", "vendorized/lib/b.rs"])
+    );
+}
+
+#[test]
+fn compound_intersection_with_opaque_and_glob_is_empty() {
+    let (_dir, files) = setup_tempdir_with_vendor();
+
+    let toml_str = r#"
+        Vendor.opaque = "vendor/"
+        Rust.glob = "**/*.rs"
+        VendorRust = "Vendor & Rust"
+    "#;
+    let table: FileSetTable = toml::from_str(toml_str).unwrap();
+    let result = table.compile(&files).unwrap();
+
+    // Opaque files are removed before glob expansion, so intersection is empty.
+    assert!(result[&n("VendorRust")].is_empty());
+}
+
+#[test]
+fn multiple_disjoint_opaques_partition_glob_visibility() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let file_paths =
+        ["vendor/a.rs", "generated/x.rs", "src/main.rs", "src/lib.rs", "tests/main_test.rs"];
+    for path in &file_paths {
+        let full = root.join(path);
+        fs::create_dir_all(full.parent().unwrap()).unwrap();
+        fs::write(&full, "").unwrap();
+    }
+
+    let files = enumerate_files(root).unwrap();
+    let toml_str = r#"
+        Vendor.opaque = "vendor/"
+        Generated.opaque = "generated/"
+        AllRust.glob = "**/*.rs"
+        Everything = "Vendor | Generated | AllRust"
+    "#;
+    let table: FileSetTable = toml::from_str(toml_str).unwrap();
+    let result = table.compile(&files).unwrap();
+
+    assert_eq!(result[&n("Vendor")], path_set(&["vendor/a.rs"]));
+    assert_eq!(result[&n("Generated")], path_set(&["generated/x.rs"]));
+    assert_eq!(
+        result[&n("AllRust")],
+        path_set(&["src/lib.rs", "src/main.rs", "tests/main_test.rs"])
+    );
+    assert_eq!(
+        result[&n("Everything")],
+        path_set(&[
+            "generated/x.rs",
+            "src/lib.rs",
+            "src/main.rs",
+            "tests/main_test.rs",
+            "vendor/a.rs",
+        ])
+    );
+}
+
+#[test]
+fn opaque_definition_with_no_matching_files_compiles_to_empty() {
+    let (_dir, files) = setup_tempdir_with_vendor();
+
+    let toml_str = r#"
+        Missing.opaque = "third_party/"
+        Rust.glob = "**/*.rs"
+    "#;
+    let table: FileSetTable = toml::from_str(toml_str).unwrap();
+    let result = table.compile(&files).unwrap();
+
+    assert!(result[&n("Missing")].is_empty());
+    assert_eq!(
+        result[&n("Rust")],
+        path_set(&[
+            "src/main.rs",
+            "src/test/main_test.rs",
+            "src/util.rs",
+            "vendor/lib/a.rs",
+            "vendor/lib/b.rs",
+            "vendor/other/c.rs",
+        ])
+    );
+}
+
+#[test]
+fn stress_many_opaques_many_compounds_and_many_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    for i in 0..40 {
+        for j in 0..5 {
+            let opaque_file = root.join(format!("opaque{i}/f{j}.rs"));
+            fs::create_dir_all(opaque_file.parent().unwrap()).unwrap();
+            fs::write(opaque_file, "").unwrap();
+
+            let src_file = root.join(format!("src/module{i}/m{j}.rs"));
+            fs::create_dir_all(src_file.parent().unwrap()).unwrap();
+            fs::write(src_file, "").unwrap();
+        }
+    }
+
+    let files = enumerate_files(root).unwrap();
+    let mut toml_str = String::new();
+    for i in 0..40 {
+        toml_str.push_str(&format!("Opaque{i}.opaque = \"opaque{i}/\"\n"));
+    }
+    toml_str.push_str("Src.glob = \"src/**\"\n");
+    toml_str.push_str("AllOpaque = \"Opaque0");
+    for i in 1..40 {
+        toml_str.push_str(&format!(" | Opaque{i}"));
+    }
+    toml_str.push_str("\"\n");
+    toml_str.push_str("Everything = \"AllOpaque | Src\"\n");
+
+    let table: FileSetTable = toml::from_str(&toml_str).unwrap();
+    let result = table.compile(&files).unwrap();
+
+    assert_eq!(result[&n("Src")].len(), 200);
+    assert_eq!(result[&n("AllOpaque")].len(), 200);
+    assert_eq!(result[&n("Everything")].len(), 400);
+}
