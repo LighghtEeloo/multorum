@@ -1,0 +1,76 @@
+name: multorum
+version: 1
+description: Spec-driven development for Multorum orchestrated parallel workflows
+
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Work intent and scope definition
+    template: proposal.md
+    instruction: |
+      Create a proposal that explains WHY this parallel work is needed.
+      Define the high-level goal, scope (in/out), and success criteria.
+      This will become the initial task bundle sent to the worker.
+    requires: []
+
+  - id: perspective
+    generates: perspective.md
+    description: File ownership boundaries and perspective definition
+    template: perspective.md
+    instruction: |
+      Define the perspective (role) for this work including:
+      - File-set algebra: what file sets will be referenced
+      - Write set: files this worker may modify (closed list)
+      - Read set: files that must remain stable during work
+      Follow Multorum's rulebook.toml format for expressions.
+      
+      Critical constraints:
+      - Write set is a CLOSED list of existing files
+      - Workers CANNOT create files outside the write set
+      - If new files are needed, the orchestrator must create them first
+      - Read set defines stable context for conflict detection
+    requires: [proposal]
+
+  - id: design
+    generates: design.md
+    description: Technical approach for the worker
+    template: design.md
+    instruction: |
+      Explain HOW the worker should implement this task.
+      Include: strategy, key decisions, risk mitigations, 
+      and how to verify the work is correct.
+      The worker will reference this during implementation.
+      
+      Remember: The worker sees the full repository but can only write
+      to the perspective's write set. Design accordingly.
+    requires: [proposal]
+
+  - id: tasks
+    generates: tasks.md
+    description: Implementation checklist
+    template: tasks.md
+    instruction: |
+      Create a concrete task list for the worker to complete.
+      Tasks should be small enough to complete in one session.
+      The worker will check these off as they progress.
+      
+      Final task should always be:
+      - Submit work via `multorum local commit`
+    requires: [perspective, design]
+
+apply:
+  requires: [tasks]
+  tracks: tasks.md
+  instruction: |
+    When applying, the orchestrator should:
+    1. Ensure rulebook.toml defines the perspective
+    2. Create worker: multorum worker create <perspective>
+    3. Send proposal.md as the initial task bundle
+    4. Monitor worker outbox for reports/commits
+    
+    The worker lifecycle:
+    - ACTIVE: Worker receives task, begins implementation
+    - BLOCKED: Worker sends report, needs orchestrator input
+    - COMMITTED: Worker submits commit for review
+    - MERGED: Orchestrator integrates the work
+    - DISCARDED: Work abandoned without merge
